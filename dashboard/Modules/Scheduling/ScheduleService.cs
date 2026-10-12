@@ -59,14 +59,33 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
         return (await LoadAsync(conditions, "schedule-job-tasks", ct, maxPages: 4)).Where(t => !t.Completed).ToList();
     }
 
-    private async Task<List<ScheduleTask>> LoadAsync(JsonArray conditions, string queryName, CancellationToken ct, int maxPages = int.MaxValue)
+    /// <summary>
+    /// Every scheduled task on one job, including phase groups, for the job timeline. Cached 2 minutes and
+    /// cleared on push like the weekly schedule.
+    /// </summary>
+    public async Task<IReadOnlyList<ScheduleTask>> GetJobTimelineAsync(string jobId, bool refresh, CancellationToken ct)
+    {
+        var key = $"schedule:timeline:{jobId}";
+        if (refresh) cache.Remove(key);
+        return (await cache.GetOrCreateAsync(key, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheFor;
+            entry.AddExpirationToken(new Microsoft.Extensions.Primitives.CancellationChangeToken(resetSignal.Token));
+            var conditions = new JsonArray(new JsonArray(new JsonArray("job", "id"), "=", jobId));
+            return (IReadOnlyList<ScheduleTask>)await LoadAsync(conditions, "schedule-timeline", ct, maxPages: 8, includeGroups: true);
+        }))!;
+    }
+
+    private async Task<List<ScheduleTask>> LoadAsync(JsonArray conditions, string queryName, CancellationToken ct, int maxPages = int.MaxValue, bool includeGroups = false)
     {
         var result = new List<ScheduleTask>();
         string? page = null;
         var pages = 0;
         do
         {
-            var where = JsonNode.Parse("""{ "and": [["isToDo", false], ["isGroup", false], [["job", "id"], "!=", null]] }""")!;
+            var where = JsonNode.Parse(includeGroups
+                ? """{ "and": [["isToDo", false], [["job", "id"], "!=", null]] }"""
+                : """{ "and": [["isToDo", false], ["isGroup", false], [["job", "id"], "!=", null]] }""")!;
             var and = (JsonArray)where["and"]!;
             foreach (var c in conditions) and.Add(c!.DeepClone());
 
@@ -75,7 +94,7 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
 
             var nodes = JsonNode.Parse("""
             {
-              "id": {}, "name": {}, "startDate": {}, "endDate": {}, "startTime": {}, "endTime": {}, "completed": {},
+              "id": {}, "name": {}, "startDate": {}, "endDate": {}, "startTime": {}, "endTime": {}, "completed": {}, "isGroup": {},
               "taskType": { "id": {}, "name": {} },
               "parentTask": { "id": {} },
               "dependents": { "_": "dependentTasks", "count": {} },
@@ -125,6 +144,7 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
             StartTime = TimeOnly.TryParse(task.Str("startTime"), out var st) ? st : null,
             EndTime = TimeOnly.TryParse(task.Str("endTime"), out var et) ? et : null,
             Completed = task.Dec("completed") >= 1,
+            IsGroup = task["isGroup"]?.GetValue<bool>() == true,
             TaskType = task["taskType"].Str("name"),
             JobId = jobId,
             JobName = job.Str("name") ?? "(no name)",

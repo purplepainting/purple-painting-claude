@@ -1,0 +1,82 @@
+@page "/scheduling/job/{id}"
+@model PurpleDashboard.Pages.Scheduling.JobModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Integrations.JobTread
+@using PurpleDashboard.Modules.Scheduling
+@using PurpleDashboard.Modules.People
+
+<div class="module-head">
+    <div>
+        <a class="link-button" href="/scheduling">← Schedule</a>
+        <h2 class="timeline-title">@Model.JobName</h2>
+        <p class="muted small">
+            @Model.JobType
+            @if (Model.ProjectManager is not null) { <span class="pm-tag" style="@Model.Team.PmStyle(Model.ProjectManager)">PM @Model.ProjectManager.Split(' ')[0]</span> }
+            · <a href="@JobTreadIds.JobUrl(Model.JobId)" target="_blank" rel="noopener">JobTread ↗</a>
+            · <a asp-page="/Scheduling/Job" asp-route-id="@Model.JobId" asp-route-refresh="true">Refresh</a>
+        </p>
+    </div>
+</div>
+
+@if (Model.Error is not null)
+{
+    <div class="card notice warn"><strong>Couldn't load the timeline.</strong><p>@Model.Error</p></div>
+}
+else if (Model.Tasks.Count == 0)
+{
+    <div class="card empty-state"><p class="muted">No scheduled tasks on this job in JobTread.</p></div>
+}
+else
+{
+    <div class="kpis">
+        <div class="card kpi"><span class="kpi-label">Dates</span><span class="kpi-value num" style="font-size:18px">@Format.Date(Model.Tasks.Min(t => t.Start)) – @Format.Date(Model.Tasks.Max(t => t.End))</span></div>
+        <div class="card kpi"><span class="kpi-label">Tasks done</span><span class="kpi-value num">@Model.DoneCount / @Model.TaskCount</span></div>
+        <div class="card kpi"><span class="kpi-label">Crew-days scheduled</span><span class="kpi-value num">@Format.Number(Model.CrewDays)</span></div>
+    </div>
+
+    <section class="card timeline-card">
+        <div class="table-wrap">
+            <div class="timeline" style="--days:@Model.Days">
+                <div class="tl-head">
+                    <div class="tl-label"></div>
+                    <div class="tl-track">
+                        @foreach (var w in Model.Weeks()) { <span class="tl-week" style="@Model.At(w)">@w.ToString("MMM d")</span> }
+                        @if (Model.Today >= Model.Start && Model.Today <= Model.End) { <span class="tl-today-label" style="@Model.At(Model.Today)">Today</span> }
+                    </div>
+                </div>
+                @foreach (var (phase, items) in Model.Rows)
+                {
+                    <div class="tl-row tl-phase">
+                        <div class="tl-label"><b>@(phase?.Name ?? "Tasks")</b></div>
+                        <div class="tl-track">
+                            @if (phase is not null) { <span class="tl-bar phase" style="@Model.Bar(phase.Start, phase.End)" title="@phase.Name: @Format.Date(phase.Start) – @Format.Date(phase.End)"></span> }
+                            @if (Model.Today >= Model.Start && Model.Today <= Model.End) { <span class="tl-today" style="@Model.At(Model.Today)"></span> }
+                        </div>
+                    </div>
+                    @foreach (var t in items)
+                    {
+                        var state = t.Completed ? "done" : t.End < Model.Today ? "late" : t.Start <= Model.Today ? "now" : "";
+                        <div class="tl-row">
+                            <div class="tl-label">
+                                <span class="tl-name">@IndexModel.ShortName(t.Name)</span>
+                                <span class="muted small">@Format.Date(t.Start)@(t.End != t.Start ? " – " + Format.Date(t.End) : "") @IndexModel.Time(t)</span>
+                            </div>
+                            <div class="tl-track">
+                                <span class="tl-bar @state" style="@Model.Bar(t.Start, t.End)" title="@t.Name&#10;@Format.Date(t.Start) – @Format.Date(t.End) @IndexModel.Time(t)&#10;@string.Join(", ", t.People)@(t.Dependents > 0 ? $"&#10;{t.Dependents} linked task(s)" : "")"></span>
+                                <span class="tl-crew" style="@Model.CrewStyle(t)">
+                                    @foreach (var c in t.Crew.OrderBy(c => Levels.Rank(Model.Team.LevelOf(c.Name))))
+                                    {
+                                        <span class="pchip @Model.Team.ChipClass(c.Name)" style="@Model.Team.ChipStyle(c.Name)">@c.Name.Split(' ')[0]</span>
+                                    }
+                                    @if (t.Dependents > 0) { <span class="muted small">⛓ @t.Dependents</span> }
+                                </span>
+                                @if (Model.Today >= Model.Start && Model.Today <= Model.End) { <span class="tl-today" style="@Model.At(Model.Today)"></span> }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+        <p class="muted small tl-legend"><span class="tl-key done"></span> done <span class="tl-key now"></span> in progress <span class="tl-key"></span> upcoming <span class="tl-key late"></span> past its dates, not marked done</p>
+    </section>
+}

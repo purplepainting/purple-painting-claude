@@ -462,3 +462,28 @@ table.data tr.burden-row td:first-child { padding-left: 24px; }
 .cust-job-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .cust-links { margin-left: auto; display: flex; gap: 4px; }
 .connection-head { flex-wrap: wrap; } .connection-head h2 { margin-right: auto; }
+
+/* Job timeline */
+.timeline-title { margin: 4px 0 2px; font-size: 20px; }
+.timeline-card { padding: 12px 14px; }
+.timeline { min-width: 820px; display: grid; }
+.tl-head, .tl-row { display: grid; grid-template-columns: 260px minmax(0, 1fr); align-items: center; min-height: 34px; }
+.tl-head { min-height: 38px; border-bottom: 1px solid var(--border); }
+.tl-row { border-bottom: 1px dashed color-mix(in srgb, var(--border) 70%, transparent); }
+.tl-phase { background: var(--purple-50); }
+.tl-label { padding: 4px 10px 4px 0; display: grid; min-width: 0; }
+.tl-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+.tl-track { position: relative; height: 100%; min-height: 30px; }
+.tl-week { position: absolute; top: 4px; font-size: 11px; color: var(--muted); border-left: 1px solid var(--border); padding-left: 4px; }
+.tl-today-label { position: absolute; top: 20px; font-size: 11px; font-weight: 700; color: #DC2626; transform: translateX(-50%); }
+.tl-today { position: absolute; top: 0; bottom: 0; width: 2px; background: #DC2626; opacity: .55; }
+.tl-bar { position: absolute; top: 8px; height: 16px; border-radius: 4px; background: var(--purple-600); }
+.tl-bar.phase { top: 11px; height: 10px; background: var(--purple-900, #3B0764); opacity: .55; }
+.tl-bar.done { background: #22A35A; }
+.tl-bar.now { background: #D97706; }
+.tl-bar.late { background: #DC2626; }
+.tl-crew { position: absolute; top: 6px; display: flex; gap: 3px; padding-left: 6px; white-space: nowrap; align-items: center; }
+.tl-legend { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.tl-key { display: inline-block; width: 18px; height: 8px; border-radius: 3px; background: var(--purple-600); margin-left: 8px; }
+.tl-key.done { background: #22A35A; } .tl-key.now { background: #D97706; } .tl-key.late { background: #DC2626; }
+a.row-title, a.block-title { color: inherit; text-decoration: none; } a.row-title:hover, a.block-title:hover { text-decoration: underline; }

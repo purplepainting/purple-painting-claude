@@ -12,6 +12,8 @@ public sealed record ScheduleTask
     public TimeOnly? StartTime { get; init; }
     public TimeOnly? EndTime { get; init; }
     public bool Completed { get; init; }
+    /// <summary>A phase that groups other tasks (only loaded for the job timeline).</summary>
+    public bool IsGroup { get; init; }
     public string? TaskType { get; init; }
     public required string JobId { get; init; }
     public required string JobName { get; init; }
