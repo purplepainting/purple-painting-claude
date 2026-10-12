@@ -53,6 +53,16 @@
         </div>
     </div>
     <div class="nav-progress" aria-hidden="true"></div>
+    @* Start loading a page when the pointer rests on its link (desktop) or touches it (phone), so it's
+       usually ready by the time the click lands. Pages with side effects (sign-in, sign-out, refresh) are left out. *@
+    <script type="speculationrules">
+    {"prefetch": [{"where": {"and": [
+        {"href_matches": "/*"},
+        {"not": {"href_matches": "/.auth/*"}},
+        {"not": {"href_matches": "/connections*"}},
+        {"not": {"selector_matches": "[data-no-prefetch], [href*='refresh='], [href*='handler=']"}}
+    ]}, "eagerness": "moderate"}]}
+    </script>
     <script src="~/js/nav-feedback.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>

@@ -1,11 +1,13 @@
-// Instant feedback when moving between pages. Pages load data from JobTread/QuickBooks on the server,
-// which can take a moment; this shows the click registered: the tapped pill/button lights up, a bar runs
-// across the top, and the page dims until the next page arrives.
+// Instant feedback while the next page loads: whatever was clicked lights up, a bar runs across the top,
+// and on phones the menu closes right away. Links are also prefetched on hover / touch (see _Layout).
 (function () {
   function start(el) {
     document.body.classList.add('navigating');
     if (el) el.classList.add('pressed');
+    var toggle = document.getElementById('nav-toggle');
+    if (toggle) toggle.checked = false;
   }
+
   document.addEventListener('click', function (e) {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     var a = e.target.closest('a[href]');
@@ -15,13 +17,15 @@
     if (a.origin && a.origin !== location.origin) return;
     start(a);
   });
+
   document.addEventListener('submit', function (e) {
     if (e.defaultPrevented) return;
     var form = e.target;
     if (form.dataset.noFeedback !== undefined) return;
-    start(form.querySelector('[type=submit]') || null);
+    start(e.submitter || form.querySelector('[type=submit], button:not([type])'));
   });
-  // Coming back with the browser's Back button restores the page from cache: clear the state.
+
+  // Back/forward restores the old page from cache: clear the loading state.
   window.addEventListener('pageshow', function () {
     document.body.classList.remove('navigating');
     document.querySelectorAll('.pressed').forEach(function (el) { el.classList.remove('pressed'); });

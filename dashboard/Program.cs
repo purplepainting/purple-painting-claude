@@ -83,8 +83,12 @@ builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Customers.Custom
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Vendors.DueSoonMetric>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Equipment.LowStockMetric>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Sales.CommissionsOwedMetric>();
+builder.Services.AddSingleton<PurpleDashboard.Infrastructure.MenuNumbers>();
 
 var app = builder.Build();
+
+// Fill the menu numbers (and the caches behind them) as soon as the app is up.
+app.Lifetime.ApplicationStarted.Register(() => app.Services.GetRequiredService<PurpleDashboard.Infrastructure.MenuNumbers>().StartRefresh());
 
 // Sign-in is handled by Azure App Service Authentication (Entra ID) in front of
 // this app, so every request that reaches here is already a signed-in team member.
