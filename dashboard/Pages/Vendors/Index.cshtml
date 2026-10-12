@@ -1,0 +1,81 @@
+@page "/vendors"
+@model PurpleDashboard.Pages.Vendors.IndexModel
+@using PurpleDashboard.Infrastructure
+
+<div class="module-head">
+    <div class="pills" role="tablist" aria-label="Views">
+        @foreach (var (key, label) in new[] { ("due", "Due in 14 days"), ("overdue", "Overdue"), ("all", "All open bills"), ("vendors", "By vendor") })
+        {
+            <a class="pill@(Model.CurrentView == key ? " active" : "")" asp-page="/Vendors/Index" asp-route-view="@(key == "due" ? null : key)" asp-route-q="@Model.Q">@label</a>
+        }
+    </div>
+    <form class="filters" method="get">
+        @if (Model.CurrentView != "due") { <input type="hidden" name="view" value="@Model.CurrentView"> }
+        <input type="search" name="q" value="@Model.Q" placeholder="Search vendor or bill #" aria-label="Search">
+        <button class="button secondary" type="submit">Search</button>
+    </form>
+</div>
+
+@if (!Model.Connected)
+{
+    <div class="card notice warn"><strong>QuickBooks isn't connected.</strong><p>Connect it once on <a href="/connections">Connections</a> and this page fills in.</p></div>
+}
+else if (Model.Error is not null)
+{
+    <div class="card notice warn"><strong>Couldn't load bills.</strong><p>@Model.Error</p></div>
+}
+else
+{
+    <div class="kpis">
+        <div class="card kpi"><span class="kpi-label">Overdue</span><span class="kpi-value num@(Model.Overdue.Any() ? " neg" : "")">@Format.Money(Model.Overdue.Sum(b => b.Balance))</span><span class="kpi-sub">@Model.Overdue.Count() bills</span></div>
+        <div class="card kpi"><span class="kpi-label">Due in 14 days</span><span class="kpi-value num">@Format.Money(Model.DueSoon.Sum(b => b.Balance))</span><span class="kpi-sub">@Model.DueSoon.Count() bills</span></div>
+        <div class="card kpi"><span class="kpi-label">All open bills</span><span class="kpi-value num">@Format.Money(Model.Bills.Sum(b => b.Balance))</span><span class="kpi-sub">@Model.Bills.Count bills · @Model.Bills.Select(b => b.Vendor).Distinct().Count() vendors</span></div>
+    </div>
+    <p class="list-meta muted">From QuickBooks (read only) · <a asp-page="/Vendors/Index" asp-route-view="@Model.View" asp-route-q="@Model.Q" asp-route-refresh="true">Refresh</a></p>
+
+    @if (Model.CurrentView == "vendors")
+    {
+        <section class="card fin-section">
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Vendor</th><th class="num">Bills</th><th class="num">Owed</th><th class="num">Overdue</th><th>Next due</th></tr></thead>
+                    <tbody>
+                        @foreach (var v in Model.ByVendor)
+                        {
+                            <tr><td><a asp-page="/Vendors/Index" asp-route-view="all" asp-route-q="@v.Vendor">@v.Vendor</a></td><td class="num">@v.Bills</td><td class="num">@Format.Money(v.Owed)</td><td class="num@(v.Overdue > 0 ? " neg" : "")">@Format.Money(v.Overdue)</td><td>@Format.Date(v.NextDue)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+    else
+    {
+        <section class="card fin-section">
+            @if (!Model.Shown.Any()) { <p class="muted">No bills here.</p> }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Vendor</th><th>Bill #</th><th>Bill date</th><th>Due</th><th class="num">Total</th><th class="num">Open balance</th></tr></thead>
+                        <tbody>
+                            @foreach (var b in Model.Shown)
+                            {
+                                var days = b.DaysUntilDue(Model.Today);
+                                <tr>
+                                    <td>@b.Vendor @if (b.Memo is { } m) { <span class="muted small">· @m</span> }</td>
+                                    <td>@(b.DocNumber ?? "—")</td>
+                                    <td>@Format.Date(b.Date)</td>
+                                    <td class="@(days < 0 ? "neg" : "")">@Format.Date(b.Due) <span class="muted small">@Model.DueLabel(b)</span></td>
+                                    <td class="num">@Format.Money(b.Total)</td>
+                                    <td class="num"><b>@Format.Money(b.Balance)</b></td>
+                                </tr>
+                            }
+                            <tr class="total"><td colspan="5">Total</td><td class="num">@Format.Money(Model.Shown.Sum(b => b.Balance))</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+}
