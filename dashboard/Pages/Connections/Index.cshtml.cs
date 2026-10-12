@@ -25,6 +25,7 @@ public class IndexModel(QuickBooksClient quickBooks, IJobTreadClient jobTread, J
     public QuickBooksConnection? Connection { get; private set; }
     public JobTreadUserKey? MyJobTread { get; private set; }
     public string? MyName => me.DisplayName;
+    public string? MyEmail => me.Email;
     public string? CheckResult { get; private set; }
     public bool CheckOk { get; private set; }
     [TempData] public string? Message { get; set; }
