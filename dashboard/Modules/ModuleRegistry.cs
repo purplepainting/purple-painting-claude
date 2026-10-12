@@ -18,7 +18,8 @@ public sealed record ModuleDefinition(
 }
 
 /// <summary>
-/// The one place modules are listed. The launchpad shows tiles in this order.
+/// The one place modules are listed. The left menu shows them in this order, and the first
+/// one is the home page.
 /// To build a module: add its pages under Pages/{Name}/ with @page "/{key}",
 /// then set its Status to Live here. See dashboard/README.md.
 /// </summary>
@@ -30,11 +31,14 @@ public static class ModuleRegistry
         new("scheduling", "Scheduling",              "Who is on which job, by crew and week.",                "JobTread",              "calendar",  "Jobs this week", ModuleStatus.Live),
         new("financials", "Financials",              "Company P&L, job profit and JobTread vs QuickBooks.",   "QuickBooks + JobTread", "chart",     "Net profit YTD"),
         new("customers",  "Customers",               "Contacts, jobs, balances and reviews.",                 "JobTread + QuickBooks", "users",     "Customers owing"),
-        new("sales",      "Sales and marketing",     "Ad spend to revenue, door-to-door and reps.",           "Dashboard",             "megaphone", "Leads this month"),
+        new("sales",      "Sales & Marketing",       "Ad spend to revenue, door-to-door and reps.",           "Dashboard",             "megaphone", "Leads this month"),
         new("vendors",    "Vendors and payables",    "Bills, due dates and vendor balances.",                 "QuickBooks",            "receipt",   "Due in 14 days"),
         new("employees",  "Employees",               "One profile per person across payroll and jobs.",       "QuickBooks + JobTread", "id",        "Team members"),
-        new("equipment",  "Equipment and sundries",  "Sprayers, ladders, vehicles and supplies.",             "Dashboard",             "tools",     "Low or out of stock"),
+        new("equipment",  "Equipment & Sundries",    "Sprayers, ladders, vehicles and supplies.",             "Dashboard",             "tools",     "Low or out of stock"),
     ];
+
+    /// <summary>The module shown at "/" (the first page after sign-in).</summary>
+    public static ModuleDefinition Home => All[0];
 
     public static ModuleDefinition? Find(string key) =>
         All.FirstOrDefault(m => string.Equals(m.Key, key, StringComparison.OrdinalIgnoreCase));

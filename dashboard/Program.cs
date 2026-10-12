@@ -6,7 +6,11 @@ using PurpleDashboard.Modules.Scheduling;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddRazorPages();
+builder.Services.AddRazorPages(options =>
+{
+    // Home page = the Projects list (also at /projects).
+    options.Conventions.AddPageRoute("/Projects/Index", "");
+});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<CurrentUser>();

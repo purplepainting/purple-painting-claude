@@ -1,8 +1,8 @@
 namespace PurpleDashboard.Modules;
 
 /// <summary>
-/// Supplies the key number on a module's launchpad tile. Register an implementation in
-/// Program.cs; the launchpad shows "—" for modules without one or if it fails.
+/// Supplies the key number on a module's menu tile. Register an implementation in
+/// Program.cs; the menu shows no number for modules without one or if it fails.
 /// </summary>
 public interface ITileMetric
 {

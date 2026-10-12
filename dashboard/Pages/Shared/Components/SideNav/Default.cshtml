@@ -1,0 +1,19 @@
+@model PurpleDashboard.ViewComponents.SideNavModel
+<nav class="sidenav" aria-label="Modules">
+    @foreach (var m in Model.Modules)
+    {
+        var active = m.Key == Model.ActiveKey;
+        var live = m.Status == ModuleStatus.Live;
+        <a class="navtile@(active ? " active" : "")@(live ? "" : " is-soon")" href="@m.Route" aria-current="@(active ? "page" : null)">
+            <span class="navtile-icon"><partial name="_Icon" model="m.Icon" /></span>
+            <span class="navtile-text">
+                <span class="navtile-name">@m.Name</span>
+                <span class="navtile-sub">@(live ? m.MetricLabel : "Coming soon")</span>
+            </span>
+            @if (Model.Metrics.TryGetValue(m.Key, out var value))
+            {
+                <span class="navtile-metric num">@value</span>
+            }
+        </a>
+    }
+</nav>

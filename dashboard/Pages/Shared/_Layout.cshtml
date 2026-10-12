@@ -1,8 +1,7 @@
 @inject CurrentUser Me
 @{
-    // Module pages set ViewData["ModuleName"] to get the "← Dashboard" top bar.
-    var moduleName = ViewData["ModuleName"] as string;
     var title = ViewData["Title"] as string;
+    var moduleName = ViewData["ModuleName"] as string ?? title ?? "Dashboard";
 }
 <!doctype html>
 <html lang="en">
@@ -26,26 +25,33 @@
     @await RenderSectionAsync("Head", required: false)
 </head>
 <body>
-    <header class="topbar">
-        <div class="topbar-inner">
-            @if (moduleName is not null)
-            {
-                <a class="topbar-back" href="/">← Dashboard</a>
-                <span class="topbar-title">@moduleName</span>
-            }
-            else
-            {
-                <a class="brand" href="/"><span class="logo">P</span><span>Purple Painting</span></a>
-            }
+    @* The checkbox opens the menu on phones without needing JavaScript. *@
+    <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-hidden="true" tabindex="-1">
+    <div class="shell">
+        <aside class="sidebar" id="sidebar">
+            <a class="brand" href="/"><span class="logo">P</span><span>Purple Painting</span></a>
+            @await Component.InvokeAsync("SideNav")
             @if (Me.DisplayName is not null)
             {
-                <span class="topbar-user" title="@Me.Email">@Me.DisplayName</span>
+                <div class="sidebar-user" title="@Me.Email">Signed in as @Me.DisplayName</div>
             }
+        </aside>
+        <label for="nav-toggle" class="scrim" aria-hidden="true"></label>
+
+        <div class="main">
+            <header class="topbar">
+                <div class="topbar-inner">
+                    <label for="nav-toggle" class="menu-button" aria-label="Open menu" aria-controls="sidebar" role="button" tabindex="0">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+                    </label>
+                    <span class="topbar-title">@moduleName</span>
+                </div>
+            </header>
+            <main class="page">
+                @RenderBody()
+            </main>
         </div>
-    </header>
-    <main class="page">
-        @RenderBody()
-    </main>
+    </div>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

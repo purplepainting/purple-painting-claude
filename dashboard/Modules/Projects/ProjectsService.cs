@@ -85,7 +85,8 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             };
 
             var response = await jobTread.QueryAsync(page is null ? "projects-list" : "projects-list-more", query, ct);
-            var connection = response["organization"]?["jobs"];
+            var connection = response["organization"]?["jobs"]
+                ?? throw new JobTreadException("Unexpected JobTread response: " + Trim(response.ToJsonString()));
             foreach (var job in connection.Nodes()) result.Add(ToSummary(job));
             page = connection.Str("nextPage");
         } while (page is not null);
@@ -218,6 +219,8 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
     }
 
     private static JsonNode Json(string json) => JsonNode.Parse(json)!;
+
+    private static string Trim(string s) => s.Length > 300 ? s[..300] : s;
 
     private sealed class CostCodeTotals(string? number, string name)
     {
