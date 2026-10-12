@@ -110,3 +110,93 @@ table.data td.num, table.data th.num { text-align: right; }
   .tile { min-height: 0; }
   .topbar-user { max-width: 40%; font-size: 13px; }
 }
+
+/* ---------- Module pages: views and filters ---------- */
+.module-head { display: grid; gap: 12px; margin-bottom: 12px; }
+.pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.pills::-webkit-scrollbar { display: none; }
+.pill { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: var(--touch); padding: 0 16px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px; white-space: nowrap; }
+.pill.active { background: var(--purple-600); border-color: var(--purple-600); color: #fff; }
+.pill-count { font-size: 12px; opacity: .75; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filters input[type=search], .filters select { min-height: var(--touch); padding: 0 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--card); color: var(--text); font-family: inherit; }
+.filters input[type=search] { flex: 1 1 220px; }
+.filters select { flex: 0 1 200px; max-width: 100%; }
+.link-button { display: inline-flex; align-items: center; min-height: var(--touch); padding: 0 8px; }
+.list-meta { font-size: 13px; margin: 4px 0 12px; }
+.small { font-size: 12px; }
+.tag { display: inline-flex; padding: 2px 8px; border-radius: 6px; font-size: 12px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); white-space: nowrap; }
+.notice { padding: 16px 18px; margin-bottom: 16px; }
+.notice p { margin: 4px 0 0; }
+.notice.warn { background: var(--warn-bg); border-color: #F5C9A4; color: var(--warn-text); }
+.notice-inline.warn { color: var(--warn-text); margin: 0; }
+.neg { color: var(--warn-text); }
+
+/* ---------- Progress ring and bars ---------- */
+.ring { position: relative; display: inline-flex; width: 48px; height: 48px; flex: none; }
+.ring-track { fill: none; stroke: var(--purple-50); stroke-width: 5; }
+.ring-fill { fill: none; stroke: var(--purple-600); stroke-width: 5; stroke-linecap: round; }
+.ring.over .ring-fill { stroke: var(--warn-text); }
+.ring.empty .ring-fill { stroke: none; }
+.ring-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.bar { display: inline-block; width: 80px; height: 6px; border-radius: 3px; background: var(--purple-50); overflow: hidden; vertical-align: middle; }
+.bar > span { display: block; height: 100%; background: var(--purple-600); }
+.bar.over > span { background: var(--warn-text); }
+
+/* ---------- Expandable job rows ---------- */
+.job-list { display: grid; gap: 10px; min-width: 0; }
+.job { min-width: 0; }
+/* Grid children default to min-width:auto, which would let a wide table stretch the page on phones. */
+.job-detail > *, .job-row > * { min-width: 0; }
+.job > summary { list-style: none; cursor: pointer; }
+.job > summary::-webkit-details-marker { display: none; }
+.job-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 16px; align-items: center; padding: 14px 16px; min-height: 76px; }
+.job[open] > .job-row { border-bottom: 1px solid var(--border); }
+@media (hover: hover) { .job > summary:hover { background: #FBFAFD; border-radius: var(--radius); } }
+.job-progress { display: grid; justify-items: center; gap: 2px; width: 64px; }
+.job-billed { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.job-title { font-weight: 700; overflow-wrap: anywhere; }
+.job-num { color: var(--muted); font-weight: 500; font-size: 13px; }
+.job-sub { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.job-figs { display: flex; gap: 20px; margin: 0; }
+.job-figs dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.job-figs dd { margin: 2px 0 0; font-size: 14px; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+.job-profit { display: grid; justify-items: end; min-width: 88px; }
+.profit { font-size: 20px; font-weight: 600; padding: 2px 10px; border-radius: 999px; }
+.profit-strong { background: var(--good-bg); color: var(--good-text); }
+.profit-okay { color: var(--good-text); }
+.profit-baseline { color: var(--text); }
+.profit-below { background: var(--warn-bg); color: var(--warn-text); }
+.profit-none { color: var(--muted); }
+.profit-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.chevron { width: 10px; height: 10px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: 0 4px 4px; transition: transform .15s; }
+.job[open] .chevron { transform: rotate(-135deg); margin-top: 6px; }
+.job-detail { padding: 14px 16px 16px; display: grid; gap: 12px; }
+.job-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.job-totals { font-size: 13px; margin-left: auto; }
+.detail-title { font-size: 15px; margin: 4px 0 8px; }
+.job-detail .table-wrap { border: 1px solid var(--border); border-radius: var(--radius-sm); }
+table.data tfoot td { font-weight: 700; border-top: 1px solid var(--border); }
+table.data tr.no-costs td { color: var(--muted); }
+table.data td.used { white-space: nowrap; }
+table.data td.used .bar { width: 60px; margin-right: 6px; }
+
+@media (max-width: 900px) {
+  /* Ring + name on top; dates/contract/budget and profit on the line below. */
+  .job-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "ring main main" "figs figs profit"; gap: 10px 12px; }
+  .job-progress { grid-area: ring; align-self: start; }
+  .job-main { grid-area: main; }
+  .job-figs { grid-area: figs; flex-wrap: wrap; gap: 8px 18px; }
+  .job-profit { grid-area: profit; align-self: end; min-width: 0; }
+  .job-row .chevron { display: none; }
+}
+@media (max-width: 520px) {
+  .job-row { padding: 12px; }
+  .job-progress { width: 52px; }
+  .profit { font-size: 17px; padding: 2px 8px; }
+  .job-totals { margin-left: 0; width: 100%; }
+  .filters select { flex: 1 1 45%; }
+  .job-budget .bar { width: 56px; }
+  .profit-band { display: none; }
+}

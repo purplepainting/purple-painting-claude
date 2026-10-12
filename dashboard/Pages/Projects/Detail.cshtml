@@ -1,0 +1,76 @@
+@page "/projects/{id}/detail"
+@model PurpleDashboard.Pages.Projects.DetailModel
+@using PurpleDashboard.Infrastructure
+@{
+    Layout = null;
+}
+@if (Model.Error is not null)
+{
+    <p class="notice-inline warn">@Model.Error</p>
+}
+else if (Model.Detail is { } d)
+{
+    @if (d.CostCodes.Count == 0)
+    {
+        <p class="muted">No budget or costs on this job yet.</p>
+    }
+    else
+    {
+        <h3 class="detail-title">Costs by cost code <span class="muted">(@d.CostCodes.Count codes on this job)</span></h3>
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Cost code</th>
+                        <th class="num">Budget</th>
+                        <th class="num">Labor</th>
+                        <th class="num">Bills</th>
+                        <th class="num">Actual</th>
+                        <th class="num">Remaining</th>
+                        <th>Used</th>
+                        <th class="num">Hours</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in d.CostCodes)
+                    {
+                        var over = c.PercentUsed > 100;
+                        <tr class="@(c.HasCosts ? "" : "no-costs")">
+                            <td><span class="num muted">@c.Number</span> @c.Name</td>
+                            <td class="num">@Format.Money(c.Budget)</td>
+                            <td class="num">@Format.Money(c.Labor)</td>
+                            <td class="num">@Format.Money(c.Bills)</td>
+                            <td class="num">@Format.Money(c.Actual)</td>
+                            <td class="num@(c.Remaining < 0 ? " neg" : "")">@Format.Money(c.Remaining)</td>
+                            <td class="used">
+                                @if (c.PercentUsed is { } used)
+                                {
+                                    <span class="bar@(over ? " over" : "")"><span style="width:@Math.Min(used, 100).ToString("0", System.Globalization.CultureInfo.InvariantCulture)%"></span></span>
+                                    <span class="num@(over ? " neg" : "")">@Format.Percent(used)</span>
+                                }
+                                else if (c.HasCosts)
+                                {
+                                    <span class="chip warn">No budget</span>
+                                }
+                            </td>
+                            <td class="num">@Format.Number(c.Hours)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Total</td>
+                        <td class="num">@Format.Money(d.TotalBudget)</td>
+                        <td class="num">@Format.Money(d.CostCodes.Sum(c => c.Labor))</td>
+                        <td class="num">@Format.Money(d.CostCodes.Sum(c => c.Bills))</td>
+                        <td class="num">@Format.Money(d.TotalActual)</td>
+                        <td class="num@(d.TotalBudget - d.TotalActual < 0 ? " neg" : "")">@Format.Money(d.TotalBudget - d.TotalActual)</td>
+                        <td></td>
+                        <td class="num">@Format.Number(d.TotalHours)</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        <p class="muted small">Grayed-out codes have budget but no costs yet. Bills include approved and pending vendor bills.</p>
+    }
+}

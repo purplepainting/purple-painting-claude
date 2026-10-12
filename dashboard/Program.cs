@@ -1,10 +1,38 @@
 using PurpleDashboard.Auth;
+using PurpleDashboard.Integrations.JobTread;
+using PurpleDashboard.Modules;
+using PurpleDashboard.Modules.Projects;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorPages();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<CurrentUser>();
+
+// JobTread. The grant key comes from the JOBTREAD_API_KEY setting in Azure (same name as the function app).
+builder.Services.Configure<JobTreadOptions>(o =>
+{
+    o.GrantKey = builder.Configuration["JOBTREAD_API_KEY"];
+    o.FixtureDirectory = builder.Configuration["JobTread:FixtureDirectory"];
+});
+if (builder.Environment.IsDevelopment() && !string.IsNullOrEmpty(builder.Configuration["JobTread:FixtureDirectory"]))
+{
+    builder.Services.AddSingleton<IJobTreadClient, FixtureJobTreadClient>();
+}
+else
+{
+    builder.Services.AddHttpClient<IJobTreadClient, JobTreadClient>(c =>
+    {
+        c.BaseAddress = new Uri("https://api.jobtread.com/");
+        c.Timeout = TimeSpan.FromSeconds(30);
+    });
+}
+
+// Modules
+builder.Services.Configure<MarginBands>(builder.Configuration.GetSection("Projects:Margin"));
+builder.Services.AddScoped<ProjectsService>();
+builder.Services.AddScoped<ITileMetric, ActiveProjectsMetric>();
 
 var app = builder.Build();
 
