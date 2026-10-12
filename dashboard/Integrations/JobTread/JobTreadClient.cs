@@ -8,12 +8,19 @@ public sealed class JobTreadClient(HttpClient http, IOptions<JobTreadOptions> op
 {
     public bool IsConfigured => !string.IsNullOrWhiteSpace(options.Value.GrantKey);
 
-    public async Task<JsonNode> QueryAsync(string name, JsonObject query, CancellationToken ct = default)
+    public Task<JsonNode> QueryAsync(string name, JsonObject query, CancellationToken ct = default)
     {
         if (!IsConfigured) throw new JobTreadException("JobTread isn't connected yet: the JOBTREAD_API_KEY setting is missing.");
+        return SendAsync(name, query, options.Value.GrantKey!, ct);
+    }
 
+    public Task<JsonNode> QueryAsAsync(string name, JsonObject query, string grantKey, CancellationToken ct = default) =>
+        SendAsync(name, query, grantKey, ct);
+
+    private async Task<JsonNode> SendAsync(string name, JsonObject query, string grantKey, CancellationToken ct)
+    {
         var body = new JsonObject { ["query"] = query.DeepClone() };
-        ((JsonObject)body["query"]!)["$"] = new JsonObject { ["grantKey"] = options.Value.GrantKey };
+        ((JsonObject)body["query"]!)["$"] = new JsonObject { ["grantKey"] = grantKey };
 
         // Send with a Content-Length (not chunked); JobTread rejects some chunked requests as too large.
         var json = body.ToJsonString();

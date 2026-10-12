@@ -33,7 +33,7 @@
             @await Component.InvokeAsync("SideNav")
             @if (Me.DisplayName is not null)
             {
-                <div class="sidebar-user" title="@Me.Email">Signed in as @Me.DisplayName</div>
+                <div class="sidebar-user" title="@Me.Email">Signed in as @Me.DisplayName · <a href="/connections">Connections</a></div>
             }
         </aside>
         <label for="nav-toggle" class="scrim" aria-hidden="true"></label>

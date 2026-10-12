@@ -34,6 +34,8 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Data/DashboardDb.cs` | The dashboard database (EF Core): tables and the `DatabaseStatus` pages check before saving |
 | `Data/DatabaseSetup.cs` | Picks Azure SQL or SQLite from the connection string; applies migrations at startup |
 | `Data/Migrations/` | Schema history. Add one with `dotnet ef migrations add <Name> -o Data/Migrations` |
+| `Integrations/QuickBooks/` | QuickBooks Online connection (read only). Setup: `docs/QUICKBOOKS.md` |
+| `Pages/Connections/` | Connections page: JobTread status, your own JobTread key (for pushes), connect QuickBooks |
 | `Modules/People/TeamDirectory.cs` | Everyone's crew level and PM color (Employees page, then settings, then JobTread role) |
 | `ViewComponents/SideNavViewComponent.cs` | Builds the left menu tiles and their numbers |
 | `Pages/Shared/_Icon.cshtml` | Line icons used on menu tiles |

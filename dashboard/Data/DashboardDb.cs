@@ -12,6 +12,8 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
 {
     public DbSet<EmployeeProfile> EmployeeProfiles => Set<EmployeeProfile>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
+    public DbSet<QuickBooksConnection> QuickBooksConnections => Set<QuickBooksConnection>();
+    public DbSet<JobTreadUserKey> JobTreadUserKeys => Set<JobTreadUserKey>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -24,6 +26,20 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.Notes).HasMaxLength(2000);
             e.Property(x => x.UpdatedBy).HasMaxLength(200);
             e.Property(x => x.QbPayType).HasMaxLength(20);
+        });
+        b.Entity<QuickBooksConnection>(e =>
+        {
+            e.Property(x => x.RealmId).HasMaxLength(40);
+            e.Property(x => x.CompanyName).HasMaxLength(200);
+            e.Property(x => x.ConnectedBy).HasMaxLength(200);
+        });
+        b.Entity<JobTreadUserKey>(e =>
+        {
+            e.HasIndex(x => x.UserObjectId).IsUnique();
+            e.Property(x => x.UserObjectId).HasMaxLength(64);
+            e.Property(x => x.UserEmail).HasMaxLength(200);
+            e.Property(x => x.JobTreadUserId).HasMaxLength(32);
+            e.Property(x => x.JobTreadUserName).HasMaxLength(200);
         });
         b.Entity<ChangeLogEntry>(e =>
         {
@@ -58,6 +74,37 @@ public sealed class EmployeeProfile
 
     public DateTime UpdatedAt { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+/// <summary>
+/// The QuickBooks company the dashboard is connected to (one row). The refresh token is encrypted
+/// with ASP.NET Data Protection; Intuit replaces it on every refresh, so the newest one is saved each time.
+/// </summary>
+public sealed class QuickBooksConnection
+{
+    public int Id { get; set; }
+    public required string RealmId { get; set; }
+    public string? CompanyName { get; set; }
+    public required string RefreshTokenProtected { get; set; }
+    public DateTime RefreshTokenExpiresAt { get; set; }
+    public DateTime ConnectedAt { get; set; }
+    public string? ConnectedBy { get; set; }
+    public string? Scopes { get; set; }
+}
+
+/// <summary>
+/// A dashboard user's own JobTread grant key (encrypted), so schedule changes they push show as
+/// them in JobTread. Keyed by their Entra object id. Reading pages still uses the shared key.
+/// </summary>
+public sealed class JobTreadUserKey
+{
+    public int Id { get; set; }
+    public required string UserObjectId { get; set; }
+    public string? UserEmail { get; set; }
+    public required string GrantKeyProtected { get; set; }
+    public string? JobTreadUserId { get; set; }
+    public string? JobTreadUserName { get; set; }
+    public DateTime SavedAt { get; set; }
 }
 
 /// <summary>Audit log: who changed what, and the result (schedule pushes, employee edits).</summary>

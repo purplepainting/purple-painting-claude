@@ -1,0 +1,93 @@
+@page "/connections"
+@model PurpleDashboard.Pages.Connections.IndexModel
+@using PurpleDashboard.Infrastructure
+
+@if (Model.Message is not null)
+{
+    <div class="card notice"><p>@Model.Message</p></div>
+}
+
+<div class="connections">
+    <section class="card connection">
+        <div class="connection-head">
+            <h2>JobTread</h2>
+            <span class="chip @(Model.JobTreadConfigured ? "good" : "warn")">@(Model.JobTreadConfigured ? "Connected" : "Not set up")</span>
+        </div>
+        <p class="muted">Jobs, schedule, time entries and staff, read with the shared key in the JOBTREAD_API_KEY setting.</p>
+    </section>
+
+    <section class="card connection">
+        <div class="connection-head">
+            <h2>Your JobTread account</h2>
+            @if (Model.MyJobTread is not null) { <span class="chip good">Linked</span> }
+            else { <span class="chip warn">Not linked</span> }
+        </div>
+        <p class="muted">Schedule changes you push are sent to JobTread with your own key, so JobTread shows them as yours. Each person links their own; it's needed before you can push.</p>
+        @if (!Model.Database.Available)
+        {
+            <p class="muted">The dashboard database isn't available right now.</p>
+        }
+        else if (Model.MyJobTread is { } k)
+        {
+            <p>Linked as <b>@(k.JobTreadUserName ?? "your JobTread user")</b> on @Format.Date(DateOnly.FromDateTime(k.SavedAt.ToLocalTime())).</p>
+            <div class="form-actions">
+                <form method="post" asp-page-handler="UnlinkJobTread" onsubmit="return confirm('Remove your JobTread key from the dashboard?')">
+                    <button class="link-button" type="submit">Remove my key</button>
+                </form>
+            </div>
+        }
+        else
+        {
+            <form method="post" asp-page-handler="LinkJobTread" class="link-form">
+                <label class="field">
+                    <span>Your JobTread grant key</span>
+                    <input type="password" name="grantKey" autocomplete="off" required placeholder="Paste the key from JobTread">
+                </label>
+                <button class="button" type="submit">Link my JobTread</button>
+            </form>
+            <p class="muted small">Create it in JobTread while signed in as yourself (the same place the dashboard's main key was made), then paste it here. It's stored encrypted and only used for your pushes.</p>
+        }
+    </section>
+
+    <section class="card connection">
+        <div class="connection-head">
+            <h2>QuickBooks</h2>
+            @if (Model.Connection is not null) { <span class="chip good">Connected</span> }
+            else { <span class="chip warn">Not connected</span> }
+        </div>
+
+        @if (!Model.QuickBooksConfigured)
+        {
+            <p class="muted">The dashboard's Intuit app isn't set up yet. Add the <code>QBO_CLIENT_ID</code> and <code>QBO_CLIENT_SECRET</code> settings in Azure (see docs/QUICKBOOKS.md), then come back here.</p>
+        }
+        else if (!Model.Database.Available)
+        {
+            <p class="muted">The dashboard database isn't available, so a connection can't be saved right now.</p>
+        }
+        else if (Model.Connection is { } c)
+        {
+            <dl class="detail-grid">
+                <div><dt>Company</dt><dd>@(c.CompanyName ?? "—")</dd></div>
+                <div><dt>Connected</dt><dd>@Format.Date(DateOnly.FromDateTime(c.ConnectedAt.ToLocalTime())) by @c.ConnectedBy</dd></div>
+                <div><dt>Approval good until</dt><dd>@Format.Date(DateOnly.FromDateTime(c.RefreshTokenExpiresAt.ToLocalTime())) <span class="muted small">(renews itself when used)</span></dd></div>
+            </dl>
+            @if (Model.CheckResult is not null)
+            {
+                <p class="@(Model.CheckOk ? "" : "notice-inline warn")">@Model.CheckResult</p>
+            }
+            <div class="form-actions">
+                <a class="button secondary" asp-page="/Connections/Index" asp-route-check="true">Check connection</a>
+                <a class="link-button" asp-page="/Connections/Index" asp-page-handler="Connect">Reconnect</a>
+                <form method="post" asp-page-handler="Disconnect" onsubmit="return confirm('Disconnect QuickBooks from the dashboard?')">
+                    <button class="link-button" type="submit">Disconnect</button>
+                </form>
+            </div>
+            <p class="muted small">Read only: the dashboard reads QuickBooks and never changes anything there.</p>
+        }
+        else
+        {
+            <p class="muted">One shared connection for everyone (read only). Connect once and the dashboard can read your books (P&amp;L, invoices, bills, balances) for Financials. You'll sign in to Intuit and pick the Purple Painting company.</p>
+            <a class="button" asp-page="/Connections/Index" asp-page-handler="Connect">Connect QuickBooks</a>
+        }
+    </section>
+</div>
