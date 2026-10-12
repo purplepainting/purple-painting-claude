@@ -488,3 +488,15 @@ table.data tr.burden-row td:first-child { padding-left: 24px; }
 .tl-key.done { background: #22A35A; } .tl-key.now { background: #D97706; } .tl-key.late { background: #DC2626; }
 a.row-title, a.block-title { color: inherit; text-decoration: none; } a.row-title:hover, a.block-title:hover { text-decoration: underline; }
 table.data tr.row-off td { background: color-mix(in srgb, var(--warn-bg) 60%, transparent); }
+
+/* Navigation feedback (nav-feedback.js) */
+.pill { cursor: pointer; transition: background-color .12s, border-color .12s, color .12s; }
+.pill:hover { border-color: var(--purple-600); }
+.pill.pressed, .segmented a.pressed { background: var(--purple-600); border-color: var(--purple-600); color: #fff; }
+.button.pressed { filter: brightness(.9); }
+.nav-progress { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--purple-600); z-index: 100; opacity: 0; pointer-events: none; }
+body.navigating .nav-progress { opacity: 1; animation: nav-progress 8s cubic-bezier(.1, .7, .2, 1) forwards; }
+body.navigating .page { opacity: .6; transition: opacity .2s .15s; pointer-events: none; }
+body.navigating { cursor: progress; }
+@keyframes nav-progress { from { width: 0; } 10% { width: 35%; } to { width: 92%; } }
+@media (prefers-reduced-motion: reduce) { body.navigating .nav-progress { animation: none; width: 60%; } }
