@@ -73,7 +73,7 @@ else
                             <span class="job-num num">#@job.Number</span> @job.Name
                             @if (job.NeedsAttention) { <span class="attention-dot" title="Money waiting on us: open to see why"></span> }
                         </div>
-                        <div class="job-sub muted">@(job.Customer ?? "No client")</div>
+                        <div class="job-sub muted">@(job.Customer ?? "No client")<span class="job-pm"> · PM @(job.ProjectManager ?? "not set")</span></div>
                         <div class="job-contract num">@(job.Contract is null ? "No contract yet" : Format.Money(job.Contract) + " contract")</div>
                     </div>
                     <dl class="job-line-figs">
@@ -94,53 +94,62 @@ else
                         </div>
                     }
 
-                    <dl class="detail-grid">
-                        <div><dt>Job type</dt><dd>@(job.JobTypeShort ?? "—")</dd></div>
-                        <div><dt>Address</dt><dd>@(job.Address ?? "—")</dd></div>
-                        <div><dt>Stage</dt><dd>@(job.Stage ?? job.BidStage ?? "Bid")</dd></div>
-                        <div><dt>Project manager</dt><dd>@(job.ProjectManager ?? "—")</dd></div>
-                        <div><dt>Salesperson</dt><dd>@(job.SalesPerson ?? "—")</dd></div>
-                        <div><dt>Activity</dt><dd>@Model.Activity(job)</dd></div>
-                        <div><dt>Scheduled</dt><dd>@Format.DateRange(job.Start, job.End)</dd></div>
-                    </dl>
-
-                    <dl class="detail-grid money">
-                        <div>
-                            <dt>Contract</dt>
-                            <dd class="num">@Format.Money(job.Contract)</dd>
-                            @if (job.ContractIncludesPending)
+                    <div class="job-tabs-row">
+                        <div class="segmented job-tabs" role="tablist" aria-label="Job sections">
+                            <button type="button" role="tab" class="active" data-tab="costs" aria-selected="true">Costs</button>
+                            <button type="button" role="tab" data-tab="crew" aria-selected="false">Crew</button>
+                            <button type="button" role="tab" data-tab="details" aria-selected="false">Job details</button>
+                        </div>
+                        <div class="job-links">
+                            <a class="link-button" href="@JobTreadIds.JobUrl(job.Id)" target="_blank" rel="noopener">JobTread ↗</a>
+                            @if (job.FolderUrl is not null)
                             {
-                                <dd class="fig-note num">Approved @Format.Money(job.ApprovedContract) · Pending @Format.Money(job.PendingOrders)</dd>
-                            }
-                            @if (job.PendingOrders > 0 && job.Stage is null)
-                            {
-                                <dd class="fig-note num">Proposal pending @Format.Money(job.PendingOrders)</dd>
+                                <a class="link-button" href="@job.FolderUrl" target="_blank" rel="noopener">SharePoint ↗</a>
                             }
                         </div>
-                        <div>
-                            <dt>Billed</dt>
-                            <dd class="num">@Format.Money(job.Billed) <span class="muted">(@Format.Percent(job.BilledPercent))</span></dd>
-                            @if (job.RetentionHeld >= 1) { <dd class="fig-note num">Incl. @Format.Money(job.RetentionHeld) retention held</dd> }
-                        </div>
-                        <div><dt>Left to bill</dt><dd class="num">@Format.Money(job.LeftToBill)</dd></div>
-                        <div><dt>Unpaid</dt><dd class="num">@Format.Money(job.Unpaid)</dd></div>
-                        <div><dt>Costs</dt><dd class="num">@Format.Money(job.ActualCost)</dd></div>
-                        <div>
-                            <dt>Profit</dt>
-                            <dd class="num@(job.Profit < 0 ? " neg" : "")">@Format.Money(job.Profit) <span class="muted">(@Format.Percent(job.ProfitPercent))</span></dd>
-                            @if (job.ContractIncludesPending) { <dd class="fig-note num">On approved only @Format.Money(job.ProfitOnApproved)</dd> }
-                        </div>
-                        <div><dt>Cash (invoiced − costs)</dt><dd class="num@(job.CashPosition < 0 ? " neg" : "")">@Format.Money(job.CashPosition)</dd></div>
-                    </dl>
-
-                    <div class="job-links">
-                        <a class="button secondary" href="@JobTreadIds.JobUrl(job.Id)" target="_blank" rel="noopener">Open in JobTread</a>
-                        @if (job.FolderUrl is not null)
-                        {
-                            <a class="button secondary" href="@job.FolderUrl" target="_blank" rel="noopener">SharePoint folder</a>
-                        }
                     </div>
-                    <div class="job-detail-body" aria-live="polite"><p class="muted">Loading crew and cost codes…</p></div>
+
+                    <div class="job-panel" data-panel="details" hidden>
+                        <dl class="detail-grid">
+                            <div><dt>Job type</dt><dd>@(job.JobTypeShort ?? "—")</dd></div>
+                            <div><dt>Address</dt><dd>@(job.Address ?? "—")</dd></div>
+                            <div><dt>Stage</dt><dd>@(job.Stage ?? job.BidStage ?? "Bid")</dd></div>
+                            <div><dt>Project manager</dt><dd>@(job.ProjectManager ?? "—")</dd></div>
+                            <div><dt>Salesperson</dt><dd>@(job.SalesPerson ?? "—")</dd></div>
+                            <div><dt>Activity</dt><dd>@Model.Activity(job)</dd></div>
+                            <div><dt>Scheduled</dt><dd>@Format.DateRange(job.Start, job.End)</dd></div>
+                        </dl>
+
+                        <dl class="detail-grid money">
+                            <div>
+                                <dt>Contract</dt>
+                                <dd class="num">@Format.Money(job.Contract)</dd>
+                                @if (job.ContractIncludesPending)
+                                {
+                                    <dd class="fig-note num">Approved @Format.Money(job.ApprovedContract) · Pending @Format.Money(job.PendingOrders)</dd>
+                                }
+                                @if (job.PendingOrders > 0 && job.Stage is null)
+                                {
+                                    <dd class="fig-note num">Proposal pending @Format.Money(job.PendingOrders)</dd>
+                                }
+                            </div>
+                            <div>
+                                <dt>Billed</dt>
+                                <dd class="num">@Format.Money(job.Billed) <span class="muted">(@Format.Percent(job.BilledPercent))</span></dd>
+                                @if (job.RetentionHeld >= 1) { <dd class="fig-note num">Incl. @Format.Money(job.RetentionHeld) retention held</dd> }
+                            </div>
+                            <div><dt>Left to bill</dt><dd class="num">@Format.Money(job.LeftToBill)</dd></div>
+                            <div><dt>Unpaid</dt><dd class="num">@Format.Money(job.Unpaid)</dd></div>
+                            <div><dt>Costs</dt><dd class="num">@Format.Money(job.ActualCost)</dd></div>
+                            <div>
+                                <dt>Profit</dt>
+                                <dd class="num@(job.Profit < 0 ? " neg" : "")">@Format.Money(job.Profit) <span class="muted">(@Format.Percent(job.ProfitPercent))</span></dd>
+                                @if (job.ContractIncludesPending) { <dd class="fig-note num">On approved only @Format.Money(job.ProfitOnApproved)</dd> }
+                            </div>
+                            <div><dt>Cash (invoiced − costs)</dt><dd class="num@(job.CashPosition < 0 ? " neg" : "")">@Format.Money(job.CashPosition)</dd></div>
+                        </dl>
+                    </div>
+                    <div class="job-detail-body" aria-live="polite"><p class="muted" data-panel="costs">Loading cost codes…</p></div>
                 </div>
             </details>
         }

@@ -10,8 +10,7 @@
 }
 else if (Model.Detail is { } d)
 {
-    <div class="crew">
-        <h3 class="detail-title">Crew</h3>
+    <div class="job-panel crew" data-panel="crew" hidden>
         @if (!d.Crew.Any())
         {
             <p class="muted">Nobody has clocked time on this job yet.</p>
@@ -36,6 +35,7 @@ else if (Model.Detail is { } d)
         }
     </div>
 
+    <div class="job-panel" data-panel="costs">
     @if (d.CostCodes.Count == 0)
     {
         <p class="muted">No cost codes or costs on this job yet.</p>
@@ -89,4 +89,5 @@ else if (Model.Detail is { } d)
         </div>
         <p class="muted small">Grayed-out codes are on the job's estimate but have no costs yet. Bills include approved and pending vendor bills.</p>
     }
+    </div>
 }
