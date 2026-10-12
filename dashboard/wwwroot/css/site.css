@@ -136,6 +136,8 @@ table.data td.num, table.data th.num { text-align: right; }
 .notice.warn { background: var(--warn-bg); border-color: #F5C9A4; color: var(--warn-text); }
 .notice-inline.warn { color: var(--warn-text); margin: 0; }
 .neg { color: var(--warn-text); }
+/* Billed that includes retention held back (earned, not collected yet). */
+.retention, .detail-grid dd.fig-note.retention { color: #C2410C; }
 
 /* ---------- Progress ring and bars ---------- */
 .ring { position: relative; display: inline-flex; width: 48px; height: 48px; flex: none; }
