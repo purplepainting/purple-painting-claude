@@ -385,6 +385,12 @@
 
     // Tap-to-move painters (works with touch and mouse).
     var chip = e.target.closest('.pchip[data-person]');
+    // With a painter selected, tapping anywhere in another box that day (even on someone's chip) moves them there.
+    if (chip && selected) {
+      var chipBlock = chip.closest('.block.editable'), chipFree = chip.closest('td.free');
+      if (chipBlock && chipBlock.dataset.key !== selected.fromKey && chipBlock.dataset.day === selected.day) { movePerson(selected.id, selected.fromKey, selected.day, chipBlock.dataset.key); selected = null; render(); return; }
+      if (chipFree && selected.fromKey && chipFree.dataset.day === selected.day) { movePerson(selected.id, selected.fromKey, selected.day, 'free'); selected = null; render(); return; }
+    }
     if (chip) {
       var sameChip = selected && selected.id === chip.dataset.person && selected.fromKey === (chip.dataset.from || null) && selected.day === chip.dataset.day;
       selected = sameChip ? null : { id: chip.dataset.person, fromKey: chip.dataset.from || null, day: chip.dataset.day };
