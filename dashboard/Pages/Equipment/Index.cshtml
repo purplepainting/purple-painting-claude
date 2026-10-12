@@ -115,7 +115,13 @@
                 </details>
             }
         }
-        @if (Model.Items.Count == 0 && Model.CanEdit) { <div class="card empty-state"><p class="muted">No sundries yet. Add your first item below.</p></div> }
+        @if (Model.Items.Count == 0 && Model.CanEdit)
+        {
+            <div class="card empty-state">
+                <p class="muted">No sundries yet. Load the 31 items from the April 2025 bulk sundry order (SharePoint), or add your first item below. Counts start at 0, so take a count after loading.</p>
+                <form method="post" asp-page-handler="LoadSundries"><button class="button" type="submit">Load starting list</button></form>
+            </div>
+        }
     </div>
 
     @if (Model.CanEdit)
@@ -212,7 +218,13 @@ else if (Model.CurrentTab == "equipment")
                 </details>
             }
         }
-        @if (Model.Gear.Count == 0 && Model.CanEdit) { <div class="card empty-state"><p class="muted">No equipment yet. Add your first piece below.</p></div> }
+        @if (Model.Gear.Count == 0 && Model.CanEdit)
+        {
+            <div class="card empty-state">
+                <p class="muted">No equipment yet. Load the 76 pieces from the SharePoint equipment list (ladders, sprayers, washers, power tools, misc), or add your first piece below.</p>
+                <form method="post" asp-page-handler="LoadEquipment"><button class="button" type="submit">Load starting list</button></form>
+            </div>
+        }
     </div>
 
     @if (Model.CanEdit)

@@ -1,0 +1,694 @@
+{
+ "_source": "SharePoint: 09 Operations/Equipment/\"Equipment List - CURRENT\" (May 2026) and Inventory/\"Bulk Sundry Order April 2025\". Sundry counts start at 0.",
+ "equipment": [
+  {
+   "name": "32ft Extension ladder, aluminum",
+   "type": "Ladder",
+   "tag": "#11",
+   "condition": "Good"
+  },
+  {
+   "name": "28ft Extension ladder, aluminum",
+   "type": "Ladder",
+   "tag": "#89",
+   "vehicle": "Carlos truck",
+   "condition": "Good"
+  },
+  {
+   "name": "24ft Extension ladder, fiberglass",
+   "type": "Ladder",
+   "tag": "#52",
+   "condition": "Good"
+  },
+  {
+   "name": "20ft Extension ladder, aluminum",
+   "type": "Ladder",
+   "tag": "#20",
+   "condition": "Good"
+  },
+  {
+   "name": "16ft Extension ladder, aluminum",
+   "type": "Ladder",
+   "condition": "Good"
+  },
+  {
+   "name": "10ft A-frame ladder, fiberglass (orange)",
+   "type": "Ladder",
+   "vehicle": "Carlos truck",
+   "condition": "Good"
+  },
+  {
+   "name": "10ft A-frame ladder, fiberglass (yellow)",
+   "type": "Ladder",
+   "site": "WF - Goleta",
+   "condition": "Good"
+  },
+  {
+   "name": "10ft A-frame ladder, aluminum",
+   "type": "Ladder",
+   "site": "950 Miramonte",
+   "condition": "Good"
+  },
+  {
+   "name": "6ft A-frame ladder, fiberglass",
+   "type": "Ladder",
+   "tag": "#8",
+   "site": "950 Miramonte",
+   "condition": "Good"
+  },
+  {
+   "name": "6ft A-frame ladder, aluminum",
+   "type": "Ladder",
+   "tag": "#67",
+   "site": "Carpinteria",
+   "condition": "Good"
+  },
+  {
+   "name": "24ft Extension ladder",
+   "type": "Ladder",
+   "condition": "Good"
+  },
+  {
+   "name": "20ft Extension ladder",
+   "type": "Ladder",
+   "site": "Carpinteria",
+   "condition": "Good"
+  },
+  {
+   "name": "8ft A-frame ladder",
+   "type": "Ladder",
+   "site": "950 Miramonte",
+   "condition": "Good"
+  },
+  {
+   "name": "8ft A-frame ladder",
+   "type": "Ladder",
+   "site": "1509 Shoreline",
+   "condition": "Good"
+  },
+  {
+   "name": "6ft A-frame ladder",
+   "type": "Ladder",
+   "site": "1509 Shoreline",
+   "condition": "Good"
+  },
+  {
+   "name": "6ft A-frame ladder",
+   "type": "Ladder",
+   "site": "GVCH",
+   "condition": "Good",
+   "notes": "Marked 'Abrahams'"
+  },
+  {
+   "name": "12ft Scaffold, metal (yellow)",
+   "type": "Scaffold",
+   "site": "950 Miramonte",
+   "condition": "Good"
+  },
+  {
+   "name": "Magnum G7 Hi-boy",
+   "type": "Sprayer",
+   "condition": "Needs service",
+   "notes": "Oil base primer; 'needs work'"
+  },
+  {
+   "name": "Magnum G7 Hi-boy",
+   "type": "Sprayer",
+   "site": "Foothill",
+   "condition": "Good"
+  },
+  {
+   "name": "Graco HVLP 9.5",
+   "type": "Sprayer",
+   "condition": "Good"
+  },
+  {
+   "name": "Wagner Capspray",
+   "type": "Sprayer",
+   "condition": "Good"
+  },
+  {
+   "name": "Disposable HVLP Airspray",
+   "type": "Sprayer",
+   "condition": "Good",
+   "notes": "new"
+  },
+  {
+   "name": "Disposable HVLP Airspray",
+   "type": "Sprayer",
+   "condition": "Good",
+   "notes": "new"
+  },
+  {
+   "name": "Wagner Paintcrew Lo-boy airless",
+   "type": "Sprayer",
+   "condition": "Good"
+  },
+  {
+   "name": "Titan 440 Lo-boy",
+   "type": "Sprayer",
+   "condition": "Out of service",
+   "notes": "not working"
+  },
+  {
+   "name": "Titan 410",
+   "type": "Sprayer",
+   "site": "1509 Shoreline",
+   "condition": "Good",
+   "notes": "with housing & 413 Spray Tip"
+  },
+  {
+   "name": "Titan ed655",
+   "type": "Sprayer",
+   "condition": "Good"
+  },
+  {
+   "name": "Magnum G7 Hi-boy",
+   "type": "Sprayer",
+   "condition": "Needs service",
+   "notes": "Oil base primer; 'Needs work'"
+  },
+  {
+   "name": "Magnum G7 Hi-boy",
+   "type": "Sprayer",
+   "site": "950 Miramonte",
+   "condition": "Good"
+  },
+  {
+   "name": "Magnum G7 Hi-boy",
+   "type": "Sprayer",
+   "condition": "Needs service",
+   "notes": "'Needs work'"
+  },
+  {
+   "name": "Magnum G7 Hi-boy",
+   "type": "Sprayer",
+   "vehicle": "Frontier truck",
+   "condition": "Good",
+   "notes": "New"
+  },
+  {
+   "name": "Ridgid compressor",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Honda GCV pressure washer",
+   "type": "Pressure washer",
+   "condition": "Needs service",
+   "notes": "hose: yes, gun: yes; needs maintenance"
+  },
+  {
+   "name": "Mi-t-m 3200psi pressure washer",
+   "type": "Pressure washer",
+   "condition": "Good",
+   "notes": "no hose, no gun"
+  },
+  {
+   "name": "Dewalt battery pressure washer",
+   "type": "Pressure washer",
+   "vehicle": "New trailer",
+   "condition": "Good"
+  },
+  {
+   "name": "Dewalt battery pressure washer",
+   "type": "Pressure washer",
+   "condition": "Good"
+  },
+  {
+   "name": "Power rush generator",
+   "type": "Other",
+   "tag": "#59",
+   "condition": "Good"
+  },
+  {
+   "name": "Gas canister",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Gas canister",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Gas canister",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Honda GCV pressure washer",
+   "type": "Pressure washer",
+   "condition": "Good",
+   "notes": "hose: yes, gun: yes; 'suit & boots'"
+  },
+  {
+   "name": "Pressure washer extension wand",
+   "type": "Pressure washer",
+   "condition": "Good"
+  },
+  {
+   "name": "Ridgid vacuum",
+   "type": "Other",
+   "tag": "#62",
+   "vehicle": "Carlos truck",
+   "condition": "Good"
+  },
+  {
+   "name": "Ridgid vacuum",
+   "type": "Other",
+   "tag": "#61",
+   "condition": "Good"
+  },
+  {
+   "name": "Cannon heater",
+   "type": "Other",
+   "tag": "#57",
+   "condition": "Good"
+  },
+  {
+   "name": "Ladder pivot",
+   "type": "Ladder",
+   "vehicle": "Trailer 1",
+   "condition": "Good"
+  },
+  {
+   "name": "Small 2-gallon vacuum",
+   "type": "Other",
+   "site": "GVCH",
+   "condition": "Good"
+  },
+  {
+   "name": "New Hudson detergent sprayer",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "6-12' extension pole",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Door stackers (spray equipment)",
+   "type": "Other",
+   "vehicle": "Trailer 1",
+   "condition": "Good",
+   "notes": "Qty: 11 pairs"
+  },
+  {
+   "name": "Dewalt laser leveler",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Washer extension (pw wand)",
+   "type": "Pressure washer",
+   "condition": "Good",
+   "notes": "needs repair?"
+  },
+  {
+   "name": "Ladder pivot",
+   "type": "Ladder",
+   "vehicle": "Trailer 1",
+   "condition": "Good"
+  },
+  {
+   "name": "Double header lamp w/ stand",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Canopy (site protection)",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Cabinet drying rack",
+   "type": "Other",
+   "condition": "Good",
+   "notes": "New"
+  },
+  {
+   "name": "Saw horses",
+   "type": "Other",
+   "condition": "Good",
+   "notes": "Qty: 2 pairs"
+  },
+  {
+   "name": "Zip walls",
+   "type": "Other",
+   "condition": "Good",
+   "notes": "Qty: 4 pairs"
+  },
+  {
+   "name": "New saw horses",
+   "type": "Other",
+   "site": "1509 Shoreline",
+   "condition": "Good",
+   "notes": "Qty: 2 pairs"
+  },
+  {
+   "name": "Double header lamp",
+   "type": "Other",
+   "condition": "Good",
+   "notes": "New"
+  },
+  {
+   "name": "Yard signs",
+   "type": "Other",
+   "condition": "Good",
+   "notes": "Qty: 4; locations listed: shop, carp, foothill, alex garcia"
+  },
+  {
+   "name": "Charging station with (3) batteries",
+   "type": "Other",
+   "site": "Carpinteria",
+   "condition": "Good",
+   "notes": "New"
+  },
+  {
+   "name": "Long extension cord 100ft",
+   "type": "Other",
+   "vehicle": "New trailer",
+   "condition": "Good"
+  },
+  {
+   "name": "Festool RO150 sander (corded)",
+   "type": "Sander",
+   "site": "1509 Shoreline",
+   "condition": "Good"
+  },
+  {
+   "name": "Dewalt grinder (battery)",
+   "type": "Other",
+   "tag": "#36",
+   "vehicle": "New trailer",
+   "condition": "Good"
+  },
+  {
+   "name": "Dewalt sawzall (battery)",
+   "type": "Other",
+   "tag": "#39",
+   "condition": "Good"
+  },
+  {
+   "name": "Dewalt grinder (battery)",
+   "type": "Other",
+   "tag": "#40",
+   "vehicle": "New trailer",
+   "condition": "Good"
+  },
+  {
+   "name": "Dewalt circular saw (battery)",
+   "type": "Other",
+   "site": "Carpinteria",
+   "condition": "Good"
+  },
+  {
+   "name": "Dewalt nail gun (battery)",
+   "type": "Other",
+   "vehicle": "Carlos truck",
+   "condition": "Good",
+   "notes": "location marked '?'"
+  },
+  {
+   "name": "Craftsman multi-tool (corded)",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Craftsman belt-sander (corded)",
+   "type": "Sander",
+   "condition": "Good"
+  },
+  {
+   "name": "Craftsman belt-sander (corded)",
+   "type": "Sander",
+   "condition": "Good"
+  },
+  {
+   "name": "Drill mixer (corded)",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Dewalt power drill (battery)",
+   "type": "Other",
+   "condition": "Good"
+  },
+  {
+   "name": "Festool vacuum (corded)",
+   "type": "Other",
+   "site": "1509 Shoreline",
+   "condition": "Good"
+  },
+  {
+   "name": "Festool DTS 400 sander (corded)",
+   "type": "Sander",
+   "site": "1509 Shoreline",
+   "condition": "Good"
+  }
+ ],
+ "sundries": [
+  {
+   "name": "1.5\" FROG BLUE MASKING TAPE 4 PK",
+   "category": "Tape",
+   "unit": "4 pk",
+   "unitCost": 15.75,
+   "vendor": "Sherwin-Williams",
+   "sku": "6510-96059"
+  },
+  {
+   "name": "1.5\" 3M/SCOTCH BLUE MASKING TAPE 4 PK",
+   "category": "Tape",
+   "unit": "4 pk",
+   "unitCost": 19.89,
+   "vendor": "Sherwin-Williams",
+   "sku": "573-4215"
+  },
+  {
+   "name": "1.5\" FROG ORANGE MASKING TAPE 4 PK",
+   "category": "Tape",
+   "unit": "4 pk",
+   "unitCost": 12.6,
+   "vendor": "Sherwin-Williams",
+   "sku": "1020-83169"
+  },
+  {
+   "name": "1.5\" 3M/SCOTCH ORANGE MASKING TAPE 4 PK",
+   "category": "Tape",
+   "unit": "4 pk",
+   "unitCost": 18.07,
+   "vendor": "Sherwin-Williams",
+   "sku": "1014-42382"
+  },
+  {
+   "name": "12\" MASKING PAPER",
+   "category": "Plastic & masking",
+   "unit": "each",
+   "unitCost": 2.38,
+   "vendor": "Sherwin-Williams",
+   "sku": "406-6411"
+  },
+  {
+   "name": "4-SIDED 2 GAL BUCKET GRIDS",
+   "category": "Other",
+   "unit": "each",
+   "unitCost": 4.25,
+   "vendor": "Sherwin-Williams",
+   "sku": "597-4167"
+  },
+  {
+   "name": "4-SIDED 5 GALLON BUCKET GRIDS",
+   "category": "Other",
+   "unit": "each",
+   "unitCost": 4.99,
+   "vendor": "Sherwin-Williams",
+   "sku": "180-1281"
+  },
+  {
+   "name": "6.5X1/2 MINI ROLLERS",
+   "category": "Rollers & covers",
+   "unit": "12 pk",
+   "vendor": "Sherwin-Williams"
+  },
+  {
+   "name": "6.5X1/4 MINI ROLLERS",
+   "category": "Rollers & covers",
+   "unit": "12 pk",
+   "unitCost": 11.55,
+   "vendor": "Sherwin-Williams",
+   "sku": "6503-72683"
+  },
+  {
+   "name": "6.5X3/8 MINI ROLLERS",
+   "category": "Rollers & covers",
+   "unit": "12 pk",
+   "unitCost": 11.54,
+   "vendor": "Sherwin-Williams",
+   "sku": "6503-72691"
+  },
+  {
+   "name": "9\" WHITE DOVE 1/4 (144662091)",
+   "category": "Rollers & covers",
+   "unit": "each",
+   "unitCost": 3.41,
+   "vendor": "Sherwin-Williams",
+   "sku": "243-2573"
+  },
+  {
+   "name": "PURDY WHITE DOVE 9 X 1/2 WD 3-PACK",
+   "category": "Rollers & covers",
+   "unit": "3 pk",
+   "vendor": "Sherwin-Williams"
+  },
+  {
+   "name": "PURDY WHITE DOVE 9 X 3/8 WD 3-PACK",
+   "category": "Rollers & covers",
+   "unit": "3 pk",
+   "vendor": "Sherwin-Williams",
+   "sku": "865-2216"
+  },
+  {
+   "name": "8511 RESPIRATOR 10PK",
+   "category": "Safety & PPE",
+   "unit": "box",
+   "unitCost": 22.07,
+   "vendor": "Sherwin-Williams",
+   "sku": "165-0746"
+  },
+  {
+   "name": "WHITE RAGS",
+   "category": "Cleaning",
+   "unit": "25 lbs",
+   "unitCost": 42.0,
+   "vendor": "Sherwin-Williams",
+   "sku": "919-9431"
+  },
+  {
+   "name": "COVERALL SPRAY SUITS",
+   "category": "Safety & PPE",
+   "unit": "5-pack",
+   "unitCost": 10.0,
+   "vendor": "Sherwin-Williams",
+   "sku": "1000-63221"
+  },
+  {
+   "name": "LIGHTWEIGHT SPACKLE",
+   "category": "Caulk & patch",
+   "unit": "half pint",
+   "vendor": "Sherwin-Williams"
+  },
+  {
+   "name": "EMPTY 2 GALLON BUCKETS",
+   "category": "Other",
+   "unit": "each",
+   "unitCost": 4.36,
+   "vendor": "Sherwin-Williams",
+   "sku": "160-8769"
+  },
+  {
+   "name": "3M SAND PAPER 150 GRIT",
+   "category": "Sandpaper & abrasives",
+   "unit": "box",
+   "unitCost": 14.7,
+   "vendor": "Sherwin-Williams",
+   "sku": "946-3902"
+  },
+  {
+   "name": "3M SAND PAPER 220 GRIT",
+   "category": "Sandpaper & abrasives",
+   "unit": "box",
+   "unitCost": 10.5,
+   "vendor": "Sherwin-Williams",
+   "sku": "946-3910"
+  },
+  {
+   "name": "3M SAND PAPER 320 GRIT",
+   "category": "Sandpaper & abrasives",
+   "unit": "box",
+   "vendor": "Sherwin-Williams",
+   "sku": "954-2770"
+  },
+  {
+   "name": "PLASTIC 9X400 0.3 MIL",
+   "category": "Plastic & masking",
+   "unit": "box",
+   "unitCost": 13.99,
+   "vendor": "Sherwin-Williams",
+   "sku": "161-9337"
+  },
+  {
+   "name": "PLASTIC 12X400 0.3 MIL",
+   "category": "Plastic & masking",
+   "unit": "box",
+   "unitCost": 18.89,
+   "vendor": "Sherwin-Williams",
+   "sku": "161-9345"
+  },
+  {
+   "name": "ROSIN PAPER",
+   "category": "Plastic & masking",
+   "unit": "roll",
+   "unitCost": 12.08,
+   "vendor": "Sherwin-Williams",
+   "sku": "751-3666"
+  },
+  {
+   "name": "BONDO WOOD FILLER",
+   "category": "Caulk & patch",
+   "unit": "qt",
+   "unitCost": 17.84,
+   "vendor": "Sherwin-Williams",
+   "sku": "947-9247"
+  },
+  {
+   "name": "GUARD RAC X7/8",
+   "category": "Other",
+   "unit": "each",
+   "unitCost": 29.39,
+   "vendor": "Sherwin-Williams",
+   "sku": "220-7249"
+  },
+  {
+   "name": "MINI ROLLER FRAME 6.5 INCH",
+   "category": "Rollers & covers",
+   "unit": "each",
+   "unitCost": 4.49,
+   "vendor": "Sherwin-Williams",
+   "sku": "180-6959"
+  },
+  {
+   "name": "950A CAULKING",
+   "category": "Caulk & patch",
+   "unit": "each",
+   "unitCost": 1.99,
+   "vendor": "Sherwin-Williams",
+   "sku": "151-8323"
+  },
+  {
+   "name": "4X15 10OZ CANVAS DROP",
+   "category": "Drop cloths",
+   "unit": "each",
+   "unitCost": 15.0,
+   "vendor": "Sherwin-Williams",
+   "sku": "998-5920"
+  },
+  {
+   "name": "RAC X FFLP TIP 310",
+   "category": "Other",
+   "unit": "each",
+   "unitCost": 45.14,
+   "vendor": "Sherwin-Williams",
+   "sku": "1013-06660"
+  },
+  {
+   "name": "PURDY 2 1/2 XL-DALE",
+   "category": "Brushes",
+   "unit": "each",
+   "unitCost": 12.79,
+   "vendor": "Sherwin-Williams",
+   "sku": "813-5170"
+  }
+ ]
+}
