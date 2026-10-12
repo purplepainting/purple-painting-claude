@@ -5,7 +5,7 @@
 
 <div class="module-head">
     <div class="pills" role="tablist" aria-label="Who to show">
-        @foreach (var (key, label) in new[] { ((string?)null, "Everyone"), ("crew", "Crew"), ("supervisors", "Supervisors & office") })
+        @foreach (var (key, label) in new[] { ((string?)null, "Everyone"), ("crew", "Crew"), ("supervisors", "Management & office") })
         {
             var active = Model.Show == key;
             <a class="pill@(active ? " active" : "")" asp-page="/Employees/Index" asp-all-route-data="Model.RouteFor(key)" aria-current="@(active ? "page" : null)">@label</a>
@@ -40,10 +40,10 @@
 else
 {
     <p class="list-meta muted">
-        @Model.Total people in JobTread · level sets chip color and order on the schedule · hours are this week
+        @Model.Total people in JobTread (new people show up here on their own) · QB = QuickBooks base pay · JT = JobTread burdened rate · hours are this week
     </p>
 
-    @foreach (var (title, members) in new[] { ("Crew", Model.Crew), ("Supervisors & office", Model.Supervisors) })
+    @foreach (var (title, members) in new[] { ("Crew", Model.Crew), ("Management & office", Model.Supervisors) })
     {
         if (members.Count == 0) continue;
         <h2 class="section-title">@title <span class="muted">@members.Count</span></h2>
@@ -58,13 +58,19 @@ else
                             <div class="job-title">@s.Name</div>
                             <div class="job-sub muted">
                                 @s.Role
+                                <span class="emp-rates-inline num">· QB @IndexModel.Pay(m.Profile?.QbBasePay, m.Profile?.QbPayType) · JT @IndexModel.Pay(s.BaseRate?.HourlyRate, null)</span>
                                 @if (s.QboEmployeeId is null) { <span class="chip warn small-chip" title="No QuickBooks employee linked in JobTread">No QuickBooks link</span> }
                                 @if (m.Profile?.Notes is { } notes) { <span class="emp-note" title="@notes">· @notes</span> }
                             </div>
                         </div>
                         <span class="emp-figs">
-                            <span class="pchip @m.ChipClass" style="@m.ChipStyle" title="@(m.LevelIsSet ? "Set on this page" : "Default (from settings / JobTread role)")">@Levels.Label(m.Level)@(m.LevelIsSet ? "" : "*")</span>
+                            <span class="pchip @m.ChipClass" style="@m.ChipStyle" title="@(m.LevelIsSet ? "Set on this page" : "Default (from settings / JobTread role)")">@m.LevelLabel@(m.LevelIsSet ? "" : "*")</span>
+                            @if (m.SuggestedLevel is { } sl) { <span class="chip warn small-chip" title="QuickBooks base pay points to @Levels.Label(sl)">Pay says @Levels.Label(sl)</span> }
                             @if (m.IsSupervisor && (m.Staff.Role == "Project Manager" || !string.IsNullOrEmpty(m.Profile?.Color))) { <span class="pm-tag" style="@PmColorOptions.StyleFor(m.Color)">@s.FirstName</span> }
+                            <span class="emp-rates num">
+                                <span title="QuickBooks base pay">QB @IndexModel.Pay(m.Profile?.QbBasePay, m.Profile?.QbPayType)</span>
+                                <span class="muted" title="JobTread burdened rate@(s.BaseRate is { } br ? $" ({br.Name})" : "")">JT @IndexModel.Pay(s.BaseRate?.HourlyRate, null)</span>
+                            </span>
                             <span class="emp-hours num muted">@(Model.Hours(m) > 0 ? Format.Number(Model.Hours(m)) + " hrs" : "—")</span>
                         </span>
                         <span class="chevron" aria-hidden="true"></span>

@@ -23,6 +23,7 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.Color).HasMaxLength(9);
             e.Property(x => x.Notes).HasMaxLength(2000);
             e.Property(x => x.UpdatedBy).HasMaxLength(200);
+            e.Property(x => x.QbPayType).HasMaxLength(20);
         });
         b.Entity<ChangeLogEntry>(e =>
         {
@@ -49,6 +50,12 @@ public sealed class EmployeeProfile
     public string? Color { get; set; }
 
     public string? Notes { get; set; }
+
+    /// <summary>QuickBooks base pay (hourly rate, or annual salary when QbPayType is "Salary"). Entered or imported; the QuickBooks API doesn't share pay rates.</summary>
+    [System.ComponentModel.DataAnnotations.Schema.Column(TypeName = "decimal(10,2)")]
+    public decimal? QbBasePay { get; set; }
+    public string? QbPayType { get; set; }
+
     public DateTime UpdatedAt { get; set; }
     public string? UpdatedBy { get; set; }
 }

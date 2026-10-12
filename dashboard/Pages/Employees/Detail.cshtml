@@ -26,7 +26,8 @@ else if (Model.Member is { } m)
                             <option value="@l" selected="@(p?.Level == l)">@Levels.Label(l)</option>
                         }
                     </select>
-                    <small class="muted">Foreman $29+, Painter $23–28, Helper $16–22 base pay. Supervisors go on the Supervisors schedule.</small>
+                    <small class="muted">Foreman $29+, Painter $23–28, Helper $16–22 QuickBooks base pay. Management goes on the Management schedule.</small>
+                    @if (m.SuggestedLevel is { } sl) { <small class="notice-inline warn">QuickBooks pay points to @Levels.Label(sl).</small> }
                 </label>
                 @if (m.IsSupervisor || !string.IsNullOrEmpty(p?.Color))
                 {
@@ -39,6 +40,17 @@ else if (Model.Member is { } m)
                     <small class="muted">Used on the project and schedule PM tags. Uncheck Default to use the color picked.</small>
                 </div>
                 }
+                <div class="field">
+                    <span>QuickBooks base pay</span>
+                    <span class="color-row">
+                        <input name="qbBasePay" inputmode="decimal" placeholder="e.g. 24.00" value="@(p?.QbBasePay?.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture))" style="max-width:120px">
+                        <select name="qbPayType" aria-label="Pay type" style="width:auto">
+                            <option value="Hourly" selected="@(p?.QbPayType != "Salary")">per hour</option>
+                            <option value="Salary" selected="@(p?.QbPayType == "Salary")">per year (salary)</option>
+                        </select>
+                    </span>
+                    <small class="muted">Their regular rate in QuickBooks payroll (not burdened). Will fill in from QuickBooks pay stubs once Intuit allows it.</small>
+                </div>
                 <label class="field wide">
                     <span>Notes</span>
                     <textarea name="notes" rows="2" maxlength="2000" placeholder="e.g. Drives the spray rig, Spanish only, prevailing wage certified">@p?.Notes</textarea>
@@ -51,6 +63,21 @@ else if (Model.Member is { } m)
         </form>
 
         <div class="emp-jobs">
+            <h3 class="detail-title">JobTread burdened rates</h3>
+            @if (m.Staff.Rates.Count == 0)
+            {
+                <p class="muted">No rates set in JobTread.</p>
+            }
+            else
+            {
+                <ul class="crew-list">
+                    @foreach (var r in m.Staff.Rates)
+                    {
+                        <li><span class="crew-name">@r.Name</span><span class="crew-meta num">@IndexModel.Pay(r.HourlyRate, null)</span></li>
+                    }
+                </ul>
+            }
+
             <h3 class="detail-title">Jobs in the last 30 days</h3>
             @if (Model.RecentJobs.Count == 0)
             {
