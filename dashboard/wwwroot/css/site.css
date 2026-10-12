@@ -461,3 +461,4 @@ table.data tr.burden-row td:first-child { padding-left: 24px; }
 .cust-job { border-top: 1px solid var(--border); padding-top: 10px; display: grid; gap: 4px; }
 .cust-job-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .cust-links { margin-left: auto; display: flex; gap: 4px; }
+.connection-head { flex-wrap: wrap; } .connection-head h2 { margin-right: auto; }
