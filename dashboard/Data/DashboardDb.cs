@@ -15,6 +15,7 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<QuickBooksConnection> QuickBooksConnections => Set<QuickBooksConnection>();
     public DbSet<JobTreadUserKey> JobTreadUserKeys => Set<JobTreadUserKey>();
     public DbSet<JobTreadOAuthClient> JobTreadOAuthClients => Set<JobTreadOAuthClient>();
+    public DbSet<BonusPayout> BonusPayouts => Set<BonusPayout>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -47,6 +48,15 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
         {
             e.Property(x => x.ClientId).HasMaxLength(200);
             e.Property(x => x.RedirectUri).HasMaxLength(300);
+        });
+        b.Entity<BonusPayout>(e =>
+        {
+            e.HasIndex(x => x.JobId).IsUnique();
+            e.Property(x => x.JobId).HasMaxLength(32);
+            e.Property(x => x.JobName).HasMaxLength(300);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.ApprovedBy).HasMaxLength(200);
+            e.Property(x => x.PaidBy).HasMaxLength(200);
         });
         b.Entity<ChangeLogEntry>(e =>
         {
@@ -134,6 +144,28 @@ public sealed class JobTreadOAuthClient
     public string? ClientSecretProtected { get; set; }
     public required string RedirectUri { get; set; }
     public DateTime RegisteredAt { get; set; }
+}
+
+/// <summary>
+/// A job's bonus once someone approves it: the profit and pools at that moment and each person's share
+/// (LinesJson), then marked paid. Before approval, bonuses are calculated live from JobTread.
+/// </summary>
+public sealed class BonusPayout
+{
+    public int Id { get; set; }
+    public required string JobId { get; set; }
+    public string? JobName { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.Column(TypeName = "decimal(12,2)")] public decimal Profit { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.Column(TypeName = "decimal(12,2)")] public decimal SupervisorPool { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.Column(TypeName = "decimal(12,2)")] public decimal FieldPool { get; set; }
+    /// <summary>"approved" or "paid".</summary>
+    public required string Status { get; set; }
+    /// <summary>JSON array of { name, role, hours, amount }.</summary>
+    public required string LinesJson { get; set; }
+    public DateTime ApprovedAt { get; set; }
+    public string? ApprovedBy { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public string? PaidBy { get; set; }
 }
 
 /// <summary>Audit log: who changed what, and the result (schedule pushes, employee edits).</summary>

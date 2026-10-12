@@ -32,13 +32,25 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         return (await cache.GetOrCreateAsync(ListCacheKey, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = CacheFor;
-            var jobs = await LoadOpenJobsAsync(ct);
+            var jobs = await LoadJobsAsync(Json("""["closedOn", null]"""), "projects-list", ct);
             var activity = await LoadActivityAsync(jobs.Where(j => j.Stage is not null).Select(j => j.Id).ToList(), ct);
             return (IReadOnlyList<ProjectSummary>)jobs
                 .Select(j => activity.TryGetValue(j.Id, out var a)
                     ? j with { Start = a.Start, End = a.End, LastTimeEntry = a.LastTime, NextScheduled = a.Next }
                     : j)
                 .ToList();
+        }))!;
+    }
+
+    /// <summary>Jobs closed on or after <paramref name="since"/> (for bonuses on finished jobs). Cached like the open list.</summary>
+    public async Task<IReadOnlyList<ProjectSummary>> GetClosedJobsAsync(DateOnly since, bool refresh = false, CancellationToken ct = default)
+    {
+        var key = $"projects:closed:{since:yyyy-MM-dd}";
+        if (refresh) cache.Remove(key);
+        return (await cache.GetOrCreateAsync(key, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheFor;
+            return (IReadOnlyList<ProjectSummary>)await LoadJobsAsync(new JsonArray("closedOn", ">=", since.ToString("yyyy-MM-dd")), "projects-closed", ct);
         }))!;
     }
 
@@ -54,13 +66,13 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         }))!;
     }
 
-    private async Task<List<ProjectSummary>> LoadOpenJobsAsync(CancellationToken ct)
+    private async Task<List<ProjectSummary>> LoadJobsAsync(JsonNode where, string queryName, CancellationToken ct)
     {
         var result = new List<ProjectSummary>();
         string? page = null;
         do
         {
-            var args = new JsonObject { ["where"] = Json("""["closedOn", null]"""), ["size"] = ListPageSize };
+            var args = new JsonObject { ["where"] = where.DeepClone(), ["size"] = ListPageSize };
             if (page is not null) args["page"] = page;
 
             var query = new JsonObject
@@ -93,7 +105,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
                 ["nodes"] = Json("""{ "value": {}, "customField": { "id": {} } }"""),
             };
 
-            var response = await jobTread.QueryAsync(page is null ? "projects-list" : "projects-list-more", query, ct);
+            var response = await jobTread.QueryAsync(page is null ? queryName : queryName + "-more", query, ct);
             var connection = response["organization"]?["jobs"]
                 ?? throw new JobTreadException("Unexpected JobTread response: " + Trim(response.ToJsonString()));
             foreach (var job in connection.Nodes()) result.Add(ToSummary(job));

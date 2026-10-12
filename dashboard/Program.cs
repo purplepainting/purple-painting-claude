@@ -70,6 +70,8 @@ builder.Services.Configure<PurpleDashboard.Modules.Financials.AccountRulesOption
 builder.Services.AddScoped<PurpleDashboard.Modules.Financials.AccountRules>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Financials.FinancialsService>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Financials.NetProfitMetric>();
+builder.Services.Configure<PurpleDashboard.Modules.Financials.BonusOptions>(builder.Configuration.GetSection("Bonuses"));
+builder.Services.AddScoped<PurpleDashboard.Modules.Financials.BonusService>();
 
 var app = builder.Build();
 

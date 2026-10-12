@@ -1,0 +1,138 @@
+@page "/financials/bonuses"
+@model PurpleDashboard.Pages.Financials.BonusesModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Integrations.JobTread
+@using PurpleDashboard.Modules.Financials
+
+<div class="module-head">
+    <div class="pills" role="tablist" aria-label="Financials sections">
+        <a class="pill" href="/financials">JobTread vs QuickBooks</a>
+        <a class="pill" href="/financials?tab=burden">Labor burden</a>
+        <a class="pill" href="/financials?tab=overhead">Overhead</a>
+        <a class="pill active" href="/financials/bonuses">Bonuses</a>
+    </div>
+</div>
+
+@if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
+@if (!Model.CanEdit) { <div class="card notice warn"><p>The dashboard database isn't available, so bonuses can be seen but not approved or marked paid.</p></div> }
+
+@if (Model.Error is not null)
+{
+    <div class="card notice warn"><strong>Couldn't load bonuses.</strong><p>@Model.Error</p></div>
+}
+else
+{
+    <p class="list-meta muted">
+        @Model.Rules.SupervisorPercent% of job profit to supervisors and @Model.Rules.FieldPercent% to the field, each split by hours on the job ·
+        profit = billed (incl. retention) − costs · ready when the job is Completed and fully billed and collected ·
+        <a asp-page="/Financials/Bonuses" asp-route-show="@Model.Show" asp-route-refresh="true">Refresh</a>
+    </p>
+
+    <div class="kpis">
+        <div class="card kpi"><span class="kpi-label">Ready to approve</span><span class="kpi-value num">@Format.Money(Model.Sum(BonusStatus.Ready))</span><span class="kpi-sub">@Model.Count(BonusStatus.Ready) jobs</span></div>
+        <div class="card kpi"><span class="kpi-label">Approved, not paid</span><span class="kpi-value num">@Format.Money(Model.Sum(BonusStatus.Approved))</span><span class="kpi-sub">@Model.Count(BonusStatus.Approved) jobs</span></div>
+        <div class="card kpi"><span class="kpi-label">Coming (jobs in progress)</span><span class="kpi-value num">@Format.Money(Model.Sum(BonusStatus.Projected))</span><span class="kpi-sub">at today's profit</span></div>
+        <div class="card kpi">
+            <span class="kpi-label">Paid this year</span><span class="kpi-value num">@Format.Money(Model.PaidYtd)</span>
+            <span class="kpi-sub">@(Model.QbBonusesYtd is { } qb ? $"QuickBooks Bonus Payroll: {Format.Money(qb)}" : "QuickBooks not connected")</span>
+        </div>
+    </div>
+    @if (Model.QbBonusesYtd is { } q && Math.Abs(q - Model.PaidYtd) >= 1)
+    {
+        <div class="card notice warn"><p>QuickBooks Bonus Payroll this year (@Format.Money(q)) doesn't match bonuses marked paid here (@Format.Money(Model.PaidYtd)), a difference of @Format.Money(q - Model.PaidYtd). Bonuses paid before the dashboard, or office bonuses, will show up as a difference.</p></div>
+    }
+
+    <div class="pills" role="tablist" aria-label="Which bonuses">
+        @foreach (var (key, label) in new[] { ("ready", "Ready"), ("approved", "Approved"), ("projected", "Coming"), ("paid", "Paid"), ("all", "All") })
+        {
+            <a class="pill@((Model.Show ?? "ready") == key ? " active" : "")" asp-page="/Financials/Bonuses" asp-route-show="@(key == "ready" ? null : key)">@label</a>
+        }
+    </div>
+
+    <div class="job-list" style="margin-top:10px">
+        @if (!Model.Shown.Any()) { <div class="card empty-state"><p class="muted">No bonuses here.</p></div> }
+        @foreach (var b in Model.Shown)
+        {
+            <details class="job card emp">
+                <summary class="emp-row">
+                    <span class="chip @(b.Status switch { BonusStatus.Ready => "warn", BonusStatus.Paid => "good", BonusStatus.Approved => "active", _ => "" })">@(b.Status == BonusStatus.Projected ? "Coming" : b.Status.ToString())</span>
+                    <div class="job-main">
+                        <div class="job-title">@(b.Number is null ? "" : "#" + b.Number + " ")@b.JobName</div>
+                        <div class="job-sub muted">Profit @Format.Money(b.Profit) @(b.Waiting is { } w ? "· waiting: " + w : "")@(b.ProjectManager is { } pm ? " · PM " + pm : "")</div>
+                    </div>
+                    <span class="emp-rates num"><span>Supervisors @Format.Money(b.SupervisorPool)</span><span class="muted">Field @Format.Money(b.FieldPool)</span></span>
+                    <span class="emp-hours num"><b>@Format.Money(b.Total)</b></span>
+                    <span class="chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="job-detail bonus-detail">
+                    <dl class="detail-grid">
+                        <div><dt>Billed (incl. retention)</dt><dd class="num">@Format.Money(b.Billed)</dd></div>
+                        <div><dt>Costs</dt><dd class="num">@Format.Money(b.Costs)</dd></div>
+                        <div><dt>Profit</dt><dd class="num">@Format.Money(b.Profit)</dd></div>
+                        @if (b.Payout is { } p)
+                        {
+                            <div><dt>Approved</dt><dd>@Format.Date(DateOnly.FromDateTime(p.ApprovedAt.ToLocalTime())) by @p.ApprovedBy</dd></div>
+                            @if (p.PaidAt is { } paid) { <div><dt>Paid</dt><dd>@Format.Date(DateOnly.FromDateTime(paid.ToLocalTime())) by @p.PaidBy</dd></div> }
+                        }
+                    </dl>
+                    @if (b.Lines.Count > 0)
+                    {
+                        <div class="table-wrap">
+                            <table class="data">
+                                <thead><tr><th>Person</th><th>Pool</th><th class="num">Hours</th><th class="num">Bonus</th></tr></thead>
+                                <tbody>
+                                    @foreach (var l in b.Lines)
+                                    {
+                                        <tr><td>@l.Name</td><td>@l.Role</td><td class="num">@(l.Hours > 0 ? Format.Number(l.Hours) : "—")</td><td class="num">@Format.Money(l.Amount)</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else if (b.Status == BonusStatus.Projected)
+                    {
+                        <p class="muted small">The split by person is worked out when the job is ready (completed and paid).</p>
+                    }
+                    @if (Model.CanEdit)
+                    {
+                        <div class="form-actions">
+                            @if (b.Status == BonusStatus.Ready)
+                            {
+                                <form method="post" asp-page-handler="Approve" asp-route-show="@Model.Show"><input type="hidden" name="jobId" value="@b.JobId"><button class="button" type="submit">Approve @Format.Money(b.Total)</button></form>
+                                <span class="muted small">Locks these amounts in.</span>
+                            }
+                            @if (b.Status == BonusStatus.Approved)
+                            {
+                                <form method="post" asp-page-handler="Status" asp-route-show="@Model.Show"><input type="hidden" name="jobId" value="@b.JobId"><input type="hidden" name="action" value="paid"><button class="button" type="submit">Mark paid</button></form>
+                                <form method="post" asp-page-handler="Status" asp-route-show="@Model.Show" onsubmit="return confirm('Undo the approval? It goes back to being calculated from JobTread.')"><input type="hidden" name="jobId" value="@b.JobId"><input type="hidden" name="action" value="unapprove"><button class="link-button" type="submit">Undo approval</button></form>
+                            }
+                            @if (b.Status == BonusStatus.Paid)
+                            {
+                                <form method="post" asp-page-handler="Status" asp-route-show="@Model.Show" onsubmit="return confirm('Mark as not paid?')"><input type="hidden" name="jobId" value="@b.JobId"><input type="hidden" name="action" value="unpaid"><button class="link-button" type="submit">Mark not paid</button></form>
+                            }
+                            <a class="link-button" href="@JobTreadIds.JobUrl(b.JobId)" target="_blank" rel="noopener">JobTread ↗</a>
+                        </div>
+                    }
+                </div>
+            </details>
+        }
+    </div>
+
+    @if (Model.People.Count > 0)
+    {
+        <section class="card fin-section" style="margin-top:12px">
+            <h2 class="section-title">By person</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Person</th><th>Pool</th><th class="num">Ready</th><th class="num">Approved</th><th class="num">Paid this year</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in Model.People)
+                        {
+                            <tr><td>@p.Name</td><td>@p.Role</td><td class="num">@Format.Money(p.Ready)</td><td class="num">@Format.Money(p.Approved)</td><td class="num">@Format.Money(p.PaidYtd)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}

@@ -446,3 +446,4 @@ table.data tr.burden-row td:first-child { padding-left: 24px; }
 .acct-list ul { list-style: none; margin: 6px 0 0; padding: 0 0 0 12px; display: grid; gap: 2px; font-size: 13px; color: var(--muted); }
 .acct-list li { display: flex; justify-content: space-between; gap: 12px; }
 .fin-section .bar { display: inline-block; height: 6px; width: calc(var(--w) * 0.6); max-width: 60px; background: var(--purple-600); border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+.bonus-detail { padding: 12px 14px; display: grid; gap: 10px; } .bonus-detail .form-actions form { display: inline; }

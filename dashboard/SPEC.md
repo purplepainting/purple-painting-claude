@@ -134,6 +134,8 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 - **Job P&L:** per-job profit from JobTread, with burden rates applied.
 - **Reconciliation (key feature):** month-by-month, job-by-job comparison of JobTread job profit against QuickBooks profit. **QuickBooks is the source of truth.** Columns: job, revenue, JobTread profit, QuickBooks profit, gap, flag. A persistent gap means burden rates in JobTread need adjusting. Include a month total row with a plain-English verdict (e.g. "JobTread running ~4% optimistic").
 - **Bonuses & distributions:** dashboard-owned data. Depends on Employees.
+  - **Built (first pass):** `/financials/bonuses`. Per job: 10% of profit to supervisors and 10% to the field (settings `Bonuses:SupervisorPercent` / `FieldPercent`), profit = billed incl. retention − costs (JobTread). Each pool split by hours on the job (supervisors who clocked time; if none, all to the job's PM). **Ready** when the job is Completed and fully billed and collected; **Coming** shows pools at today's profit for jobs still going (and what it's waiting on). Approve locks the amounts (BonusPayouts table), then Mark paid. By-person totals (ready, approved, paid this year). Paid this year is checked against QuickBooks 6114 Bonus Payroll. Every action is logged.
+  - **To confirm with Kareem:** profit as the base, split by hours, and "completed and paid" as the trigger.
 - **Commissions:** dashboard-owned. Records who sold each job, commission rules, and payouts.
 
 ### 4. Customers (JobTread + QuickBooks + reviews)
