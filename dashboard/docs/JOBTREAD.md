@@ -16,7 +16,7 @@ Code: `Integrations/JobTread/` (client, ids, JSON helpers). Field ids live in `J
 
 ## Gotchas
 
-- **"Request Entity Too Large" (413) means the *response* is too big**, not the request. Ask for fewer rows (smaller `size`, more pages) or group/sum on the JobTread side instead of pulling raw rows.
+- **"Request Entity Too Large" (413) means the query's *largest possible result* is too big**, not the request. JobTread multiplies `size` by every nested list's `size` (e.g. 25 tasks × 25 assignees fails, 25 × 10 works, even when the real data is tiny). Keep nested `size`s tight, page with `nextPage`, or group/sum on the JobTread side instead of pulling raw rows.
 - **Lists return 10 items unless you pass `size`** (max 100). Always set `size`, and follow `nextPage` (pass it back as `page`) when there can be more. Grouped results (`group`) are paged the same way.
 - `where` on a related field uses a path array: `[["document", "id"], null]`, `[["job", "id"], "in", [...]]`.
 - Not every relation can be filtered on. `costItems` can't filter on `["document", "type"]` ("document is not queryable"); go through `documents` instead.
