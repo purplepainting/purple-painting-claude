@@ -60,7 +60,7 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 
 | Number | How it's read |
 |---|---|
-| Contract | `job.projectedPrice` = approved customer orders (proposal + approved change orders) |
+| Approved contract | `job.projectedPrice` = approved customer orders (proposal + approved change orders). The dashboard's contract adds pending change orders on production jobs |
 | Pending change orders | `documents` where `type = customerOrder`, `status = pending`, sum `price`. On a bid this is the proposal waiting on the customer |
 | Unsent change orders | `documents` where `type = customerOrder`, `status = draft`, `name like "%Change Order%"`. The name filter skips old draft proposals |
 | Invoiced (net) | `documents` where `type = customerInvoice` and `status in [approved, pending]`, sum `price`. **This is after retention is held back** |

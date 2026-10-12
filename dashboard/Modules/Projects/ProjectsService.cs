@@ -116,7 +116,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             SalesPerson = fields.GetValueOrDefault(JobFields.SalesPerson),
             HowBidCameIn = fields.GetValueOrDefault(JobFields.HowBidCameIn),
             FolderUrl = fields.GetValueOrDefault(JobFields.FolderLink),
-            Contract = job.Dec("projectedPrice"),
+            ApprovedContract = job.Dec("projectedPrice"),
             ActualCost = job.Dec("actualCost") ?? 0,
             PendingOrders = job["pendingOrders"].Dec("sum") ?? 0,
             UnsentChangeOrders = job["unsentChangeOrders"].Dec("sum") ?? 0,

@@ -176,6 +176,7 @@ table.data td.num, table.data th.num { text-align: right; }
 .profit-none { color: var(--muted); }
 .profit-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .profit-dollars { font-size: 13px; font-weight: 600; }
+.job-figs dd.fig-note { font-size: 11px; color: var(--muted); margin-top: 0; line-height: 1.4; }
 .cash { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .cash.neg { color: var(--warn-text); }
 .chevron { width: 10px; height: 10px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: 0 4px 4px; transition: transform .15s; }

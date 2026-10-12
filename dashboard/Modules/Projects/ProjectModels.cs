@@ -15,7 +15,20 @@ public sealed record ProjectSummary
     public string? SalesPerson { get; init; }
     public string? HowBidCameIn { get; init; }
     public string? FolderUrl { get; init; }
-    public decimal? Contract { get; init; }        // approved customer orders (JobTread projectedPrice)
+    public decimal? ApprovedContract { get; init; } // approved customer orders (JobTread projectedPrice)
+
+    /// <summary>
+    /// Contract used everywhere: approved orders plus pending change orders, which are usually
+    /// agreed and just not signed yet. On a bid (no production stage) pending is the proposal, so it's left out.
+    /// </summary>
+    public decimal? Contract => Stage is null || PendingOrders == 0
+        ? ApprovedContract
+        : (ApprovedContract ?? 0) + PendingOrders;
+
+    public bool ContractIncludesPending => Stage is not null && PendingOrders > 0;
+
+    /// <summary>Approved contract − costs: profit if none of the pending change orders go through.</summary>
+    public decimal? ProfitOnApproved => ApprovedContract is { } a ? a - ActualCost : null;
     public decimal PendingOrders { get; init; }    // customer orders sent, awaiting approval (pending change orders; for a bid, the proposal)
     public decimal UnsentChangeOrders { get; init; } // draft change orders not sent to the customer yet
     public int UnsentChangeOrderCount { get; init; }
@@ -62,9 +75,6 @@ public sealed record ProjectSummary
 
     /// <summary>(Contract − costs) ÷ contract. Null without a contract.</summary>
     public decimal? ProfitPercent => Contract > 0 ? Profit / Contract * 100 : null;
-
-    /// <summary>Profit if the pending change orders are approved.</summary>
-    public decimal? ProfitWithPending => Profit is { } p ? p + PendingOrders : null;
 
     /// <summary>Invoiced (after retention) − costs: cash position on the job so far.</summary>
     public decimal CashPosition => InvoicedNet - ActualCost;
