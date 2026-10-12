@@ -74,6 +74,8 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
                           "id": {}, "name": {}, "number": {}, "actualCost": {}, "projectedPrice": {},
                           "location": { "address": {}, "account": { "name": {} } },
                           "billed": { "_": "documents", "$": { "where": { "and": [["type", "customerInvoice"], ["status", "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } },
+                          "pendingOrders": { "_": "documents", "$": { "where": { "and": [["type", "customerOrder"], ["status", "pending"]] } }, "sum": { "$": ["price"] }, "count": {} },
+                          "unsentChangeOrders": { "_": "documents", "$": { "where": { "and": [["type", "customerOrder"], ["status", "draft"], ["name", "like", "%Change Order%"]] } }, "sum": { "$": ["price"] }, "count": {} },
                           "retainageCostItem": { "held": { "_": "documentCostItems", "$": { "where": { "and": [[["document", "type"], "customerInvoice"], [["document", "status"], "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } } }
                         }
                         """),
@@ -116,6 +118,9 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             FolderUrl = fields.GetValueOrDefault(JobFields.FolderLink),
             Contract = job.Dec("projectedPrice"),
             ActualCost = job.Dec("actualCost") ?? 0,
+            PendingOrders = job["pendingOrders"].Dec("sum") ?? 0,
+            UnsentChangeOrders = job["unsentChangeOrders"].Dec("sum") ?? 0,
+            UnsentChangeOrderCount = (int)(job["unsentChangeOrders"].Dec("count") ?? 0),
             InvoicedNet = job["billed"].Dec("sum") ?? 0,
             // Retention lines on invoices are negative; flip to the amount held back.
             RetentionHeld = -(job["retainageCostItem"]?["held"].Dec("sum") ?? 0),

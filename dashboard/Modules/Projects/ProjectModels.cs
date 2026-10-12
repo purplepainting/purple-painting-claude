@@ -16,6 +16,9 @@ public sealed record ProjectSummary
     public string? HowBidCameIn { get; init; }
     public string? FolderUrl { get; init; }
     public decimal? Contract { get; init; }        // approved customer orders (JobTread projectedPrice)
+    public decimal PendingOrders { get; init; }    // customer orders sent, awaiting approval (pending change orders; for a bid, the proposal)
+    public decimal UnsentChangeOrders { get; init; } // draft change orders not sent to the customer yet
+    public int UnsentChangeOrderCount { get; init; }
     public decimal ActualCost { get; init; }       // time entries + approved/pending vendor bills
     public decimal InvoicedNet { get; init; }      // approved/pending customer invoices, after retention held back
     public decimal RetentionHeld { get; init; }    // retention withheld on those invoices (earned, collected at the end)
@@ -59,6 +62,9 @@ public sealed record ProjectSummary
 
     /// <summary>(Contract − costs) ÷ contract. Null without a contract.</summary>
     public decimal? ProfitPercent => Contract > 0 ? Profit / Contract * 100 : null;
+
+    /// <summary>Profit if the pending change orders are approved.</summary>
+    public decimal? ProfitWithPending => Profit is { } p ? p + PendingOrders : null;
 
     /// <summary>Invoiced (after retention) − costs: cash position on the job so far.</summary>
     public decimal CashPosition => InvoicedNet - ActualCost;

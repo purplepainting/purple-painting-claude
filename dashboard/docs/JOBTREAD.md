@@ -60,7 +60,9 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 
 | Number | How it's read |
 |---|---|
-| Contract | `job.projectedPrice` |
+| Contract | `job.projectedPrice` = approved customer orders (proposal + approved change orders) |
+| Pending change orders | `documents` where `type = customerOrder`, `status = pending`, sum `price`. On a bid this is the proposal waiting on the customer |
+| Unsent change orders | `documents` where `type = customerOrder`, `status = draft`, `name like "%Change Order%"`. The name filter skips old draft proposals |
 | Invoiced (net) | `documents` where `type = customerInvoice` and `status in [approved, pending]`, sum `price`. **This is after retention is held back** |
 | Retention held | `job.retainageCostItem.documentCostItems` where `document.type = customerInvoice`, `document.status in [approved, pending]`, sum `price` (negative; flip the sign). `job.defaultRetainagePercentage` is the rate (e.g. 0.1) |
 | Billed (earned) | Invoiced (net) + retention held. Used for the billed ring and left to bill |
@@ -68,7 +70,9 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 
 Pay apps (`isPaymentApplication = true`) carry a negative "Retainage" line linked to the job's `retainageCostItem`, so each invoice's `price` is net of retention.
 
-Document types seen: `customerOrder` (proposal/contract), `customerInvoice`, `vendorBill`. Statuses: `draft`, `pending`, `approved`, `denied`. Draft and denied are ignored everywhere.
+Change orders are `customerOrder` documents named "Change Order". A job's estimate can also hold unselected option lines (`isSelected = false`); they're in the budget but not the contract (First Presbyterian: $32k budget vs $12k contract).
+
+Document types seen: `customerOrder` (proposal, change orders), `customerInvoice`, `vendorBill`. Statuses: `draft`, `pending`, `approved`, `denied`. Draft and denied are ignored everywhere.
 
 ### Costs by cost code (Projects expanded row)
 
