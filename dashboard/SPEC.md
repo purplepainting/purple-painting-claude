@@ -171,6 +171,7 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 **Built (first pass):** `/equipment` with three tabs.
 - **Sundries:** shop stock (tape, plastic, caulk, sandpaper, rollers...) with unit, average cost, reorder point and order quantity, vendor/SKU. Bulk order in (adds stock, updates average cost), issue to a job (takes stock out at average cost, charged to that job), physical count correction. Reorder list for items at or below their reorder point (tile: low or out of stock). Every movement logged (InventoryMovements).
 - **Equipment:** each piece (sprayers, ladders, scaffold, vehicles...) with tag, value, location (shop or a job), who has it, condition (Good / Needs service / Out of service), last serviced, and history (moves, condition, service).
+- **Starting list:** when a tab is empty, "Load starting list" adds the 76 pieces from the SharePoint equipment list (09 Operations/Equipment, "Equipment List - CURRENT") or the 31 sundries from the April 2025 bulk sundry order (`Modules/Equipment/starting-list.json`). Job sites in the sheet are matched to open JobTread jobs by name or address; trucks and trailers go in "with"; unmatched sites stay at the shop with the sheet location in notes. Sundry counts start at 0.
 - **Charged to jobs:** sundry cost per job for a period, with undo. Not pushed to JobTread: that would be a JobTread write (needs Kareem's approval).
 - Fully custom: items (sprayers, ladders, vehicles, supplies), status, location or assigned crew, low/out-of-stock flags.
 

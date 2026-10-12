@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using PurpleDashboard.Data;
 
@@ -154,6 +155,69 @@ public sealed class EquipmentService(IServiceProvider services, DatabaseStatus d
         var db = Db;
         if (await db.Equipment.FirstOrDefaultAsync(x => x.Id == id, ct) is { } e) { e.Active = false; await db.SaveChangesAsync(ct); await LogAsync(db, id, "retired", "Retired", user, ct); }
     }
+
+    // ---- Starting list (from the SharePoint equipment list and the April 2025 bulk sundry order) ----
+
+    private sealed record SeedFile(List<SeedGear> Equipment, List<SeedSundry> Sundries);
+    private sealed record SeedGear(string Name, string? Type, string? Tag, string? Vehicle, string? Site, string Condition, string? Notes);
+    private sealed record SeedSundry(string Name, string? Category, string? Unit, decimal UnitCost, string? Vendor, string? Sku);
+
+    private static SeedFile LoadSeed()
+    {
+        using var stream = typeof(EquipmentService).Assembly.GetManifestResourceStream("PurpleDashboard.Equipment.starting-list.json")
+            ?? throw new InvalidOperationException("starting-list.json is not embedded");
+        return JsonSerializer.Deserialize<SeedFile>(stream, new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+    }
+
+    /// <summary>
+    /// Loads the starting sundries list, only when there are no sundries yet. Counts start at 0 (the source
+    /// was an order sheet, not a count), so take a count after loading.
+    /// </summary>
+    public async Task<int> LoadStartingSundriesAsync(CancellationToken ct)
+    {
+        var db = Db;
+        if (await db.InventoryItems.AnyAsync(ct)) return 0;
+        var seed = LoadSeed().Sundries;
+        db.InventoryItems.AddRange(seed.Select(s => new InventoryItem { Name = s.Name, Category = s.Category, Unit = s.Unit, UnitCost = s.UnitCost, Vendor = s.Vendor, Sku = s.Sku }));
+        await db.SaveChangesAsync(ct);
+        return seed.Count;
+    }
+
+    /// <summary>
+    /// Loads the starting equipment list, only when there's no equipment yet. A job site from the sheet is
+    /// matched to an open JobTread job by name or address; trucks and trailers go in "with"; anything else
+    /// stays at the shop with the sheet's location in the notes.
+    /// </summary>
+    public async Task<int> LoadStartingEquipmentAsync(IReadOnlyList<(string Id, string Name, string? Address)> openJobs, string user, CancellationToken ct)
+    {
+        var db = Db;
+        if (await db.Equipment.AnyAsync(ct)) return 0;
+        var seed = LoadSeed().Equipment;
+        var items = new List<EquipmentItem>();
+        foreach (var g in seed)
+        {
+            var notes = g.Notes;
+            (string Id, string Name, string? Address)? job = null;
+            if (g.Site is not null)
+            {
+                var key = Key(g.Site);
+                job = openJobs.Where(j => Key(j.Name).Contains(key) || (j.Address is not null && Key(j.Address).Contains(key))).Select(j => ((string, string, string?)?)j).FirstOrDefault();
+                if (job is null) notes = string.Join("; ", new[] { $"Sheet location: {g.Site}", notes }.OfType<string>());
+            }
+            items.Add(new EquipmentItem
+            {
+                Name = g.Name, Type = g.Type, Tag = g.Tag, Condition = Conditions.Contains(g.Condition) ? g.Condition : "Good", Notes = notes,
+                JobId = job?.Id, JobName = job?.Name, AssignedTo = g.Vehicle, UpdatedAt = DateTime.UtcNow,
+            });
+        }
+        db.Equipment.AddRange(items);
+        await db.SaveChangesAsync(ct);
+        db.EquipmentEvents.AddRange(items.Select(e => new EquipmentEvent { EquipmentId = e.Id, At = DateTime.UtcNow, Kind = "added", Detail = "Added from the SharePoint equipment list", By = user }));
+        await db.SaveChangesAsync(ct);
+        return items.Count;
+    }
+
+    private static string Key(string s) => new(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 
     private static async Task LogAsync(DashboardDb db, int id, string kind, string detail, string user, CancellationToken ct)
     {

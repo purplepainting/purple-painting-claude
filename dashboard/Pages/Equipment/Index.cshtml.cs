@@ -157,6 +157,27 @@ public class IndexModel(EquipmentService equipment, ProjectsService projects, Ch
         return Back("equipment");
     }
 
+    public async Task<IActionResult> OnPostLoadSundriesAsync(CancellationToken ct)
+    {
+        if (!CanEdit) return Back("sundries");
+        var n = await equipment.LoadStartingSundriesAsync(ct);
+        if (n > 0) await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "sundries", "load-starting-list", null, null, $"{n} items")], ct);
+        Message = n > 0 ? $"Loaded {n} sundries. Counts are 0: take a count to set what's on the shelf." : "Sundries already exist, nothing loaded.";
+        return Back("sundries");
+    }
+
+    public async Task<IActionResult> OnPostLoadEquipmentAsync(CancellationToken ct)
+    {
+        if (!CanEdit) return Back("equipment");
+        List<(string, string, string?)> jobs = [];
+        try { jobs = (await projects.GetOpenJobsAsync(false, ct)).Where(j => !j.IsInternal).Select(j => (j.Id, j.Name, j.Address)).ToList(); }
+        catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException) { logger.LogWarning(e, "Loading jobs for equipment matching failed"); }
+        var n = await equipment.LoadStartingEquipmentAsync(jobs, User(), ct);
+        if (n > 0) await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "equipment", "load-starting-list", null, null, $"{n} pieces")], ct);
+        Message = n > 0 ? $"Loaded {n} pieces of equipment." : "Equipment already exists, nothing loaded.";
+        return Back("equipment");
+    }
+
     public async Task<IActionResult> OnPostRetireAsync(int id, CancellationToken ct)
     {
         if (CanEdit) await equipment.RetireAsync(id, User(), ct);
