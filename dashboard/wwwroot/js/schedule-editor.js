@@ -11,7 +11,7 @@
 
   var data = JSON.parse(dataEl.textContent);
   var token = (document.querySelector('input[name="__RequestVerificationToken"]') || {}).value;
-  var draftKey = 'schedule-draft:' + data.weekStart;
+  var draftKey = 'schedule-draft:' + data.weekStart + ':' + (data.who || 'crew');
   var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   var people = {};
@@ -76,6 +76,9 @@
     return DOW[dt.getDay()] + ', ' + String(dt.getMonth() + 1).padStart(2, '0') + '.' + String(dt.getDate()).padStart(2, '0') + ' — ' + shortName(name);
   }
   function level(id) { return (people[id] || {}).level || 'painter'; }
+  var RANK = { foreman: 0, painter: 1, helper: 2, supervisor: 3 };
+  // Foremen first, then painters, helpers, supervisors.
+  function ordered(ids) { return ids.slice().sort(function (a, b) { return (RANK[level(a)] - RANK[level(b)]) || first(a).localeCompare(first(b)); }); }
   function first(id) { return (people[id] || {}).first || '?'; }
   function sameCrew(a, b) { return a.slice().sort().join() === b.slice().sort().join(); }
   function isChanged(t) {
@@ -148,7 +151,7 @@
             + (t.isNew ? '<span class="edit-tag new">New</span>' : ch ? '<span class="edit-tag">Changed</span>' : '')
             + '<span class="block-title">' + esc(shortName(t.name)) + '</span>'
             + '<span class="block-time">' + esc(times(t)) + (t.start !== t.end ? ' · ' + esc(dayLabel(t.start)) + '–' + esc(dayLabel(t.end)) : '') + '</span>'
-            + '<span class="pchips">' + (t.crew.length ? t.crew.map(function (id) {
+            + '<span class="pchips">' + (t.crew.length ? ordered(t.crew).map(function (id) {
               return '<span class="pchip lvl-' + level(id) + (selected && selected.id === id && selected.fromKey === t.key ? ' selected' : '') + '" draggable="true" data-person="' + esc(id) + '" data-from="' + t.key + '" data-day="' + d + '">' + esc(first(id)) + '</span>';
             }).join('') : '<em class="block-sub">Unassigned</em>') + '</span>'
             + (balance(t.crew) ? '<span class="block-balance">' + balance(t.crew) + '</span>' : '')
@@ -163,11 +166,13 @@
     });
 
     // Not scheduled: field staff not on any task that day.
-    html += '<tr class="free-row"><th class="row-head" scope="row">Not scheduled<span class="row-sub muted">Drag or tap a painter onto a job</span></th>';
+    html += '<tr class="free-row"><th class="row-head" scope="row">Not scheduled<span class="row-sub muted">Drag or tap ' + (data.who === 'supervisors' ? 'a supervisor' : 'a painter') + ' onto a job</span></th>';
     days.forEach(function (d) {
       var busy = {};
       live().filter(function (t) { return covers(t, d); }).forEach(function (t) { t.crew.forEach(function (id) { busy[id] = true; }); });
-      var free = data.people.filter(function (p) { return p.level !== 'supervisor' && !busy[p.id]; });
+      var wantSupervisors = data.who === 'supervisors';
+      var free = data.people.filter(function (p) { return (p.level === 'supervisor') === wantSupervisors && !busy[p.id]; })
+        .sort(function (a, b) { return (RANK[a.level] - RANK[b.level]) || a.first.localeCompare(b.first); });
       html += '<td class="drop free' + (selected && selected.day === d ? ' targetable' : '') + '" data-free="1" data-day="' + d + '"><span class="pchips">'
         + free.map(function (p) { return '<span class="pchip lvl-' + p.level + (selected && selected.id === p.id && selected.fromKey === null && selected.day === d ? ' selected' : '') + '" draggable="true" data-person="' + esc(p.id) + '" data-from="" data-day="' + d + '">' + esc(p.first) + '</span>'; }).join('')
         + '</span></td>';

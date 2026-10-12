@@ -15,6 +15,10 @@
         <h1 class="schedule-title">@Model.Heading</h1>
     </div>
     <div class="schedule-toggles" data-view-only>
+        <div class="segmented" role="group" aria-label="Whose schedule">
+            <a class="@(Model.Supervisors ? "" : "active")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(who: "crew")'>Crew</a>
+            <a class="@(Model.Supervisors ? "active" : "")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(who: "supervisors")'>Supervisors</a>
+        </div>
         <div class="segmented" role="group" aria-label="Range">
             <a class="@(Model.IsDay ? "active" : "")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(Model.IsDay ? Model.From : (Model.Today >= Model.From && Model.Today <= Model.To ? Model.Today : Model.From), "day")'>Day</a>
             <a class="@(Model.IsDay ? "" : "active")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(LocalClock.WeekStart(Model.From), "week")'>Week</a>
@@ -54,7 +58,7 @@ else
 
         @if (Model.Tasks.Count == 0)
         {
-            <div class="card empty-state"><p class="muted">Nothing scheduled in JobTread for this @(Model.IsDay ? "day" : "week").</p></div>
+            <div class="card empty-state"><p class="muted">No @(Model.Supervisors ? "supervisor" : "crew") tasks in JobTread for this @(Model.IsDay ? "day" : "week").</p></div>
         }
         else
         {
@@ -119,7 +123,7 @@ else
                                                             <span class="block-time">@IndexModel.Time(t)</span>
                                                             <span class="pchips">
                                                                 @if (t.Crew.Count == 0) { <em class="block-sub">Unassigned</em> }
-                                                                @foreach (var c in t.Crew)
+                                                                @foreach (var c in Model.Ordered(t.Crew))
                                                                 {
                                                                     var noShow = Model.IsPastOrToday(day) && day < Model.Today && !Model.ClockedIn(t.JobId, day, c.Name);
                                                                     <span class="pchip lvl-@Model.LevelOf(c.Name)@(noShow ? " no-show" : "")" title="@(noShow ? $"{c.Name} was scheduled but didn't clock in" : c.Name)">@c.Name.Split(' ')[0]</span>
@@ -135,7 +139,7 @@ else
                                                     <div class="actual" title="Who clocked in, from JobTread time entries">
                                                         <span class="actual-label">@(day == Model.Today ? "Clocked in so far" : "Actual")</span>
                                                         <span class="pchips">
-                                                            @foreach (var (name, hours) in actualCrew)
+                                                            @foreach (var (name, hours) in Model.Ordered(actualCrew))
                                                             {
                                                                 <span class="pchip lvl-@Model.LevelOf(name)@(scheduled.Contains(name) ? "" : " unscheduled")" title="@name: @Format.Number(hours) hrs@(scheduled.Contains(name) ? "" : " (not scheduled)")">@name.Split(' ')[0] <span class="hrs">@Format.Number(hours)h</span></span>
                                                             }
@@ -189,7 +193,7 @@ else
                                         <span class="agenda-task">@IndexModel.ShortName(t.Name)</span>
                                         <span class="pchips">
                                             @if (t.Crew.Count == 0) { <em class="muted">Unassigned</em> }
-                                            @foreach (var c in t.Crew)
+                                            @foreach (var c in Model.Ordered(t.Crew))
                                             {
                                                 var noShow = day < Model.Today && !Model.ClockedIn(t.JobId, day, c.Name);
                                                 <span class="pchip lvl-@Model.LevelOf(c.Name)@(noShow ? " no-show" : "")">@c.Name.Split(' ')[0]</span>
@@ -203,7 +207,7 @@ else
                                     <div class="actual">
                                         <span class="actual-label">@(day == Model.Today ? "Clocked in so far" : "Actual")</span>
                                         <span class="pchips">
-                                            @foreach (var (name, hours) in actualCrew)
+                                            @foreach (var (name, hours) in Model.Ordered(actualCrew))
                                             {
                                                 <span class="pchip lvl-@Model.LevelOf(name)@(scheduled.Contains(name) ? "" : " unscheduled")">@name.Split(' ')[0] <span class="hrs">@Format.Number(hours)h</span></span>
                                             }
