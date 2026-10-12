@@ -165,6 +165,10 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 - **Later:** certifications, viewing the change log.
 
 ### 8. Equipment and sundries (dashboard-owned)
+**Built (first pass):** `/equipment` with three tabs.
+- **Sundries:** shop stock (tape, plastic, caulk, sandpaper, rollers...) with unit, average cost, reorder point and order quantity, vendor/SKU. Bulk order in (adds stock, updates average cost), issue to a job (takes stock out at average cost, charged to that job), physical count correction. Reorder list for items at or below their reorder point (tile: low or out of stock). Every movement logged (InventoryMovements).
+- **Equipment:** each piece (sprayers, ladders, scaffold, vehicles...) with tag, value, location (shop or a job), who has it, condition (Good / Needs service / Out of service), last serviced, and history (moves, condition, service).
+- **Charged to jobs:** sundry cost per job for a period, with undo. Not pushed to JobTread: that would be a JobTread write (needs Kareem's approval).
 - Fully custom: items (sprayers, ladders, vehicles, supplies), status, location or assigned crew, low/out-of-stock flags.
 
 ## 7. Phased plan
