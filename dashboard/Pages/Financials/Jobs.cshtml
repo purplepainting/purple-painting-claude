@@ -1,0 +1,77 @@
+@page "/financials/jobs"
+@model PurpleDashboard.Pages.Financials.JobsModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Integrations.JobTread
+
+<div class="module-head">
+    <div class="pills" role="tablist" aria-label="Financials sections">
+        <a class="pill" href="/financials">JobTread vs QuickBooks</a>
+        <a class="pill active" href="/financials/jobs">Job by job</a>
+        <a class="pill" href="/financials?tab=burden">Labor burden</a>
+        <a class="pill" href="/financials?tab=overhead">Overhead</a>
+        <a class="pill" href="/financials/bonuses">Bonuses</a>
+    </div>
+</div>
+
+@if (!Model.Connected)
+{
+    <div class="card notice warn"><strong>QuickBooks isn't connected.</strong><p>Connect it on <a href="/connections">Connections</a>.</p></div>
+}
+else if (Model.Error is not null)
+{
+    <div class="card notice warn"><strong>Couldn't load.</strong><p>@Model.Error</p></div>
+}
+else if (Model.Report is { } r)
+{
+    var matched = r.Rows.Where(x => x.Job is not null && x.Qb is not null).ToList();
+    <p class="list-meta muted">
+        Each job's whole life: JobTread (invoices net of retention, costs to date) vs QuickBooks (P&amp;L by customer/job, all dates; labor = field wages + burden).
+        QuickBooks columns are matched to JobTread jobs by job name or number, or by customer when they have one job. ·
+        loaded @r.LoadedAt.ToString("h:mm tt") · <a asp-page="/Financials/Jobs" asp-route-show="@Model.Show" asp-route-refresh="true">Refresh</a>
+    </p>
+
+    <div class="kpis">
+        <div class="card kpi"><span class="kpi-label">Jobs matched</span><span class="kpi-value num">@matched.Count</span><span class="kpi-sub">@r.Rows.Count(x => x.Off) with a profit gap</span></div>
+        <div class="card kpi"><span class="kpi-label">Profit gap (matched)</span><span class="kpi-value num">@Format.Money(matched.Sum(x => x.Gap))</span><span class="kpi-sub">QB − JT; negative = QB lower</span></div>
+        <div class="card kpi"><span class="kpi-label">Not matched</span><span class="kpi-value num">@r.Rows.Count(x => x.Job is null || x.Qb is null)</span><span class="kpi-sub">JT-only or QB-only</span></div>
+        @if (r.Unassigned is { } u)
+        {
+            <div class="card kpi"><span class="kpi-label">QB not assigned to a job</span><span class="kpi-value num neg">@Format.Money(u.Labor + u.JobCosts)</span><span class="kpi-sub">labor @Format.Money(u.Labor) · job costs @Format.Money(u.JobCosts)</span></div>
+        }
+    </div>
+    @if (r.Unassigned is { } un && un.Labor > 0)
+    {
+        <div class="card notice warn"><p>@Format.Money(un.Labor) of field labor in QuickBooks isn't assigned to any customer or job, so it can't show on a job here. If payroll doesn't carry customer/job, job profit in QuickBooks looks higher than it is.</p></div>
+    }
+
+    <div class="pills">
+        <a class="pill@(Model.Show != "all" ? " active" : "")" asp-page="/Financials/Jobs">Gaps &amp; unmatched</a>
+        <a class="pill@(Model.Show == "all" ? " active" : "")" asp-page="/Financials/Jobs" asp-route-show="all">All jobs</a>
+    </div>
+    <section class="card fin-section" style="margin-top:10px">
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Job</th><th class="num">JT revenue</th><th class="num">QB revenue</th><th class="num">JT costs</th><th class="num">QB costs</th><th class="num">JT profit</th><th class="num">QB profit</th><th class="num">Gap</th></tr></thead>
+                <tbody>
+                    @foreach (var x in Model.Shown)
+                    {
+                        <tr class="@(x.Off ? "row-off" : "")">
+                            <td>
+                                @if (x.Job is { } j) { <a href="@JobTreadIds.JobUrl(j.Id)" target="_blank" rel="noopener">#@j.Number @j.Name</a> } else { <b>@x.Qb?.Column</b> }
+                                <div class="muted small">@(x.Job is not null && x.Qb is not null ? $"QB: {x.Qb.Column} · matched by {x.Match.ToLowerInvariant()}" : x.Match)</div>
+                            </td>
+                            <td class="num">@(x.Job is null ? "—" : Format.Money(x.JtRevenue))</td>
+                            <td class="num">@(x.Qb is null ? "—" : Format.Money(x.QbRevenue))</td>
+                            <td class="num">@(x.Job is null ? "—" : Format.Money(x.JtCosts))</td>
+                            <td class="num">@(x.Qb is null ? "—" : Format.Money(x.QbCosts))</td>
+                            <td class="num">@(x.Job is null ? "—" : Format.Money(x.JtProfit))</td>
+                            <td class="num">@(x.Qb is null ? "—" : Format.Money(x.QbProfit))</td>
+                            <td class="num@(x.Off ? " neg" : "")">@(x.Job is null || x.Qb is null ? "—" : Format.Money(x.Gap))</td>
+                        </tr>
+                    }
+                    @if (!Model.Shown.Any()) { <tr><td colspan="8" class="muted">Nothing off. Every matched job is within $1,000 / 10%.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
