@@ -100,6 +100,15 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 - Saved views as pills (e.g. All active, Starting this week, Over budget, Public works) plus "+ Save current view". Saved views are stored per user in the dashboard DB.
 - Filters: status, job type, project manager, text search (name/address).
 - Table columns: job, customer, stage (chip), dates, contract amount, budget used (bar + %, warning color over 100%), link to SharePoint folder.
+- **Expandable job rows.** Each job is a row (a card on phones) that expands in place when tapped; tap again to collapse. It must work by touch.
+  - **Collapsed row (the bar you tap)** also shows:
+    - a **% complete ring** (a small donut like QuickBooks Projects), with the number in the middle;
+    - **profit %** = (billed to date − costs to date) ÷ billed to date, using JobTread billings and costs. Good color at or above target margin, warning color below it or negative.
+  - **Expanded panel:**
+    - **Costs by cost code:** one line per JobTread cost code on the job with budget, actual cost to date, remaining, and % of budget used (bar, warning color over 100%).
+    - **List of all cost codes on the job**, including codes with budget but no costs yet.
+    - Links to the job in JobTread and its SharePoint folder.
+  - Data: the job's budget, cost items and cost codes from JobTread, plus its billings and actual costs. Load the expanded detail when the row opens so the list stays fast.
 
 ### 2. Scheduling (JobTread)
 - Week view by default (Day / Week / Month toggle), with prev/next/today.
@@ -159,4 +168,5 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 - Commission and bonus rules (amounts, triggers, who is eligible).
 - Which job types and crews exist in JobTread, and how crews are represented there.
 - QuickBooks API access: Intuit developer app setup and where OAuth tokens are stored.
+- Projects: how "% complete" is measured (costs to date ÷ budgeted cost, billed ÷ contract, or a progress value set in JobTread), and the target profit margin that decides good vs warning color.
 - Beyond scheduling (the first write-back), which fields should be editable from the dashboard, and in which system (JobTread or QuickBooks) each edit lands.
