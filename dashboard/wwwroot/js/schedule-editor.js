@@ -96,6 +96,7 @@
   function label(t) { return ((allJobs[t.jobId] || {}).name || 'Job') + ' · ' + shortName(t.name); }
   function live() { return tasks.filter(function (t) { return !t.deleted; }); }
   function byKey(k) { return tasks.find(function (t) { return t.key === k; }); }
+  function jobStyle(j) { return '--h:' + j.hue + (j.deep ? ';--l:80%' : ''); }
   function money(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
   // "$1,234 · 24h": either part left out when zero.
   function costLabel(amount, hours) {
@@ -141,7 +142,7 @@
     html += '</tr></thead><tbody>';
 
     shown.forEach(function (j) {
-      html += '<tr style="--h:' + j.hue + '"><th class="row-head" scope="row"><span class="swatch"></span><span class="row-title">' + esc(j.name) + '</span>'
+      html += '<tr style="' + jobStyle(j) + '"><th class="row-head" scope="row"><span class="swatch"></span><span class="row-title">' + esc(j.name) + '</span>'
         + (j.type ? '<span class="row-sub muted">' + esc(j.type) + '</span>' : '')
         + (j.pm ? '<span class="row-pm"><span class="pm-tag" style="color:' + esc(j.pmColor) + ';background:color-mix(in srgb,' + esc(j.pmColor) + ' 12%,transparent);border-color:color-mix(in srgb,' + esc(j.pmColor) + ' 35%,transparent)">PM ' + esc(j.pm.split(' ')[0]) + '</span></span>' : '');
       var week = 0, weekHours = 0, est = false;
@@ -152,7 +153,7 @@
         html += '<td class="drop" data-job="' + esc(j.id) + '" data-day="' + d + '">';
         live().filter(function (t) { return t.jobId === j.id && covers(t, d); }).forEach(function (t) {
           var ch = isChanged(t);
-          html += '<div class="block editable' + (isMarked(t) ? ' marked-delete' : '') + (t.isNew ? ' is-new' : ch ? ' is-changed' : '') + (selected && selected.day === d ? ' targetable' : '') + '" draggable="true" data-key="' + t.key + '" data-day="' + d + '" style="--h:' + j.hue + '">'
+          html += '<div class="block editable' + (isMarked(t) ? ' marked-delete' : '') + (t.isNew ? ' is-new' : ch ? ' is-changed' : '') + (selected && selected.day === d ? ' targetable' : '') + '" draggable="true" data-key="' + t.key + '" data-day="' + d + '" style="' + jobStyle(j) + '">'
             + (t.isNew ? '<span class="edit-tag new">New</span>' : ch ? '<span class="edit-tag">Changed</span>' : '')
             + '<span class="block-title">' + esc(shortName(t.name)) + '</span>'
             + '<span class="block-time">' + esc(times(t)) + (t.start !== t.end ? ' · ' + esc(dayLabel(t.start)) + '–' + esc(dayLabel(t.end)) : '') + '</span>'
