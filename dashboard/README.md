@@ -14,6 +14,11 @@ dotnet run
 
 Locally there's no Entra sign-in in front of the app, so you're shown as "Local Developer".
 
+To see real JobTread data locally, set the grant key first: `dotnet user-secrets set JOBTREAD_API_KEY <key>`
+(never put it in a file in the repo). Or point at saved sample responses with
+`JobTread__FixtureDirectory=/path/to/folder dotnet run`, where the folder has one `{query name}.json`
+per query (`projects-list`, `projects-dates`, `projects-detail`).
+
 ## Layout
 
 | Path | What it is |
@@ -26,6 +31,11 @@ Locally there's no Entra sign-in in front of the app, so you're shown as "Local 
 | `Pages/Shared/_Layout.cshtml` | Top bar and page frame used by every page |
 | `Pages/Shared/_Icon.cshtml` | Line icons used on tiles |
 | `wwwroot/css/site.css` | All styles. Colors, fonts and sizes are CSS variables at the top |
+| `wwwroot/js/site.js` | Small optional scripts (auto-submit filters, load expanded rows) |
+| `Integrations/JobTread/` | The JobTread client. Every JobTread call goes through `IJobTreadClient` |
+| `Modules/Projects/` | Projects data: models, preset views, `ProjectsService` (JobTread queries) |
+| `Infrastructure/` | Shared helpers: `LocalClock` (Pacific time), `Format` (money, %, dates) |
+| `docs/JOBTREAD.md` | How our JobTread data is structured and how to query it |
 
 ## Common changes
 
@@ -39,6 +49,14 @@ straight away with a "Coming soon" page.
    A literal route like this takes priority over the Coming soon page.
 2. In the page, set `ViewData["ModuleName"] = "Projects";` to get the "← Dashboard" top bar.
 3. In `ModuleRegistry.cs`, set the module's status to `ModuleStatus.Live`.
+
+**Add a launchpad key number:** implement `ITileMetric` for the module and register it in `Program.cs`
+(see `ActiveProjectsMetric`).
+
+**Add or change a Projects view pill:** edit `Modules/Projects/ProjectViews.cs`.
+
+**Change the profit % color bands:** `Projects:Margin` in `appsettings.json`, or override in Azure with
+`Projects__Margin__Strong` / `Okay` / `Baseline`.
 
 **Change colors or fonts:** edit the variables in `:root` at the top of `wwwroot/css/site.css`.
 

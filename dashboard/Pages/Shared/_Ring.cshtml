@@ -1,0 +1,16 @@
+@model (decimal? Percent, string Label)
+@* Small % complete donut. Over 100% fills the ring in the warning color. *@
+@{
+    var pct = Model.Percent;
+    var shown = pct is null ? 0 : Math.Clamp(pct.Value, 0, 100);
+    var over = pct > 100;
+    const double circumference = 2 * Math.PI * 16;
+    var dash = (double)shown / 100 * circumference;
+}
+<span class="ring@(over ? " over" : "")@(pct is null ? " empty" : "")" role="img" aria-label="@Model.Label: @PurpleDashboard.Infrastructure.Format.Percent(pct)">
+    <svg viewBox="0 0 40 40" width="48" height="48" aria-hidden="true">
+        <circle cx="20" cy="20" r="16" class="ring-track" />
+        <circle cx="20" cy="20" r="16" class="ring-fill" stroke-dasharray="@dash.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) @circumference.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)" transform="rotate(-90 20 20)" />
+    </svg>
+    <span class="ring-text num">@(pct is null ? "—" : PurpleDashboard.Infrastructure.Format.Percent(pct))</span>
+</span>

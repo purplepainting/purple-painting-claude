@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>PurpleDashboard</RootNamespace>
+    <UserSecretsId>purple-dashboard</UserSecretsId>
   </PropertyGroup>
 
 </Project>

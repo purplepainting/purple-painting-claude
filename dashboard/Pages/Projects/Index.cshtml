@@ -1,0 +1,126 @@
+@page "/projects"
+@model PurpleDashboard.Pages.Projects.IndexModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Integrations.JobTread
+@using PurpleDashboard.Modules.Projects
+
+<div class="module-head">
+    <div class="pills" role="tablist" aria-label="Saved views">
+        @foreach (var view in ProjectViews.All)
+        {
+            var active = view.Key == Model.CurrentView.Key;
+            <a class="pill@(active ? " active" : "")" asp-page="/Projects/Index" asp-all-route-data="Model.RouteFor(view.Key)" aria-current="@(active ? "page" : null)">
+                @view.Label <span class="pill-count num">@Model.ViewCounts.GetValueOrDefault(view.Key)</span>
+            </a>
+        }
+    </div>
+
+    <form class="filters" method="get" data-autosubmit>
+        @if (Model.CurrentView != ProjectViews.Default)
+        {
+            <input type="hidden" name="view" value="@Model.CurrentView.Key">
+        }
+        <input type="search" name="q" value="@Model.Q" placeholder="Search job, customer, address" aria-label="Search projects">
+        <select name="pm" aria-label="Project manager">
+            <option value="">All PMs</option>
+            @foreach (var pm in Model.ProjectManagers)
+            {
+                <option value="@pm" selected="@(pm == Model.Pm)">@pm</option>
+            }
+        </select>
+        <select name="type" aria-label="Job type">
+            <option value="">All job types</option>
+            @foreach (var t in Model.JobTypes)
+            {
+                <option value="@t" selected="@(t == Model.Type)">@t</option>
+            }
+        </select>
+        <button class="button secondary" type="submit">Apply</button>
+        @if (Model.HasFilters)
+        {
+            <a class="link-button" asp-page="/Projects/Index" asp-route-view="@(Model.CurrentView == ProjectViews.Default ? null : Model.CurrentView.Key)">Clear</a>
+        }
+    </form>
+</div>
+
+@if (Model.Error is not null)
+{
+    <div class="card notice warn">
+        <strong>Couldn't load projects.</strong>
+        <p>@Model.Error</p>
+    </div>
+}
+else
+{
+    <p class="list-meta muted">
+        @Model.Jobs.Count @(Model.Jobs.Count == 1 ? "job" : "jobs") · from JobTread at @Model.LoadedAt.ToString("h:mm tt") ·
+        <a asp-page="/Projects/Index" asp-all-route-data="Model.RouteFor(Model.CurrentView.Key)" asp-route-refresh="true">Refresh</a>
+    </p>
+
+    @if (Model.Jobs.Count == 0)
+    {
+        <div class="card empty-state"><p class="muted">No jobs match this view.</p></div>
+    }
+
+    <div class="job-list">
+        @foreach (var job in Model.Jobs)
+        {
+            var band = Model.Bands.For(job.ProfitPercent);
+            <details class="job card" data-detail-url="/projects/@job.Id/detail">
+                <summary class="job-row">
+                    <div class="job-progress">
+                        <partial name="_Ring" model="@((job.PercentComplete, "Complete"))" />
+                        <span class="job-billed num" title="Billed ÷ contract">@Format.Percent(job.BilledPercent) billed</span>
+                    </div>
+
+                    <div class="job-main">
+                        <div class="job-title"><span class="job-num num">#@job.Number</span> @job.Name</div>
+                        <div class="job-sub muted">@job.Customer@(job.Address is null ? "" : " · " + job.Address)</div>
+                        <div class="job-chips">
+                            <span class="chip @IndexModel.StageCss(job.Stage)">@(job.Stage ?? job.BidStage ?? "Bid")</span>
+                            @if (job.UnderBilled) { <span class="chip warn">Under-billed: send a pay app</span> }
+                            @if (job.OverBudget) { <span class="chip warn">Over budget</span> }
+                            @if (job.JobType is not null) { <span class="tag">@job.JobType</span> }
+                            @if (job.ProjectManager is not null) { <span class="tag">PM @job.ProjectManager</span> }
+                        </div>
+                    </div>
+
+                    <dl class="job-figs">
+                        <div><dt>Dates</dt><dd>@Format.DateRange(job.Start, job.End)</dd></div>
+                        <div><dt>Contract</dt><dd class="num">@Format.Money(job.Contract)</dd></div>
+                        <div class="job-budget">
+                            <dt>Budget used</dt>
+                            <dd>
+                                <span class="bar@(job.OverBudget ? " over" : "")"><span style="width:@Math.Min(job.PercentComplete ?? 0, 100).ToString("0", System.Globalization.CultureInfo.InvariantCulture)%"></span></span>
+                                <span class="num">@Format.Money(job.ActualCost) / @Format.Money(job.BudgetCost)</span>
+                            </dd>
+                        </div>
+                    </dl>
+
+                    <div class="job-profit">
+                        <span class="profit profit-@band.Css num" title="(Billed − costs) ÷ billed">@Format.Percent(job.ProfitPercent)</span>
+                        <span class="profit-label">@(job.ProfitPercent is null ? "Not billed" : "Profit")@if (job.ProfitPercent is not null) {<span class="profit-band"> · @band.Label</span>}</span>
+                    </div>
+
+                    <span class="chevron" aria-hidden="true"></span>
+                </summary>
+
+                <div class="job-detail">
+                    <div class="job-links">
+                        <a class="button secondary" href="@JobTreadIds.JobUrl(job.Id)" target="_blank" rel="noopener">Open in JobTread</a>
+                        @if (job.FolderUrl is not null)
+                        {
+                            <a class="button secondary" href="@job.FolderUrl" target="_blank" rel="noopener">SharePoint folder</a>
+                        }
+                        <span class="muted job-totals num">Billed @Format.Money(job.Billed) · Costs @Format.Money(job.ActualCost)</span>
+                    </div>
+                    <div class="job-detail-body" aria-live="polite"><p class="muted">Loading cost codes…</p></div>
+                </div>
+            </details>
+        }
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/site.js" asp-append-version="true"></script>
+}

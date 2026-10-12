@@ -162,6 +162,7 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 1. App shell: layout, top bar, design tokens, fonts, launchpad with all 8 tiles. Tiles for unbuilt modules show "Coming soon". Show the signed-in user's name from Easy Auth headers.
 2. Database: Azure SQL + EF Core + first migration (users and saved views). List the env var names Kareem needs to add.
 3. JobTread data path: decide with Kareem between (a) reading live through the existing `JobTreadProxy` function, or (b) having the function app sync jobs into the DB on webhook events. (b) is the agreed long-term direction; (a) is acceptable as a first step.
+   **Decided (first step):** the dashboard reads JobTread live from its own server code (`IJobTreadClient`, grant key in the `JOBTREAD_API_KEY` setting), with a 2-minute cache and a Refresh link. Not through `JobTreadProxy`, which is anonymous and only lists jobs. Moving to (b) later only changes the services in `Modules/`, not the pages.
 4. Projects screen with filters and saved views.
 
 **Phase 2:** Scheduling, then Customers (needs QuickBooks access: an Intuit developer app with OAuth2 and token storage).

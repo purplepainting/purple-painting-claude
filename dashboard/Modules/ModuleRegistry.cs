@@ -26,7 +26,7 @@ public static class ModuleRegistry
 {
     public static readonly IReadOnlyList<ModuleDefinition> All =
     [
-        new("projects",   "Projects",                "Active jobs, stages, budgets and saved views.",         "JobTread",              "clipboard", "Active jobs"),
+        new("projects",   "Projects",                "Active jobs, stages, budgets and saved views.",         "JobTread",              "clipboard", "Active jobs", ModuleStatus.Live),
         new("scheduling", "Scheduling",              "Who is on which job, by crew and week.",                "JobTread",              "calendar",  "Jobs this week"),
         new("financials", "Financials",              "Company P&L, job profit and JobTread vs QuickBooks.",   "QuickBooks + JobTread", "chart",     "Net profit YTD"),
         new("customers",  "Customers",               "Contacts, jobs, balances and reviews.",                 "JobTread + QuickBooks", "users",     "Customers owing"),
