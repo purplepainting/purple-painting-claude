@@ -34,7 +34,7 @@ public static class ModuleRegistry
         new("sales",      "Sales & Marketing",       "Commissions, door-to-door and ad spend vs lead sources.", "JobTread + Dashboard",  "megaphone", "Commissions owed", ModuleStatus.Live),
         new("vendors",    "Vendors & Payables",      "Bills, due dates and vendor balances.",                 "QuickBooks",            "receipt",   "Due in 14 days"),
         new("employees",  "Employees",               "Crew levels, PM colors and who worked where.",          "JobTread + Dashboard",  "id",        "Team members", ModuleStatus.Live),
-        new("equipment",  "Equipment & Sundries",    "Sprayers, ladders, vehicles and supplies.",             "Dashboard",             "tools",     "Low or out of stock"),
+        new("equipment",  "Equipment & Sundries",    "Shop sundries, issued to jobs, reorders; equipment by location and condition.", "Dashboard", "tools", "Low or out of stock", ModuleStatus.Live),
     ];
 
     /// <summary>The module shown at "/" (the first page after sign-in).</summary>

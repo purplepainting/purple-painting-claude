@@ -20,6 +20,10 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<CommissionPayment> CommissionPayments => Set<CommissionPayment>();
     public DbSet<SalesActivity> SalesActivities => Set<SalesActivity>();
     public DbSet<AdSpend> AdSpends => Set<AdSpend>();
+    public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
+    public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
+    public DbSet<EquipmentItem> Equipment => Set<EquipmentItem>();
+    public DbSet<EquipmentEvent> EquipmentEvents => Set<EquipmentEvent>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -88,6 +92,44 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.Month).HasMaxLength(7);
             e.Property(x => x.Channel).HasMaxLength(100);
             e.Property(x => x.Amount).HasColumnType("decimal(12,2)");
+        });
+        b.Entity<InventoryItem>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Category).HasMaxLength(60);
+            e.Property(x => x.Unit).HasMaxLength(30);
+            e.Property(x => x.Vendor).HasMaxLength(120);
+            e.Property(x => x.Sku).HasMaxLength(80);
+            e.Property(x => x.OnHand).HasColumnType("decimal(12,2)");
+            e.Property(x => x.UnitCost).HasColumnType("decimal(12,4)");
+            e.Property(x => x.ReorderAt).HasColumnType("decimal(12,2)");
+            e.Property(x => x.ReorderQty).HasColumnType("decimal(12,2)");
+        });
+        b.Entity<InventoryMovement>(e =>
+        {
+            e.HasIndex(x => x.Date);
+            e.HasIndex(x => x.JobId);
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.JobId).HasMaxLength(32);
+            e.Property(x => x.JobName).HasMaxLength(300);
+            e.Property(x => x.Quantity).HasColumnType("decimal(12,2)");
+            e.Property(x => x.UnitCost).HasColumnType("decimal(12,4)");
+        });
+        b.Entity<EquipmentItem>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Type).HasMaxLength(60);
+            e.Property(x => x.Tag).HasMaxLength(80);
+            e.Property(x => x.JobId).HasMaxLength(32);
+            e.Property(x => x.JobName).HasMaxLength(300);
+            e.Property(x => x.AssignedTo).HasMaxLength(200);
+            e.Property(x => x.Condition).HasMaxLength(30);
+            e.Property(x => x.Value).HasColumnType("decimal(12,2)");
+        });
+        b.Entity<EquipmentEvent>(e =>
+        {
+            e.HasIndex(x => x.EquipmentId);
+            e.Property(x => x.Kind).HasMaxLength(20);
         });
         b.Entity<ChangeLogEntry>(e =>
         {
@@ -252,6 +294,76 @@ public sealed class AdSpend
     public int? Leads { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+/// <summary>A sundry kept in stock at the shop (tape, plastic, caulk, sandpaper, rollers...).</summary>
+public sealed class InventoryItem
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    public string? Category { get; set; }
+    /// <summary>roll, box, tube, each...</summary>
+    public string? Unit { get; set; }
+    public decimal OnHand { get; set; }
+    /// <summary>Average cost per unit, updated on each received order.</summary>
+    public decimal UnitCost { get; set; }
+    /// <summary>Reorder when on hand drops to this.</summary>
+    public decimal ReorderAt { get; set; }
+    public decimal ReorderQty { get; set; }
+    public string? Vendor { get; set; }
+    public string? Sku { get; set; }
+    public string? Notes { get; set; }
+    public bool Active { get; set; } = true;
+}
+
+/// <summary>Stock in (bulk order received), out (issued to a job) or a count correction.</summary>
+public sealed class InventoryMovement
+{
+    public long Id { get; set; }
+    public int ItemId { get; set; }
+    public DateOnly Date { get; set; }
+    /// <summary>"received", "issued", "count".</summary>
+    public required string Kind { get; set; }
+    /// <summary>Positive in, negative out.</summary>
+    public decimal Quantity { get; set; }
+    public decimal UnitCost { get; set; }
+    public string? JobId { get; set; }
+    public string? JobName { get; set; }
+    public string? Note { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>A piece of equipment: where it is (shop or a job), its condition, who has it.</summary>
+public sealed class EquipmentItem
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    public string? Type { get; set; }
+    /// <summary>Serial number or asset tag.</summary>
+    public string? Tag { get; set; }
+    /// <summary>Null when it's at the shop.</summary>
+    public string? JobId { get; set; }
+    public string? JobName { get; set; }
+    public string? AssignedTo { get; set; }
+    /// <summary>"Good", "Needs service", "Out of service".</summary>
+    public required string Condition { get; set; }
+    public decimal? Value { get; set; }
+    public DateOnly? LastServiced { get; set; }
+    public string? Notes { get; set; }
+    public bool Active { get; set; } = true;
+    public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>History for a piece of equipment: moved, condition change, service, note.</summary>
+public sealed class EquipmentEvent
+{
+    public long Id { get; set; }
+    public int EquipmentId { get; set; }
+    public DateTime At { get; set; }
+    public required string Kind { get; set; }
+    public string? Detail { get; set; }
+    public string? By { get; set; }
 }
 
 /// <summary>Audit log: who changed what, and the result (schedule pushes, employee edits).</summary>

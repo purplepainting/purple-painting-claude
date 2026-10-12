@@ -1,0 +1,273 @@
+@page "/equipment"
+@model PurpleDashboard.Pages.Equipment.IndexModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Modules.Equipment
+
+<div class="module-head">
+    <div class="pills" role="tablist" aria-label="Equipment sections">
+        @foreach (var (key, label) in new[] { ("sundries", "Sundries"), ("equipment", "Equipment"), ("jobs", "Charged to jobs") })
+        {
+            <a class="pill@(Model.CurrentTab == key ? " active" : "")" asp-page="/Equipment/Index" asp-route-tab="@(key == "sundries" ? null : key)">@label</a>
+        }
+    </div>
+    @if (Model.CurrentTab == "jobs")
+    {
+        <form class="filters" method="get" data-autosubmit>
+            <input type="hidden" name="tab" value="jobs">
+            <select name="period" aria-label="Period">
+                <option value="30" selected="@(Model.Period == "30")">Last 30 days</option>
+                <option value="" selected="@(Model.Period is null or "90")">Last 90 days</option>
+                <option value="ytd" selected="@(Model.Period == "ytd")">Year to date</option>
+            </select>
+        </form>
+    }
+</div>
+
+@if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
+@if (!Model.CanEdit) { <div class="card notice warn"><p>The dashboard database isn't available, so nothing can be shown or saved right now.</p></div> }
+
+<datalist id="job-list">@foreach (var j in Model.Jobs) { <option value="@j.Name"></option> }</datalist>
+
+@if (Model.CurrentTab == "sundries")
+{
+    <div class="kpis">
+        <div class="card kpi"><span class="kpi-label">Items in stock</span><span class="kpi-value num">@Model.Items.Count</span></div>
+        <div class="card kpi"><span class="kpi-label">Stock value</span><span class="kpi-value num">@Format.Money(Model.StockValue)</span><span class="kpi-sub">at average cost</span></div>
+        <div class="card kpi"><span class="kpi-label">To reorder</span><span class="kpi-value num@(Model.LowStock.Any() ? " neg" : "")">@Model.LowStock.Count()</span><span class="kpi-sub">at or below reorder point</span></div>
+    </div>
+
+    @if (Model.LowStock.Any())
+    {
+        <section class="card fin-section">
+            <h2 class="section-title">Reorder</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Item</th><th class="num">On hand</th><th class="num">Reorder at</th><th class="num">Order</th><th>Vendor</th><th class="num">Est. cost</th></tr></thead>
+                    <tbody>
+                        @foreach (var i in Model.LowStock)
+                        {
+                            <tr><td>@i.Name</td><td class="num neg">@IndexModel.Qty(i.OnHand) @i.Unit</td><td class="num">@IndexModel.Qty(i.ReorderAt)</td><td class="num">@IndexModel.Qty(i.ReorderQty) @i.Unit</td><td>@i.Vendor @(i.Sku is null ? "" : "· " + i.Sku)</td><td class="num">@Format.Money(i.ReorderQty * i.UnitCost)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+
+    <div class="job-list">
+        @foreach (var group in Model.Items.GroupBy(i => i.Category ?? "Other"))
+        {
+            <h2 class="section-title">@group.Key</h2>
+            @foreach (var i in group)
+            {
+                <details class="job card emp">
+                    <summary class="emp-row">
+                        <span class="chip @(EquipmentService.IsLow(i) ? "warn" : "good")">@IndexModel.Qty(i.OnHand)</span>
+                        <div class="job-main">
+                            <div class="job-title">@i.Name</div>
+                            <div class="job-sub muted">@(i.Unit ?? "each") · @IndexModel.Cost(i.UnitCost) avg @(i.ReorderAt > 0 ? $"· reorder at {IndexModel.Qty(i.ReorderAt)}" : "") @(i.Vendor is null ? "" : "· " + i.Vendor)</div>
+                        </div>
+                        <span class="emp-hours num">@Format.Money(Math.Max(0, i.OnHand) * i.UnitCost)</span>
+                        <span class="chevron" aria-hidden="true"></span>
+                    </summary>
+                    @if (Model.CanEdit)
+                    {
+                        <div class="job-detail bonus-detail">
+                            <form method="post" asp-page-handler="Issue" class="inline-form">
+                                <input type="hidden" name="itemId" value="@i.Id">
+                                <label class="field"><span>Issue to job</span>
+                                    <select name="jobId" required><option value="">Pick a job…</option>@foreach (var j in Model.Jobs) { <option value="@j.Id">@j.Name</option> }</select></label>
+                                <label class="field"><span>Qty</span><input name="qty" inputmode="decimal" required style="width:80px"></label>
+                                <label class="field"><span>Date</span><input type="date" name="date" value="@LocalClock.Today.ToString("yyyy-MM-dd")"></label>
+                                <label class="field grow"><span>Note</span><input name="note"></label>
+                                <button class="button" type="submit">Issue</button>
+                            </form>
+                            <form method="post" asp-page-handler="Receive" class="inline-form">
+                                <input type="hidden" name="itemId" value="@i.Id">
+                                <label class="field"><span>Bulk order in: qty</span><input name="qty" inputmode="decimal" required style="width:90px"></label>
+                                <label class="field"><span>Cost per @(i.Unit ?? "unit")</span><input name="unitCost" inputmode="decimal" placeholder="@IndexModel.Cost(i.UnitCost)" style="width:100px"></label>
+                                <label class="field"><span>Date</span><input type="date" name="date" value="@LocalClock.Today.ToString("yyyy-MM-dd")"></label>
+                                <label class="field grow"><span>Note (store, PO #)</span><input name="note"></label>
+                                <button class="button secondary" type="submit">Add to stock</button>
+                            </form>
+                            <form method="post" asp-page-handler="Count" class="inline-form">
+                                <input type="hidden" name="itemId" value="@i.Id">
+                                <label class="field"><span>Counted on shelf</span><input name="counted" inputmode="decimal" value="@IndexModel.Qty(i.OnHand)" style="width:90px"></label>
+                                <button class="button secondary" type="submit">Save count</button>
+                            </form>
+                            <details class="paste-key">
+                                <summary class="muted small">Edit item</summary>
+                                <form method="post" asp-page-handler="Item" class="inline-form wrap">
+                                    <input type="hidden" name="id" value="@i.Id">
+                                    <label class="field grow"><span>Name</span><input name="name" value="@i.Name" required></label>
+                                    <label class="field"><span>Category</span><select name="category">@foreach (var c in EquipmentService.Categories) { <option selected="@(i.Category == c)">@c</option> }</select></label>
+                                    <label class="field"><span>Unit</span><input name="unit" value="@i.Unit" style="width:80px"></label>
+                                    <label class="field"><span>Reorder at</span><input name="reorderAt" inputmode="decimal" value="@IndexModel.Qty(i.ReorderAt)" style="width:80px"></label>
+                                    <label class="field"><span>Order qty</span><input name="reorderQty" inputmode="decimal" value="@IndexModel.Qty(i.ReorderQty)" style="width:80px"></label>
+                                    <label class="field"><span>Vendor</span><input name="vendor" value="@i.Vendor"></label>
+                                    <label class="field"><span>SKU</span><input name="sku" value="@i.Sku" style="width:110px"></label>
+                                    <button class="button secondary" type="submit">Save</button>
+                                </form>
+                                <form method="post" asp-page-handler="ArchiveItem" onsubmit="return confirm('Remove this item from the list?')"><input type="hidden" name="id" value="@i.Id"><button class="link-button" type="submit">Remove item</button></form>
+                            </details>
+                        </div>
+                    }
+                </details>
+            }
+        }
+        @if (Model.Items.Count == 0 && Model.CanEdit) { <div class="card empty-state"><p class="muted">No sundries yet. Add your first item below.</p></div> }
+    </div>
+
+    @if (Model.CanEdit)
+    {
+        <section class="card fin-section" style="margin-top:12px">
+            <h2 class="section-title">Add an item</h2>
+            <form method="post" asp-page-handler="Item" class="inline-form wrap">
+                <input type="hidden" name="id" value="0">
+                <label class="field grow"><span>Name</span><input name="name" required placeholder="e.g. 1.88&quot; blue tape"></label>
+                <label class="field"><span>Category</span><select name="category">@foreach (var c in EquipmentService.Categories) { <option>@c</option> }</select></label>
+                <label class="field"><span>Unit</span><input name="unit" placeholder="roll, box, tube" style="width:110px"></label>
+                <label class="field"><span>On hand</span><input name="onHand" inputmode="decimal" style="width:80px"></label>
+                <label class="field"><span>Cost per unit</span><input name="unitCost" inputmode="decimal" style="width:90px"></label>
+                <label class="field"><span>Reorder at</span><input name="reorderAt" inputmode="decimal" style="width:80px"></label>
+                <label class="field"><span>Order qty</span><input name="reorderQty" inputmode="decimal" style="width:80px"></label>
+                <label class="field"><span>Vendor</span><input name="vendor"></label>
+                <button class="button" type="submit">Add</button>
+            </form>
+        </section>
+    }
+
+    @if (Model.Movements.Count > 0)
+    {
+        <section class="card fin-section">
+            <h2 class="section-title">Last 30 days</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Date</th><th>Item</th><th></th><th class="num">Qty</th><th class="num">Cost</th><th>Job / note</th><th>By</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in Model.Movements)
+                        {
+                            <tr><td>@Format.Date(m.Date)</td><td>@Model.ItemName(m.ItemId)</td><td>@m.Kind</td><td class="num">@IndexModel.Qty(m.Quantity)</td><td class="num">@Format.Money(Math.Abs(m.Quantity) * m.UnitCost)</td><td>@(m.JobName ?? m.Note)</td><td class="muted small">@m.CreatedBy</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+else if (Model.CurrentTab == "equipment")
+{
+    <div class="kpis">
+        <div class="card kpi"><span class="kpi-label">Equipment</span><span class="kpi-value num">@Model.Gear.Count</span></div>
+        <div class="card kpi"><span class="kpi-label">At the shop</span><span class="kpi-value num">@Model.Gear.Count(g => g.JobId is null)</span></div>
+        <div class="card kpi"><span class="kpi-label">Out on jobs</span><span class="kpi-value num">@Model.Gear.Count(g => g.JobId is not null)</span></div>
+        <div class="card kpi"><span class="kpi-label">Needs attention</span><span class="kpi-value num@(Model.Gear.Any(g => g.Condition != "Good") ? " neg" : "")">@Model.Gear.Count(g => g.Condition != "Good")</span></div>
+    </div>
+
+    <div class="job-list">
+        @foreach (var group in Model.Gear.GroupBy(g => g.JobName ?? "Shop").OrderBy(g => g.Key == "Shop" ? 0 : 1).ThenBy(g => g.Key))
+        {
+            <h2 class="section-title">@group.Key <span class="muted">@group.Count()</span></h2>
+            @foreach (var g in group)
+            {
+                <details class="job card emp">
+                    <summary class="emp-row">
+                        <span class="chip @IndexModel.ConditionCss(g.Condition)">@g.Condition</span>
+                        <div class="job-main">
+                            <div class="job-title">@g.Name</div>
+                            <div class="job-sub muted">@g.Type @(g.Tag is null ? "" : "· " + g.Tag) @(g.AssignedTo is null ? "" : "· with " + g.AssignedTo) @(g.LastServiced is { } ls ? "· serviced " + Format.Date(ls) : "")</div>
+                        </div>
+                        <span class="emp-hours num muted">@(g.Value is { } v ? Format.Money(v) : "")</span>
+                        <span class="chevron" aria-hidden="true"></span>
+                    </summary>
+                    <div class="job-detail bonus-detail">
+                        @if (Model.CanEdit)
+                        {
+                            <form method="post" asp-page-handler="Move" class="inline-form">
+                                <input type="hidden" name="id" value="@g.Id">
+                                <label class="field"><span>Move to</span>
+                                    <select name="jobId"><option value="">Shop</option>@foreach (var j in Model.Jobs) { <option value="@j.Id" selected="@(g.JobId == j.Id)">@j.Name</option> }</select></label>
+                                <label class="field"><span>With (person)</span><input name="assignedTo" value="@g.AssignedTo"></label>
+                                <button class="button" type="submit">Move</button>
+                            </form>
+                            <form method="post" asp-page-handler="Condition" class="inline-form">
+                                <input type="hidden" name="id" value="@g.Id">
+                                <label class="field"><span>Condition</span><select name="condition">@foreach (var c in EquipmentService.Conditions) { <option selected="@(g.Condition == c)">@c</option> }</select></label>
+                                <label class="field grow"><span>Note</span><input name="note" placeholder="e.g. tip guard cracked"></label>
+                                <label class="check"><input type="checkbox" name="serviced" value="true"> Serviced today</label>
+                                <button class="button secondary" type="submit">Save</button>
+                            </form>
+                        }
+                        @if (Model.Events.TryGetValue(g.Id, out var events))
+                        {
+                            <ul class="crew-list">
+                                @foreach (var e in events) { <li><span class="crew-name">@e.Detail</span><span class="crew-meta">@Format.Date(DateOnly.FromDateTime(e.At.ToLocalTime())) · @e.By</span></li> }
+                            </ul>
+                        }
+                        @if (Model.CanEdit)
+                        {
+                            <form method="post" asp-page-handler="Retire" onsubmit="return confirm('Retire this equipment (sold, lost, broken)?')"><input type="hidden" name="id" value="@g.Id"><button class="link-button" type="submit">Retire</button></form>
+                        }
+                    </div>
+                </details>
+            }
+        }
+        @if (Model.Gear.Count == 0 && Model.CanEdit) { <div class="card empty-state"><p class="muted">No equipment yet. Add your first piece below.</p></div> }
+    </div>
+
+    @if (Model.CanEdit)
+    {
+        <section class="card fin-section" style="margin-top:12px">
+            <h2 class="section-title">Add equipment</h2>
+            <form method="post" asp-page-handler="Equipment" class="inline-form wrap">
+                <input type="hidden" name="id" value="0">
+                <label class="field grow"><span>Name</span><input name="name" required placeholder="e.g. Graco 695 sprayer"></label>
+                <label class="field"><span>Type</span><select name="type">@foreach (var t in EquipmentService.EquipmentTypes) { <option>@t</option> }</select></label>
+                <label class="field"><span>Serial / tag</span><input name="tag" style="width:130px"></label>
+                <label class="field"><span>Value</span><input name="value" inputmode="decimal" style="width:100px"></label>
+                <label class="field"><span>Condition</span><select name="condition">@foreach (var c in EquipmentService.Conditions) { <option>@c</option> }</select></label>
+                <button class="button" type="submit">Add</button>
+            </form>
+        </section>
+    }
+}
+else
+{
+    var byJob = Model.Movements.GroupBy(m => (m.JobId, m.JobName)).Select(g => (Job: g.Key.JobName ?? g.Key.JobId ?? "?", Cost: g.Sum(m => -m.Quantity * m.UnitCost), Lines: g.ToList())).OrderByDescending(x => x.Cost).ToList();
+    <p class="list-meta muted">Sundries issued from the shop to jobs, at average cost. These aren't in JobTread yet: adding them as job costs there would be a JobTread write, which needs approval first.</p>
+    <div class="kpis">
+        <div class="card kpi"><span class="kpi-label">Charged to jobs</span><span class="kpi-value num">@Format.Money(byJob.Sum(x => x.Cost))</span><span class="kpi-sub">since @Format.Date(Model.From)</span></div>
+        <div class="card kpi"><span class="kpi-label">Jobs</span><span class="kpi-value num">@byJob.Count</span></div>
+    </div>
+    <div class="job-list">
+        @foreach (var j in byJob)
+        {
+            <details class="job card emp">
+                <summary class="emp-row">
+                    <div class="job-main" style="grid-column: 1 / 3"><div class="job-title">@j.Job</div><div class="job-sub muted">@j.Lines.Count issues</div></div>
+                    <span class="emp-hours num"><b>@Format.Money(j.Cost)</b></span>
+                    <span class="chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="job-detail bonus-detail">
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Date</th><th>Item</th><th class="num">Qty</th><th class="num">Cost</th><th>By</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var m in j.Lines)
+                                {
+                                    <tr><td>@Format.Date(m.Date)</td><td>@Model.ItemName(m.ItemId)</td><td class="num">@IndexModel.Qty(-m.Quantity) @Model.ItemUnit(m.ItemId)</td><td class="num">@Format.Money(-m.Quantity * m.UnitCost)</td><td class="muted small">@m.CreatedBy</td>
+                                        <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="UndoIssue" asp-route-tab="jobs" onsubmit="return confirm('Undo this and put the stock back?')"><input type="hidden" name="id" value="@m.Id"><button class="link-button" type="submit">Undo</button></form> }</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </details>
+        }
+        @if (byJob.Count == 0) { <div class="card empty-state"><p class="muted">Nothing issued to jobs in this period.</p></div> }
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/site.js" asp-append-version="true"></script>
+}
