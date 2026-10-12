@@ -104,7 +104,13 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
   - **Collapsed row (the bar you tap)** also shows:
     - a **% complete ring** (a small donut like QuickBooks Projects), with the number in the middle. **% complete = costs to date ÷ budgeted cost** (capped at 100% on the ring; over 100% shows the warning color).
     - **billed %** (billed to date ÷ contract) in small text next to the ring. If billed % trails % complete by more than 10 points, flag it ("Under-billed: send a pay app").
-    - **profit %** = (billed to date − costs to date) ÷ billed to date, using JobTread billings and costs. Green at or above the target margin, warning color below the floor or negative, no color in between. Starting values: **target 35%, floor 25%**, stored as settings (later per job type, since public works runs lower) so they can be changed without a code change.
+    - **profit %** = (billed to date − costs to date) ÷ billed to date, using JobTread billings and costs. Color bands (Kareem's numbers):
+      - **30% and up: strong** (green chip).
+      - **25–29.9%: okay** (green text, no chip).
+      - **20–24.9%: baseline** (no color).
+      - **Below 20% or negative: below baseline** (warning chip).
+
+      The three thresholds (30 / 25 / 20) are stored as settings, not hard-coded, so they can change without a code change (later per job type if needed).
   - **Expanded panel:**
     - **Costs by cost code:** one line per JobTread cost code on the job with budget, actual cost to date, remaining, and % of budget used (bar, warning color over 100%).
     - **List of all cost codes on the job**, including codes with budget but no costs yet.
@@ -169,5 +175,5 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 - Commission and bonus rules (amounts, triggers, who is eligible).
 - Which job types and crews exist in JobTread, and how crews are represented there.
 - QuickBooks API access: Intuit developer app setup and where OAuth tokens are stored.
-- Projects: confirm the starting margin target (35%) and floor (25%) against real job history, and whether public works needs its own numbers.
+- Projects: whether public works needs its own margin bands (default is 30 / 25 / 20 for all jobs).
 - Beyond scheduling (the first write-back), which fields should be editable from the dashboard, and in which system (JobTread or QuickBooks) each edit lands.
