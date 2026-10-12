@@ -143,7 +143,8 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 
 ### 7. Employees (QuickBooks payroll + JobTread assignments)
 - One profile per person.
-- **Open issue:** identity matching ("Jose in QuickBooks" = "Jose in JobTread"). Propose a mapping table in the dashboard DB with a simple admin screen to link records manually. Don't attempt fuzzy auto-matching without approval.
+- **Identity matching (solved):** every JobTread membership carries `qboEmployeeId`, so JobTread and QuickBooks people match by id. A manual override in the dashboard DB covers any missing link.
+- **Per-employee settings live here** (dashboard DB): crew level (Foreman / Painter / Helper / Supervisor; suggested from QuickBooks base rate: Helper $16–22, Painter $23–28, Foreman $29+, confirmable/overridable) and a color for each PM. The schedule, Projects crew list and foreman pick read from these profiles. Until this module exists they come from the `Crew` and `ProjectManagers` settings in appsettings.json.
 
 ### 8. Equipment and sundries (dashboard-owned)
 - Fully custom: items (sprayers, ladders, vehicles, supplies), status, location or assigned crew, low/out-of-stock flags.
@@ -164,7 +165,6 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 
 ## 8. Open questions to raise with Kareem (don't guess)
 - Marketing attribution method.
-- Employee identity matching approach.
 - Commission and bonus rules (amounts, triggers, who is eligible).
 - Which job types and crews exist in JobTread, and how crews are represented there.
 - QuickBooks API access: Intuit developer app setup and where OAuth tokens are stored.

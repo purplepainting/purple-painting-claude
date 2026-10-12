@@ -112,5 +112,6 @@ Where-clause note: a single condition is passed bare (`"where": [["job","id"], "
 ## People and roles
 
 - `organization.memberships` where `isInternal = true`: staff. `role.name` is one of Admin, Project Manager, Salesperson, Office Administrator, Field Employee. There is **no foreman role**; every painter is "Field Employee".
+- **Link to QuickBooks:** each membership has `qboEmployeeId`, the QuickBooks employee id. Every internal member has one, so JobTread ↔ QuickBooks people match by id, not by name (names differ: e.g. "Alejandra Guzman" in JobTread is "Alejandra De Jesus" in QuickBooks, "Moises Gonzalez" is "Gonzales"). A user's display name belongs to their own JobTread login and can't be changed through the API (`updateMembership` has no name field).
 - Crew on a job: `job.timeEntries` grouped by `user.id`, `user.name` → sum `minutes`, max `hourlyRate`, max `startedAt`. `hourlyRate` is the cost rate on each entry.
 - Foreman (dashboard rule): highest `hourlyRate` among Field Employees on the job, ties by hours.
