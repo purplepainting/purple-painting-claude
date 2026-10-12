@@ -141,7 +141,7 @@ public sealed class QuickBooksClient(
 
     /// <summary>A report, e.g. ReportAsync("ProfitAndLoss", new() { ["start_date"] = "2026-01-01", ["end_date"] = "2026-10-12" }).</summary>
     public Task<JsonNode> ReportAsync(string report, Dictionary<string, string> parameters, CancellationToken ct) =>
-        Options.FixtureDirectory is not null ? FixtureAsync(report, ct) : GetAsync($"reports/{report}?" + string.Join("&", parameters.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}")), ct);
+        Options.FixtureDirectory is not null ? FixtureAsync(report + (parameters.TryGetValue("summarize_column_by", out var by) && by != "Month" ? "-" + by : ""), ct) : GetAsync($"reports/{report}?" + string.Join("&", parameters.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}")), ct);
 
     private async Task<JsonNode> FixtureAsync(string name, CancellationToken ct)
     {

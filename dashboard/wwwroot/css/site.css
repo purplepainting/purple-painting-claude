@@ -487,3 +487,4 @@ table.data tr.burden-row td:first-child { padding-left: 24px; }
 .tl-key { display: inline-block; width: 18px; height: 8px; border-radius: 3px; background: var(--purple-600); margin-left: 8px; }
 .tl-key.done { background: #22A35A; } .tl-key.now { background: #D97706; } .tl-key.late { background: #DC2626; }
 a.row-title, a.block-title { color: inherit; text-decoration: none; } a.row-title:hover, a.block-title:hover { text-decoration: underline; }
+table.data tr.row-off td { background: color-mix(in srgb, var(--warn-bg) 60%, transparent); }
