@@ -8,6 +8,20 @@ document.querySelectorAll('form[data-autosubmit] select').forEach(function (sele
 // Expandable rows (<details data-detail-url>) load their detail the first time they open.
 document.querySelectorAll('details[data-detail-url]').forEach(function (details) {
   details.addEventListener('toggle', load);
+  details.addEventListener('toggle', closeOthers);
+
+  // One open at a time: opening a row closes the others on the page, and keeps the
+  // opened row in view if closing a row above it moved the page.
+  function closeOthers() {
+    if (!details.open) return;
+    var moved = false;
+    document.querySelectorAll('details[data-detail-url][open]').forEach(function (other) {
+      if (other === details) return;
+      if (other.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING) moved = true;
+      other.open = false;
+    });
+    if (moved && details.getBoundingClientRect().top < 0) details.scrollIntoView({ block: 'start' });
+  }
   if (details.open) { load(); details.scrollIntoView({ block: 'start' }); }
 
   function load() {
