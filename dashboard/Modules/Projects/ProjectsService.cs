@@ -14,6 +14,8 @@ namespace PurpleDashboard.Modules.Projects;
 public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache, IOptions<JobTreadOptions> options)
 {
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(2);
+    private const int ListPageSize = 50;
+    private const int ActivityBatchSize = 30;
     private const string ListCacheKey = "projects:list";
 
     private static readonly string[] WantedFields =
@@ -57,7 +59,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         string? page = null;
         do
         {
-            var args = new JsonObject { ["where"] = Json("""["closedOn", null]"""), ["size"] = 100 };
+            var args = new JsonObject { ["where"] = Json("""["closedOn", null]"""), ["size"] = ListPageSize };
             if (page is not null) args["page"] = page;
 
             var query = new JsonObject
@@ -131,7 +133,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
 
     /// <summary>
     /// Per job: first/last scheduled task, most recent clock-in, and next scheduled day.
-    /// One JobTread call per 100 jobs, using grouped queries.
+    /// One JobTread call per batch of jobs, using grouped queries.
     /// </summary>
     private async Task<Dictionary<string, JobActivity>> LoadActivityAsync(List<string> jobIds, CancellationToken ct)
     {
@@ -141,7 +143,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         var next = new Dictionary<string, DateOnly?>();
         var today = LocalClock.Today.ToString("yyyy-MM-dd");
 
-        foreach (var chunk in jobIds.Chunk(100))
+        foreach (var chunk in jobIds.Chunk(ActivityBatchSize))
         {
             JsonArray Ids() => new(chunk.Select(id => (JsonNode)id!).ToArray());
             JsonArray JobIn() => new(new JsonArray("job", "id"), "in", Ids());

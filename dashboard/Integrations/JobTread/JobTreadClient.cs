@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
 
@@ -15,13 +15,17 @@ public sealed class JobTreadClient(HttpClient http, IOptions<JobTreadOptions> op
         var body = new JsonObject { ["query"] = query.DeepClone() };
         ((JsonObject)body["query"]!)["$"] = new JsonObject { ["grantKey"] = options.Value.GrantKey };
 
+        // Send with a Content-Length (not chunked); JobTread rejects some chunked requests as too large.
+        var json = body.ToJsonString();
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
         var started = DateTime.UtcNow;
-        using var response = await http.PostAsJsonAsync("pave", body, ct);
+        using var response = await http.PostAsync("pave", content, ct);
         var text = await response.Content.ReadAsStringAsync(ct);
-        logger.LogInformation("JobTread {Query} {Status} in {Ms} ms", name, (int)response.StatusCode, (DateTime.UtcNow - started).TotalMilliseconds);
+        logger.LogInformation("JobTread {Query} {Status} in {Ms} ms ({Bytes} bytes sent)", name, (int)response.StatusCode, (DateTime.UtcNow - started).TotalMilliseconds, json.Length);
 
         if (!response.IsSuccessStatusCode)
-            throw new JobTreadException($"JobTread returned {(int)response.StatusCode}: {Trim(text)}");
+            throw new JobTreadException($"JobTread returned {(int)response.StatusCode} for {name} ({json.Length:N0} bytes sent): {Trim(text)}");
 
         try
         {
