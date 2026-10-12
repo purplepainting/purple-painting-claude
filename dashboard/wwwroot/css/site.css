@@ -158,7 +158,7 @@ table.data td.num, table.data th.num { text-align: right; }
 .job-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 16px; align-items: center; padding: 14px 16px; min-height: 76px; }
 .job[open] > .job-row { border-bottom: 1px solid var(--border); }
 @media (hover: hover) { .job > summary:hover { background: #FBFAFD; border-radius: var(--radius); } }
-.job-progress { display: grid; justify-items: center; gap: 2px; width: 64px; }
+.job-progress { display: grid; justify-items: center; gap: 2px; min-width: 64px; }
 .job-billed { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .job-title { font-weight: 700; overflow-wrap: anywhere; }
 .job-num { color: var(--muted); font-weight: 500; font-size: 13px; }
@@ -198,7 +198,7 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
 }
 @media (max-width: 520px) {
   .job-row { padding: 12px; }
-  .job-progress { width: 52px; }
+  .job-progress { min-width: 52px; }
   .profit { font-size: 17px; padding: 2px 8px; }
   .job-totals { margin-left: 0; width: 100%; }
   .filters select { flex: 1 1 45%; }
