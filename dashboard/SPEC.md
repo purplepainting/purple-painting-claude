@@ -154,6 +154,7 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 
 ### 6. Vendors and payables (QuickBooks)
 - Bills, due dates and vendor balances. Saved views (e.g. Due in 14 days, Overdue).
+- **Built (first pass):** `/vendors`: open QuickBooks bills (Balance > 0) with views Due in 14 days (incl. overdue), Overdue, All open, By vendor; search; KPI totals; tile = owed in the next 14 days. Read only.
 
 ### 7. Employees (QuickBooks payroll + JobTread assignments)
 - One profile per person.
