@@ -113,10 +113,41 @@ public partial class IndexModel(
         return new JsonResult(new { results });
     }
 
+    /// <summary>Labor cost per person per day (by-person view): actual up to today, estimated after.</summary>
+    public Dictionary<(string Name, DateOnly Day), DayCost> PersonCosts { get; } = [];
+
+    public (decimal Actual, decimal Estimate) PersonWeekCost(string name) =>
+        (PersonCosts.Where(c => c.Key.Name == name && !c.Value.IsEstimate).Sum(c => c.Value.Amount),
+         PersonCosts.Where(c => c.Key.Name == name && c.Value.IsEstimate).Sum(c => c.Value.Amount));
+
+    private async Task LoadPersonCostsAsync(CancellationToken ct)
+    {
+        var actual = await laborCosts.GetActualByPersonAsync(From, To, ct);
+        foreach (var name in Tasks.SelectMany(t => t.People).Distinct())
+        {
+            if (!staffByName.TryGetValue(name, out var st)) continue;
+            foreach (var day in Days)
+            {
+                if (day <= Today)
+                {
+                    if (actual.TryGetValue((st.UserId, day), out var a) && a.Cost > 0) PersonCosts[(name, day)] = new DayCost(a.Cost, false);
+                }
+                else
+                {
+                    decimal est = 0;
+                    foreach (var t in Tasks.Where(t => t.Covers(day) && t.Crew.Any(c => c.MembershipId == st.MembershipId)))
+                        est += await laborCosts.EstimatePersonAsync(t, st.MembershipId, ct) ?? 0;
+                    if (est > 0) PersonCosts[(name, day)] = new DayCost(est, true);
+                }
+            }
+        }
+    }
+
     private async Task LoadCostsAsync(CancellationToken ct)
     {
         try
         {
+            if (ByPerson) { await LoadPersonCostsAsync(ct); return; }
             var actual = await laborCosts.GetActualAsync(From, To, ct);
             foreach (var jobId in Tasks.Select(t => t.JobId).Distinct())
             {

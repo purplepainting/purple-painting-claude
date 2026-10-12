@@ -40,22 +40,42 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
         }))!;
     }
 
+    /// <summary>Actual labor per (user id, local date): cost and minutes, from the same time entries.</summary>
+    public async Task<Dictionary<(string UserId, DateOnly Day), (decimal Cost, decimal Minutes)>> GetActualByPersonAsync(DateOnly from, DateOnly to, CancellationToken ct)
+    {
+        var key = $"labor:person:{from:yyyy-MM-dd}:{to:yyyy-MM-dd}";
+        return (await cache.GetOrCreateAsync(key, async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
+            var result = new Dictionary<(string, DateOnly), (decimal, decimal)>();
+            await foreach (var e in TimeEntriesAsync(LocalClock.StartOfDayUtc(from), LocalClock.StartOfDayUtc(to.AddDays(1)), ct))
+            {
+                if (e.UserId is null) continue;
+                var k = (e.UserId, LocalClock.ToLocalDate(e.StartedAt));
+                var cur = result.GetValueOrDefault(k);
+                result[k] = (cur.Item1 + e.Cost, cur.Item2 + e.Minutes);
+            }
+            return result;
+        }))!;
+    }
+
     /// <summary>Estimated cost of a scheduled task: crew × scheduled hours × burdened rate.</summary>
     public async Task<decimal?> EstimateAsync(ScheduleTask task, CancellationToken ct)
     {
-        if (task.StartTime is not { } start || task.EndTime is not { } end || end <= start || task.Crew.Count == 0) return null;
-        var hours = (decimal)(end - start).TotalHours;
-        var rates = await GetRatesAsync(ct);
-        var staff = (await people.GetStaffAsync(ct)).ToDictionary(s => s.MembershipId);
-
         decimal total = 0;
-        foreach (var member in task.Crew)
-        {
-            if (!staff.TryGetValue(member.MembershipId, out var s)) continue;
-            var rate = rates.ByUserJob.GetValueOrDefault((s.UserId, task.JobId)) is var r && r > 0 ? r : rates.ByUser.GetValueOrDefault(s.UserId);
-            total += rate * hours;
-        }
-        return total;
+        foreach (var member in task.Crew) total += await EstimatePersonAsync(task, member.MembershipId, ct) ?? 0;
+        return total > 0 ? total : null;
+    }
+
+    /// <summary>Estimated cost of one person on a scheduled task: scheduled hours × their burdened rate.</summary>
+    public async Task<decimal?> EstimatePersonAsync(ScheduleTask task, string membershipId, CancellationToken ct)
+    {
+        if (task.StartTime is not { } start || task.EndTime is not { } end || end <= start) return null;
+        var staff = (await people.GetStaffAsync(ct)).FirstOrDefault(s => s.MembershipId == membershipId);
+        if (staff is null) return null;
+        var rates = await GetRatesAsync(ct);
+        var rate = rates.ByUserJob.GetValueOrDefault((staff.UserId, task.JobId)) is var r && r > 0 ? r : rates.ByUser.GetValueOrDefault(staff.UserId);
+        return rate * (decimal)(end - start).TotalHours;
     }
 
     private sealed record Rates(Dictionary<(string UserId, string JobId), decimal> ByUserJob, Dictionary<string, decimal> ByUser);

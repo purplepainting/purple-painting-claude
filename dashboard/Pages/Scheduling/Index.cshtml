@@ -84,6 +84,14 @@ else
                                             {
                                                 <span class="row-sub muted">@row.Subtitle @if (row.ProjectManager is not null) { <span class="pm-tag" style="@Model.PmColors.Style(row.ProjectManager)">PM @row.ProjectManager.Split(' ')[0]</span> }</span>
                                             }
+                                            @if (Model.ByPerson)
+                                            {
+                                                var (pa, pe) = Model.PersonWeekCost(row.Title);
+                                                if (pa + pe > 0)
+                                                {
+                                                    <span class="row-cost num" title="Labor this week: actual @Format.Money(pa)@(pe > 0 ? $", estimated {Format.Money(pe)}" : "")">Week @Format.Money(pa + pe)@if (pe > 0) {<span class="muted"> · incl. est.</span>}</span>
+                                                }
+                                            }
                                             @if (row.JobId is not null)
                                             {
                                                 var (wa, we) = Model.WeekCost(row.JobId);
@@ -133,6 +141,10 @@ else
                                                             }
                                                         </span>
                                                     </div>
+                                                }
+                                                @if (Model.ByPerson && Model.PersonCosts.TryGetValue((row.Title, day), out var pc))
+                                                {
+                                                    <div class="day-cost num@(pc.IsEstimate ? " est" : "")" title="@(pc.IsEstimate ? "Estimated: scheduled hours × burdened rate" : "Actual labor from time entries")">@(pc.IsEstimate ? "est. " : "")@Format.Money(pc.Amount)</div>
                                                 }
                                                 @if (row.JobId is not null && Model.Costs.TryGetValue((row.JobId, day), out var dc))
                                                 {
