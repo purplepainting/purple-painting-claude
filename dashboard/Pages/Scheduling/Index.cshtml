@@ -1,19 +1,23 @@
 @page "/scheduling"
 @model PurpleDashboard.Pages.Scheduling.IndexModel
+@using PurpleDashboard.Infrastructure
 @using PurpleDashboard.Modules.Scheduling
 @using PurpleDashboard.Pages.Scheduling
+@{
+    var weekStart = LocalClock.WeekStart(Model.Today);
+}
 
 <div class="module-head schedule-head">
     <div class="schedule-nav">
         <a class="button secondary icon" asp-page="/Scheduling/Index" asp-all-route-data="Model.Route(Model.Previous)" aria-label="Previous">‹</a>
-        <a class="button secondary" asp-page="/Scheduling/Index" asp-all-route-data="Model.Route(Model.IsDay ? Model.Today : PurpleDashboard.Infrastructure.LocalClock.WeekStart(Model.Today))">Today</a>
+        <a class="button secondary" asp-page="/Scheduling/Index" asp-all-route-data="Model.Route(Model.IsDay ? Model.Today : weekStart)">Today</a>
         <a class="button secondary icon" asp-page="/Scheduling/Index" asp-all-route-data="Model.Route(Model.Next)" aria-label="Next">›</a>
         <h1 class="schedule-title">@Model.Heading</h1>
     </div>
-    <div class="schedule-toggles">
+    <div class="schedule-toggles" data-view-only>
         <div class="segmented" role="group" aria-label="Range">
             <a class="@(Model.IsDay ? "active" : "")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(Model.IsDay ? Model.From : (Model.Today >= Model.From && Model.Today <= Model.To ? Model.Today : Model.From), "day")'>Day</a>
-            <a class="@(Model.IsDay ? "" : "active")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(PurpleDashboard.Infrastructure.LocalClock.WeekStart(Model.From), "week")'>Week</a>
+            <a class="@(Model.IsDay ? "" : "active")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(LocalClock.WeekStart(Model.From), "week")'>Week</a>
             <span class="disabled" title="Coming later">Month</span>
         </div>
         @if (!Model.IsDay)
@@ -22,6 +26,10 @@
                 <a class="@(Model.ByPerson ? "" : "active")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(by: "job")'>By job</a>
                 <a class="@(Model.ByPerson ? "active" : "")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(by: "person")'>By person</a>
             </div>
+        }
+        @if (Model.EditorJson is not null)
+        {
+            <button type="button" class="button" id="edit-schedule">Edit schedule</button>
         }
     </div>
 </div>
@@ -32,101 +40,124 @@
 }
 else
 {
-    <p class="list-meta muted">
-        @Model.Tasks.Select(t => t.JobId).Distinct().Count() jobs · @Model.Tasks.SelectMany(t => t.People).Distinct().Count() people · from JobTread at @Model.LoadedAt.ToString("h:mm tt") ·
-        <a asp-page="/Scheduling/Index" asp-all-route-data="Model.Route()" asp-route-refresh="true">Refresh</a>
-    </p>
+    <div id="schedule-view">
+        <p class="list-meta muted">
+            @Model.Tasks.Select(t => t.JobId).Distinct().Count() jobs · @Model.Tasks.SelectMany(t => t.People).Distinct().Count() people · from JobTread at @Model.LoadedAt.ToString("h:mm tt") ·
+            <a asp-page="/Scheduling/Index" asp-all-route-data="Model.Route()" asp-route-refresh="true">Refresh</a>
+        </p>
 
-    <div class="legend">
-        @foreach (var (color, label) in JobColors.Legend)
+        <div class="legend">
+            <span class="legend-item">Each job has its own color.</span>
+            <span class="legend-item"><span class="pchip lvl-foreman">Foreman</span><span class="pchip lvl-painter">Painter</span><span class="pchip lvl-helper">Helper</span><span class="pchip lvl-supervisor">Supervisor</span></span>
+        </div>
+
+        @if (Model.Tasks.Count == 0)
         {
-            <span class="legend-item"><span class="swatch jc-@color.ToString().ToLowerInvariant()"></span>@label</span>
+            <div class="card empty-state"><p class="muted">Nothing scheduled in JobTread for this @(Model.IsDay ? "day" : "week").</p></div>
+        }
+        else
+        {
+            @if (!Model.IsDay)
+            {
+                <div class="card schedule-grid-card">
+                    <div class="table-wrap">
+                        <table class="schedule-grid">
+                            <thead>
+                                <tr>
+                                    <th class="row-head">@(Model.ByPerson ? "Person" : "Job")</th>
+                                    @foreach (var day in Model.Days)
+                                    {
+                                        <th class="@(day == Model.Today ? "today" : "")">@Format.Day(day)</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var row in Model.Rows)
+                                {
+                                    <tr style="@row.ColorStyle">
+                                        <th class="row-head" scope="row">
+                                            @if (row.ColorStyle is not null) { <span class="swatch"></span> }
+                                            <span class="row-title">@row.Title</span>
+                                            @if (Model.ByPerson) { <span class="pchip lvl-@Model.LevelOf(row.Title)">@Model.LevelOf(row.Title)</span> }
+                                            @if (row.Subtitle is not null || row.ProjectManager is not null)
+                                            {
+                                                <span class="row-sub muted">@row.Subtitle @if (row.ProjectManager is not null) { <span class="pm-tag" style="@Model.PmColors.Style(row.ProjectManager)">PM @row.ProjectManager.Split(' ')[0]</span> }</span>
+                                            }
+                                        </th>
+                                        @foreach (var day in Model.Days)
+                                        {
+                                            <td class="@(day == Model.Today ? "today" : "")">
+                                                @foreach (var t in row.Cells[day])
+                                                {
+                                                    <div class="block@(t.Completed ? " done" : "")" style="@JobColors.Style(t.JobId)" title="@t.Name">
+                                                        @if (Model.ByPerson)
+                                                        {
+                                                            <span class="block-title">@t.JobName</span>
+                                                            <span class="block-sub">@IndexModel.ShortName(t.Name)</span>
+                                                            <span class="block-time">@IndexModel.Time(t)</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="block-title">@IndexModel.ShortName(t.Name)</span>
+                                                            <span class="block-time">@IndexModel.Time(t)</span>
+                                                            <span class="pchips">
+                                                                @if (t.Crew.Count == 0) { <em class="block-sub">Unassigned</em> }
+                                                                @foreach (var c in t.Crew) { <span class="pchip lvl-@Model.LevelOf(c.Name)">@c.Name.Split(' ')[0]</span> }
+                                                            </span>
+                                                            @if (Model.Balance(t) is { Length: > 0 } bal) { <span class="block-balance">@bal</span> }
+                                                        }
+                                                    </div>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            @* Day-by-day list: phones, and the Day view everywhere. *@
+            <div class="agenda@(Model.IsDay ? " always" : "")">
+                @foreach (var day in Model.Days)
+                {
+                    var tasks = Model.Tasks.Where(t => t.Covers(day)).OrderBy(t => t.StartTime ?? TimeOnly.MinValue).ThenBy(t => t.JobName).ToList();
+                    if (tasks.Count == 0) { continue; }
+                    <section class="agenda-day">
+                        <h2 class="@(day == Model.Today ? "today" : "")">@day.ToString("dddd, MMM d")@(day == Model.Today ? " · Today" : "")</h2>
+                        @foreach (var t in tasks)
+                        {
+                            <div class="card agenda-item@(t.Completed ? " done" : "")" style="@JobColors.Style(t.JobId)">
+                                <div class="agenda-top">
+                                    <span class="block-title">@t.JobName</span>
+                                    <span class="agenda-time num">@IndexModel.Time(t)</span>
+                                </div>
+                                <div class="agenda-task">@IndexModel.ShortName(t.Name) @if (t.ProjectManager is not null) { <span class="pm-tag" style="@Model.PmColors.Style(t.ProjectManager)">PM @t.ProjectManager.Split(' ')[0]</span> }</div>
+                                <div class="pchips">
+                                    @if (t.Crew.Count == 0) { <em class="muted">Unassigned</em> }
+                                    @foreach (var c in t.Crew) { <span class="pchip lvl-@Model.LevelOf(c.Name)">@c.Name</span> }
+                                </div>
+                                @if (t.Address is not null)
+                                {
+                                    <a class="agenda-address" href="https://maps.google.com/?q=@Uri.EscapeDataString(t.Address)" target="_blank" rel="noopener">@t.Address</a>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
+            </div>
         }
     </div>
 
-    @if (Model.Tasks.Count == 0)
+    @if (Model.EditorJson is not null)
     {
-        <div class="card empty-state"><p class="muted">Nothing scheduled in JobTread for this @(Model.IsDay ? "day" : "week").</p></div>
+        @Html.AntiForgeryToken()
+        <div id="schedule-editor" hidden></div>
+        <script type="application/json" id="schedule-data">@Html.Raw(Model.EditorJson.Replace("</", "<\\/"))</script>
     }
-    else
-    {
-        @* Week grid: desktop and tablets. *@
-        @if (!Model.IsDay)
-        {
-            <div class="card schedule-grid-card">
-                <div class="table-wrap">
-                    <table class="schedule-grid">
-                        <thead>
-                            <tr>
-                                <th class="row-head">@(Model.ByPerson ? "Person" : "Job")</th>
-                                @foreach (var day in Model.Days)
-                                {
-                                    <th class="@(day == Model.Today ? "today" : "")">@PurpleDashboard.Infrastructure.Format.Day(day)</th>
-                                }
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var row in Model.Rows)
-                            {
-                                <tr>
-                                    <th class="row-head" scope="row">
-                                        @if (row.ColorCss is not null) { <span class="swatch @row.ColorCss"></span> }
-                                        <span class="row-title">@row.Title</span>
-                                        @if (row.Subtitle is not null) { <span class="row-sub muted">@row.Subtitle</span> }
-                                    </th>
-                                    @foreach (var day in Model.Days)
-                                    {
-                                        <td class="@(day == Model.Today ? "today" : "")">
-                                            @foreach (var t in row.Cells[day])
-                                            {
-                                                <div class="block @JobColors.Css(t.JobType)@(t.Completed ? " done" : "")" title="@t.Name">
-                                                    @if (Model.ByPerson)
-                                                    {
-                                                        <span class="block-title">#@t.JobNumber @t.JobName</span>
-                                                        <span class="block-sub">@IndexModel.ShortName(t.Name)</span>
-                                                    }
-                                                    else
-                                                    {
-                                                        <span class="block-title">@IndexModel.ShortName(t.Name)</span>
-                                                        <span class="block-sub">@(t.People.Count == 0 ? "Unassigned" : IndexModel.FirstNames(t.People))</span>
-                                                    }
-                                                </div>
-                                            }
-                                        </td>
-                                    }
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        }
+}
 
-        @* Day-by-day list: phones, and the Day view everywhere. *@
-        <div class="agenda@(Model.IsDay ? " always" : "")">
-            @foreach (var day in Model.Days)
-            {
-                var tasks = Model.Tasks.Where(t => t.Covers(day)).OrderBy(t => t.StartTime ?? TimeOnly.MinValue).ThenBy(t => t.JobName).ToList();
-                if (tasks.Count == 0) { continue; }
-                <section class="agenda-day">
-                    <h2 class="@(day == Model.Today ? "today" : "")">@day.ToString("dddd, MMM d")@(day == Model.Today ? " · Today" : "")</h2>
-                    @foreach (var t in tasks)
-                    {
-                        <div class="card agenda-item @JobColors.Css(t.JobType)@(t.Completed ? " done" : "")">
-                            <div class="agenda-top">
-                                <span class="block-title">#@t.JobNumber @t.JobName</span>
-                                <span class="agenda-time num">@IndexModel.Time(t)</span>
-                            </div>
-                            <div class="agenda-task">@IndexModel.ShortName(t.Name)</div>
-                            <div class="agenda-people">@(t.People.Count == 0 ? "Unassigned" : string.Join(", ", t.People))</div>
-                            @if (t.Address is not null)
-                            {
-                                <a class="agenda-address" href="https://maps.google.com/?q=@Uri.EscapeDataString(t.Address)" target="_blank" rel="noopener">@t.Address</a>
-                            }
-                        </div>
-                    }
-                </section>
-            }
-        </div>
-    }
+@section Scripts {
+    <script src="~/js/schedule-editor.js" asp-append-version="true"></script>
 }

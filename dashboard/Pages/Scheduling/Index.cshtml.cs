@@ -1,13 +1,26 @@
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.Extensions.Options;
+using PurpleDashboard.Auth;
 using PurpleDashboard.Infrastructure;
 using PurpleDashboard.Integrations.JobTread;
+using PurpleDashboard.Modules.People;
+using PurpleDashboard.Modules.Projects;
 using PurpleDashboard.Modules.Scheduling;
 
 namespace PurpleDashboard.Pages.Scheduling;
 
-public partial class IndexModel(ScheduleService schedule, ILogger<IndexModel> logger) : PageModel
+public partial class IndexModel(
+    ScheduleService schedule,
+    SchedulePushService pushService,
+    PeopleService people,
+    ProjectsService projects,
+    IOptions<CrewLevelOptions> crewLevels,
+    IOptions<PmColorOptions> pmColors,
+    CurrentUser me,
+    ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"week" (default) or "day".</summary>
     [BindProperty(SupportsGet = true)] public string? Mode { get; set; }
@@ -27,6 +40,13 @@ public partial class IndexModel(ScheduleService schedule, ILogger<IndexModel> lo
     public string? Error { get; private set; }
     public DateTime LoadedAt { get; private set; }
 
+    /// <summary>JSON for the schedule editor (week view only).</summary>
+    public string? EditorJson { get; private set; }
+
+    private Dictionary<string, StaffMember> staffByName = [];
+
+    public PmColorOptions PmColors => pmColors.Value;
+
     public async Task OnGetAsync(bool refresh, CancellationToken ct)
     {
         ViewData["Title"] = "Scheduling";
@@ -36,9 +56,11 @@ public partial class IndexModel(ScheduleService schedule, ILogger<IndexModel> lo
         From = IsDay ? date : LocalClock.WeekStart(date);
         To = IsDay ? date : From.AddDays(6);
 
+        IReadOnlyList<StaffMember> staff;
         try
         {
             Tasks = await schedule.GetTasksAsync(From, To, refresh, ct);
+            staff = await people.GetStaffAsync(ct);
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
         {
@@ -47,6 +69,7 @@ public partial class IndexModel(ScheduleService schedule, ILogger<IndexModel> lo
             return;
         }
         LoadedAt = LocalClock.Now;
+        staffByName = staff.GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.First());
 
         // Weekends only appear when something is scheduled on them.
         Days = Enumerable.Range(0, To.DayNumber - From.DayNumber + 1)
@@ -55,6 +78,77 @@ public partial class IndexModel(ScheduleService schedule, ILogger<IndexModel> lo
             .ToList();
 
         Rows = ByPerson ? RowsByPerson() : RowsByJob();
+
+        if (!IsDay) EditorJson = await BuildEditorJsonAsync(staff, ct);
+    }
+
+    /// <summary>Push the editor's draft to JobTread. Body: { changes: [...] }.</summary>
+    public async Task<IActionResult> OnPostPushAsync([FromBody] PushRequest request, CancellationToken ct)
+    {
+        if (request?.Changes is not { Count: > 0 }) return BadRequest(new { error = "No changes to push." });
+        if (request.Changes.Count > 100) return BadRequest(new { error = "Too many changes at once. Push in smaller batches." });
+
+        var results = await pushService.PushAsync(request.Changes, me.Email ?? me.DisplayName ?? "unknown", ct);
+        return new JsonResult(new { results });
+    }
+
+    private async Task<string> BuildEditorJsonAsync(IReadOnlyList<StaffMember> staff, CancellationToken ct)
+    {
+        var jobsOnSchedule = Tasks.GroupBy(t => t.JobId).Select(g => g.First()).ToList();
+
+        // Active jobs not on this week's schedule, for "+ Add job". Failing to load them only hides the button.
+        var addable = new List<object>();
+        try
+        {
+            var onSchedule = jobsOnSchedule.Select(j => j.JobId).ToHashSet();
+            addable = (await projects.GetOpenJobsAsync(ct: ct))
+                .Where(j => !j.IsInternal && ProjectViews.Default.Matches(j) && !onSchedule.Contains(j.Id))
+                .OrderBy(j => j.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(j => (object)new { id = j.Id, name = j.Name, type = j.JobTypeShort, pm = j.ProjectManager, pmColor = PmColors.For(j.ProjectManager), hue = JobColors.HueFor(j.Id) })
+                .ToList();
+        }
+        catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
+        {
+            logger.LogWarning(e, "Loading jobs for Add job failed");
+        }
+
+        var data = new
+        {
+            weekStart = From.ToString("yyyy-MM-dd"),
+            today = Today.ToString("yyyy-MM-dd"),
+            days = Enumerable.Range(0, 7).Select(i => From.AddDays(i).ToString("yyyy-MM-dd")),
+            jobs = jobsOnSchedule.OrderBy(j => j.JobName, StringComparer.OrdinalIgnoreCase).Select(j => new
+            {
+                id = j.JobId, name = j.JobName, type = ShortType(j.JobType), pm = j.ProjectManager, pmColor = PmColors.For(j.ProjectManager), hue = JobColors.HueFor(j.JobId),
+            }),
+            addableJobs = addable,
+            tasks = Tasks.Select(t => new
+            {
+                id = t.Id, jobId = t.JobId, name = t.Name,
+                start = t.Start.ToString("yyyy-MM-dd"), end = t.End.ToString("yyyy-MM-dd"),
+                startTime = t.StartTime?.ToString("HH:mm"), endTime = t.EndTime?.ToString("HH:mm"),
+                crew = t.Crew.Select(c => c.MembershipId),
+                parentTaskId = t.ParentTaskId, taskTypeId = t.TaskTypeId, dependents = t.Dependents,
+            }),
+            people = staff.Select(s => new { id = s.MembershipId, name = s.Name, first = s.FirstName, level = LevelOf(s) }),
+        };
+        return JsonSerializer.Serialize(data);
+    }
+
+    /// <summary>"foreman", "painter", "helper", or "supervisor" for non-field staff.</summary>
+    public string LevelOf(StaffMember s) => !s.IsField ? "supervisor" : crewLevels.Value.For(s.Name).ToString().ToLowerInvariant();
+
+    public string LevelOf(string name) => staffByName.TryGetValue(name, out var s) ? LevelOf(s) : "painter";
+
+    /// <summary>"1F · 2P · 1H": the crew balance on a task.</summary>
+    public string Balance(ScheduleTask t)
+    {
+        var levels = t.People.Select(LevelOf).Where(l => l != "supervisor").ToList();
+        if (levels.Count == 0) return "";
+        var parts = new List<string>();
+        void Add(string level, string letter) { var n = levels.Count(l => l == level); if (n > 0) parts.Add($"{n}{letter}"); }
+        Add("foreman", "F"); Add("painter", "P"); Add("helper", "H");
+        return string.Join(" · ", parts);
     }
 
     private List<ScheduleRow> RowsByJob() => Tasks
@@ -62,8 +156,7 @@ public partial class IndexModel(ScheduleService schedule, ILogger<IndexModel> lo
         .Select(g =>
         {
             var first = g.First();
-            return new ScheduleRow(
-                $"#{first.JobNumber} {first.JobName}", first.Address, JobColors.Css(first.JobType),
+            return new ScheduleRow(first.JobName, ShortType(first.JobType), JobColors.Style(first.JobId), first.ProjectManager,
                 Days.ToDictionary(d => d, d => (IReadOnlyList<ScheduleTask>)g.Where(t => t.Covers(d)).ToList()));
         })
         .OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
@@ -71,16 +164,25 @@ public partial class IndexModel(ScheduleService schedule, ILogger<IndexModel> lo
 
     private List<ScheduleRow> RowsByPerson()
     {
-        var people = Tasks.SelectMany(t => t.People).Distinct().Order(StringComparer.OrdinalIgnoreCase).ToList();
-        var rows = people.Select(p => new ScheduleRow(p, null, null,
+        var names = Tasks.SelectMany(t => t.People).Distinct().Order(StringComparer.OrdinalIgnoreCase).ToList();
+        var rows = names.Select(p => new ScheduleRow(p, null, null, null,
             Days.ToDictionary(d => d, d => (IReadOnlyList<ScheduleTask>)Tasks.Where(t => t.Covers(d) && t.People.Contains(p)).ToList())))
             .ToList();
-        var unassigned = Tasks.Where(t => t.People.Count == 0).ToList();
+        var unassigned = Tasks.Where(t => t.Crew.Count == 0).ToList();
         if (unassigned.Count > 0)
-            rows.Add(new ScheduleRow("Unassigned", null, null,
+            rows.Add(new ScheduleRow("Unassigned", null, null, null,
                 Days.ToDictionary(d => d, d => (IReadOnlyList<ScheduleTask>)unassigned.Where(t => t.Covers(d)).ToList())));
         return rows;
     }
+
+    public static string? ShortType(string? jobType) => jobType switch
+    {
+        "Residential - Standard Home" => "Residential",
+        "Residential - Custom House" => "Custom Home",
+        "Prevailing Wage" => "Public Works",
+        "Property Management / Production" => "Property Mgmt",
+        var t => t,
+    };
 
     public Dictionary<string, string?> Route(DateOnly? date = null, string? mode = null, string? by = null) => new()
     {
@@ -99,14 +201,14 @@ public partial class IndexModel(ScheduleService schedule, ILogger<IndexModel> lo
     /// <summary>Task names repeat the date ("Mon, 10.12 — Paint", "Day 6 (Mon 10/12) – Prep"); the grid already shows it.</summary>
     public static string ShortName(string name) => DatePrefix().Replace(name, "").Trim() is { Length: > 0 } s ? s : name;
 
-    public static string FirstNames(IEnumerable<string> people) => string.Join(", ", people.Select(p => p.Split(' ')[0]));
-
     public static string Time(ScheduleTask t) => t.StartTime is { } s
-        ? s.ToString("h:mm tt").Replace(":00", "") + (t.EndTime is { } e ? "–" + e.ToString("h:mm tt").Replace(":00", "") : "")
+        ? Clock(s) + (t.EndTime is { } e ? " – " + Clock(e) : "")
         : "";
+
+    private static string Clock(TimeOnly t) => t.ToString(t.Minute == 0 ? "h tt" : "h:mm tt", System.Globalization.CultureInfo.GetCultureInfo("en-US"));
 
     [GeneratedRegex(@"^(Day\s*\d+\s*\([^)]*\)|(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s*[\d./]+)\s*[—–-]\s*", RegexOptions.IgnoreCase)]
     private static partial Regex DatePrefix();
 }
 
-public sealed record ScheduleRow(string Title, string? Subtitle, string? ColorCss, IReadOnlyDictionary<DateOnly, IReadOnlyList<ScheduleTask>> Cells);
+public sealed record ScheduleRow(string Title, string? Subtitle, string? ColorStyle, string? ProjectManager, IReadOnlyDictionary<DateOnly, IReadOnlyList<ScheduleTask>> Cells);
