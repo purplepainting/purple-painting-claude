@@ -100,19 +100,14 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 - Default view: **all active jobs** = Pre-Construction, Scheduled, In Progress, On Hold, **plus Completed jobs that still have money to bill or collect** (left to bill, unpaid invoices, or retention held). A completed job leaves the active list once it's fully billed and paid. Sorted **most active first**: nearest clock-in or scheduled day to today. Jobs in Pre-Construction / Color Submittals haven't started, so they sort to the bottom. Each row shows that activity ("Today", "Next Wed 10/14", "Last time Oct 6").
 - Saved views as pills (e.g. All active, Starting this week, Over budget, Public works) plus "+ Save current view". Saved views are stored per user in the dashboard DB.
 - Filters: status, job type, project manager, text search (name/address).
-- **The JobTread budget is not used** (Purple Painting doesn't maintain it). Each job row shows two things:
-  - **Billing:** contract, billed, **left to bill**, **retention held**, and a **ring = billed ÷ contract**. Billed includes retention withheld on pay apps (it's earned, just collected at the end), so left to bill = contract − billed.
-  - **Profit:** costs to date, **profit = contract − costs** in dollars and **profit % = (contract − costs) ÷ contract**, colored in bands: 30%+ strong (green chip), 25–29.9% okay (green text), 20–24.9% baseline (plain), below 20% or negative (warning chip). Thresholds are settings (`Projects:Margin`).
-  - **Cash position = invoiced after retention − costs**, in smaller text, and a "Costs ahead of billing" flag when costs exceed invoices.
-  - **Change orders:** **contract = approved orders + pending change orders** (sent, awaiting approval; usually agreed, just not signed), shown as two parts under the total: **Approved** and **Pending**. Profit and left to bill use the total (pending COs usually go through, e.g. T&M), and a small "On approved only" line shows profit if none of the pending ones do. On bids, a pending order is the proposal, so it shows as "Proposal pending" instead. **Unsent change orders** (drafts named "Change Order") get a warning chip with count and amount. Denied ones are ignored.
-  - Early in a job, contract − costs reads high because most costs aren't in yet; the billed ring shows how far along it is.
-  - Plus stage chip, job type, PM, activity and scheduled dates.
+- **The JobTread budget is not used** (Purple Painting doesn't maintain it).
+- **Main line (collapsed) stays basic:** billed ring (billed ÷ contract), `#number Name`, short job type (Residential, Custom Home, Commercial, Public Works, Property Mgmt), billed $, and the **profit % pill**. A small orange dot marks money waiting on us (unsent change orders, or a finished job not fully billed/paid).
+- **Profit % = (contract − costs) ÷ contract**, contract including pending change orders. Pill color is a smooth gradient: **40%+ purple → 20% green → 10% yellow → 5% and below orange; negative red** (blended by hue, so purple → green passes through blue/teal). Stops live in `Modules/Projects/ProfitScale.cs`.
+- **Dropdown (expanded)** holds everything else: flags, customer, address, stage, PM, activity, scheduled dates; contract (approved · pending), billed (incl. retention held), left to bill, unpaid, costs, profit $ (and "on approved only"), cash (invoiced − costs); links to JobTread and SharePoint; then costs by cost code.
+- **Change orders:** contract = approved orders + pending change orders (usually agreed, e.g. T&M). Unsent change orders (drafts named "Change Order") get a flag. On bids, a pending order is the proposal ("Proposal pending").
+- Early in a job, contract − costs reads high because most costs aren't in yet; the billed ring shows how far along it is.
 - View pills include "Costs ahead of billing", "Left to bill" and "Done, money owed". Rows show **Unpaid** (invoice balances) and completed jobs with money outstanding get a "Done, $X to bill or collect" chip.
-- **Expandable job rows.** Tap a row to expand it in place (works by touch):
-  - **Costs by cost code:** labor, bills, total, share of the job's costs, and hours per JobTread cost code.
-  - **Every cost code on the job**, including codes on the estimate with no costs yet (grayed out).
-  - Links to the job in JobTread and its SharePoint folder.
-  - Detail loads when the row opens, so the list stays fast.
+- **Costs by cost code** (bottom of the dropdown, loaded when the row opens): labor, bills, total, share of the job's costs, and hours per JobTread cost code, including codes on the estimate with no costs yet (grayed out).
 
 ### 2. Scheduling (JobTread)
 - Week view by default (Day / Week / Month toggle), with prev/next/today. Day and Week are built; Month comes later.
@@ -173,6 +168,5 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 - Commission and bonus rules (amounts, triggers, who is eligible).
 - Which job types and crews exist in JobTread, and how crews are represented there.
 - QuickBooks API access: Intuit developer app setup and where OAuth tokens are stored.
-- Projects: whether public works needs its own margin bands (default is 30 / 25 / 20 for all jobs).
 - Projects: a work-based % complete (e.g. costs ÷ contract × 75%) was considered and set aside for now in favor of billing + costs-vs-billed.
 - Beyond scheduling (the first write-back), which fields should be editable from the dashboard, and in which system (JobTread or QuickBooks) each edit lands.

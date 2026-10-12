@@ -56,8 +56,7 @@ straight away with a "Coming soon" page.
 
 **Add or change a Projects view pill:** edit `Modules/Projects/ProjectViews.cs`.
 
-**Change the profit % color bands:** `Projects:Margin` in `appsettings.json`, or override in Azure with
-`Projects__Margin__Strong` / `Okay` / `Baseline`.
+**Change the profit % colors:** edit the stops in `Modules/Projects/ProfitScale.cs`.
 
 **Change colors or fonts:** edit the variables in `:root` at the top of `wwwroot/css/site.css`.
 

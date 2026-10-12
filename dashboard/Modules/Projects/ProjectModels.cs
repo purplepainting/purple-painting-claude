@@ -46,6 +46,19 @@ public sealed record ProjectSummary
 
     public bool IsInternal => HowBidCameIn == "Internal Job";
 
+    /// <summary>Job type in one or two words for the main line.</summary>
+    public string? JobTypeShort => JobType switch
+    {
+        "Residential - Standard Home" => "Residential",
+        "Residential - Custom House" => "Custom Home",
+        "Prevailing Wage" => "Public Works",
+        "Property Management / Production" => "Property Mgmt",
+        var t => t,
+    };
+
+    /// <summary>Money waiting on us (unsent change orders, finished job not fully billed or paid): a dot on the main line.</summary>
+    public bool NeedsAttention => (IsCompleted && HasMoneyOutstanding) || UnsentChangeOrderCount > 0;
+
     public bool IsPreConstruction => Stage == "Pre-Construction / Color Submittals";
 
     /// <summary>
@@ -105,21 +118,4 @@ public sealed record ProjectDetail(string JobId, IReadOnlyList<CostCodeLine> Cos
     public decimal TotalHours => CostCodes.Sum(c => c.Hours);
 
     public decimal? ShareOfCost(CostCodeLine line) => TotalActual > 0 ? line.Actual / TotalActual * 100 : null;
-}
-
-/// <summary>Profit % color bands. Values come from the "Projects:Margin" settings.</summary>
-public sealed class MarginBands
-{
-    public decimal Strong { get; set; } = 30;
-    public decimal Okay { get; set; } = 25;
-    public decimal Baseline { get; set; } = 20;
-
-    public (string Label, string Css) For(decimal? profitPercent) => profitPercent switch
-    {
-        null => ("No contract", "none"),
-        var p when p >= Strong => ("Strong", "strong"),
-        var p when p >= Okay => ("Okay", "okay"),
-        var p when p >= Baseline => ("Baseline", "baseline"),
-        _ => ("Below baseline", "below"),
-    };
 }

@@ -1,13 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.Extensions.Options;
 using PurpleDashboard.Infrastructure;
 using PurpleDashboard.Integrations.JobTread;
 using PurpleDashboard.Modules.Projects;
 
 namespace PurpleDashboard.Pages.Projects;
 
-public class IndexModel(ProjectsService projects, IOptions<MarginBands> margin, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(ProjectsService projects, ILogger<IndexModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true)] public string? View { get; set; }
     [BindProperty(SupportsGet = true)] public string? Pm { get; set; }
@@ -19,7 +18,6 @@ public class IndexModel(ProjectsService projects, IOptions<MarginBands> margin, 
     public Dictionary<string, int> ViewCounts { get; } = [];
     public IReadOnlyList<string> ProjectManagers { get; private set; } = [];
     public IReadOnlyList<string> JobTypes { get; private set; } = [];
-    public MarginBands Bands => margin.Value;
     public string? Error { get; private set; }
     public DateTime LoadedAt { get; private set; }
     public DateOnly Today { get; private set; }
