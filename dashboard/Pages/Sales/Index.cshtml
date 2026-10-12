@@ -1,0 +1,259 @@
+@page "/sales"
+@model PurpleDashboard.Pages.Sales.IndexModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Integrations.JobTread
+@using PurpleDashboard.Modules.Sales
+
+<div class="module-head">
+    <div class="pills" role="tablist" aria-label="Sales sections">
+        @foreach (var (key, label) in new[] { ("commissions", "Commissions"), ("doors", "Door-to-door"), ("ads", "Ads & lead sources") })
+        {
+            <a class="pill@(Model.CurrentTab == key ? " active" : "")" asp-page="/Sales/Index" asp-route-tab="@(key == "commissions" ? null : key)">@label</a>
+        }
+    </div>
+    @if (Model.CurrentTab != "commissions")
+    {
+        <form class="filters" method="get" data-autosubmit>
+            <input type="hidden" name="tab" value="@Model.CurrentTab">
+            <select name="period" aria-label="Period">
+                <option value="30" selected="@(Model.Period == "30")">Last 30 days</option>
+                <option value="" selected="@(Model.Period is null or "90")">Last 90 days</option>
+                <option value="ytd" selected="@(Model.Period == "ytd")">Year to date</option>
+            </select>
+        </form>
+    }
+</div>
+
+@if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
+@if (!Model.CanEdit) { <div class="card notice warn"><p>The dashboard database isn't available, so nothing can be saved right now.</p></div> }
+@if (Model.Error is not null) { <div class="card notice warn"><strong>Couldn't load.</strong><p>@Model.Error</p></div> }
+
+@if (Model.CurrentTab == "commissions" && Model.Error is null)
+{
+    <p class="list-meta muted">Salesperson comes from each job in JobTread. Set each person's rate below; "collected" pays as the customer pays (invoices minus unpaid, before retention).</p>
+
+    <section class="card fin-section">
+        <h2 class="section-title">Salespeople</h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Person</th><th>Rate</th><th class="num">Jobs</th><th class="num">Earned</th><th class="num">Paid</th><th class="num">Owed</th></tr></thead>
+                <tbody>
+                    @foreach (var p in Model.People)
+                    {
+                        <tr>
+                            <td>
+                                <details class="acct-list">
+                                    <summary><b>@p.Person</b></summary>
+                                    <form method="post" asp-page-handler="Rule" class="inline-form">
+                                        <input type="hidden" name="person" value="@p.Person">
+                                        <input name="percent" inputmode="decimal" value="@(p.Rule?.Percent.ToString("0.##"))" placeholder="%" aria-label="Commission percent" style="width:70px" required>
+                                        <select name="basis" aria-label="Commission based on">
+                                            @foreach (var b in SalesService.Bases) { <option value="@b" selected="@((p.Rule?.Basis ?? "collected") == b)">% @SalesService.BasisLabel(b)</option> }
+                                        </select>
+                                        <input name="notes" value="@p.Rule?.Notes" placeholder="Notes (optional)" aria-label="Notes">
+                                        <button class="button secondary" type="submit" disabled="@(!Model.CanEdit)">Save</button>
+                                    </form>
+                                </details>
+                            </td>
+                            <td class="@(p.Rule is null ? "neg" : "")">@IndexModel.Rate(p.Rule)</td>
+                            <td class="num">@p.Jobs</td>
+                            <td class="num">@Format.Money(p.Earned)</td>
+                            <td class="num">@Format.Money(p.Paid)</td>
+                            <td class="num"><b>@Format.Money(p.Owed)</b></td>
+                        </tr>
+                    }
+                    <tr class="total"><td>Total</td><td></td><td class="num">@Model.People.Sum(p => p.Jobs)</td><td class="num">@Format.Money(Model.People.Sum(p => p.Earned))</td><td class="num">@Format.Money(Model.People.Sum(p => p.Paid))</td><td class="num">@Format.Money(Model.People.Sum(p => p.Owed))</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="pills">
+        <a class="pill@(Model.Show != "all" ? " active" : "")" asp-page="/Sales/Index">Owed</a>
+        <a class="pill@(Model.Show == "all" ? " active" : "")" asp-page="/Sales/Index" asp-route-show="all">All jobs</a>
+    </div>
+    <div class="job-list" style="margin-top:10px">
+        @if (!Model.ShownCommissions.Any()) { <div class="card empty-state"><p class="muted">Nothing owed right now.</p></div> }
+        @foreach (var c in Model.ShownCommissions)
+        {
+            <details class="job card emp">
+                <summary class="emp-row with-chip">
+                    <span class="chip">@c.Person.Split(' ')[0]</span>
+                    <div class="job-main">
+                        <div class="job-title">#@c.Number @c.JobName</div>
+                        <div class="job-sub muted">@c.Stage · contract @Format.Money(c.Contract) · collected @Format.Money(c.Collected)</div>
+                    </div>
+                    <span class="emp-rates num"><span>Earned @Format.Money(c.Earned)</span><span class="muted">Paid @Format.Money(c.Paid)</span></span>
+                    <span class="emp-hours num"><b>@(c.Rule is null ? "set rate" : Format.Money(c.Owed))</b></span>
+                    <span class="chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="job-detail bonus-detail">
+                    <p class="muted small">@c.Person: @IndexModel.Rate(c.Rule) · job profit @Format.Money(c.Profit) · <a href="@JobTreadIds.JobUrl(c.JobId)" target="_blank" rel="noopener">JobTread ↗</a></p>
+                    @if (Model.CanEdit)
+                    {
+                        <form method="post" asp-page-handler="Pay" asp-route-show="@Model.Show" class="inline-form">
+                            <input type="hidden" name="jobId" value="@c.JobId"><input type="hidden" name="jobName" value="@c.JobName"><input type="hidden" name="person" value="@c.Person">
+                            <input name="amount" inputmode="decimal" value="@(c.Owed > 0 ? c.Owed.ToString("0.00") : "")" placeholder="Amount" aria-label="Amount paid" style="width:110px" required>
+                            <input type="date" name="paidOn" value="@LocalClock.Today.ToString("yyyy-MM-dd")" aria-label="Paid on">
+                            <input name="note" placeholder="Note (e.g. check #, payroll date)" aria-label="Note">
+                            <button class="button" type="submit">Record payment</button>
+                        </form>
+                    }
+                </div>
+            </details>
+        }
+    </div>
+
+    @if (Model.Payments.Count > 0)
+    {
+        <section class="card fin-section" style="margin-top:12px">
+            <h2 class="section-title">Recent payments</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Paid</th><th>Person</th><th>Job</th><th class="num">Amount</th><th>Note</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var p in Model.Payments)
+                        {
+                            <tr>
+                                <td>@Format.Date(p.PaidOn)</td><td>@p.Person</td><td>@p.JobName</td><td class="num">@Format.Money(p.Amount)</td><td class="muted">@p.Note</td>
+                                <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeletePayment" asp-route-show="@Model.Show" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@p.Id"><button class="link-button" type="submit">Delete</button></form> }</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+else if (Model.CurrentTab == "doors" && Model.Error is null)
+{
+    var a = Model.Activity;
+    <div class="kpis">
+        <div class="card kpi"><span class="kpi-label">Doors</span><span class="kpi-value num">@a.Sum(x => x.Doors).ToString("#,0")</span></div>
+        <div class="card kpi"><span class="kpi-label">Leads</span><span class="kpi-value num">@a.Sum(x => x.Leads)</span><span class="kpi-sub num">@IndexModelPct(a.Sum(x => x.Leads), a.Sum(x => x.Doors)) of doors</span></div>
+        <div class="card kpi"><span class="kpi-label">Sold</span><span class="kpi-value num">@a.Sum(x => x.Sold)</span><span class="kpi-sub num">@IndexModelPct(a.Sum(x => x.Sold), a.Sum(x => x.Leads)) of leads</span></div>
+        <div class="card kpi"><span class="kpi-label">Sold $</span><span class="kpi-value num">@Format.Money(a.Sum(x => x.SoldAmount))</span></div>
+    </div>
+
+    @if (Model.CanEdit)
+    {
+        <section class="card fin-section">
+            <h2 class="section-title">Log activity</h2>
+            <form method="post" asp-page-handler="Activity" asp-route-period="@Model.Period" class="inline-form wrap">
+                <label class="field"><span>Date</span><input type="date" name="date" value="@LocalClock.Today.ToString("yyyy-MM-dd")"></label>
+                <label class="field"><span>Rep</span><input name="rep" required list="reps"></label>
+                <datalist id="reps">@foreach (var r in a.Select(x => x.Rep).Distinct()) { <option value="@r"></option> }</datalist>
+                <label class="field"><span>Doors</span><input type="number" name="doors" min="0" value="0" style="width:90px"></label>
+                <label class="field"><span>Leads</span><input type="number" name="leads" min="0" value="0" style="width:90px"></label>
+                <label class="field"><span>Sold</span><input type="number" name="sold" min="0" value="0" style="width:90px"></label>
+                <label class="field"><span>Sold $</span><input name="soldAmount" inputmode="decimal" style="width:110px"></label>
+                <label class="field grow"><span>Notes</span><input name="notes"></label>
+                <button class="button" type="submit">Log</button>
+            </form>
+        </section>
+    }
+
+    <section class="card fin-section">
+        <h2 class="section-title">By rep</h2>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Rep</th><th class="num">Days</th><th class="num">Doors</th><th class="num">Leads</th><th class="num">Sold</th><th class="num">Sold $</th></tr></thead>
+                <tbody>
+                    @foreach (var g in a.GroupBy(x => x.Rep).OrderByDescending(g => g.Sum(x => x.SoldAmount)))
+                    {
+                        <tr><td>@g.Key</td><td class="num">@g.Select(x => x.Date).Distinct().Count()</td><td class="num">@g.Sum(x => x.Doors)</td><td class="num">@g.Sum(x => x.Leads)</td><td class="num">@g.Sum(x => x.Sold)</td><td class="num">@Format.Money(g.Sum(x => x.SoldAmount))</td></tr>
+                    }
+                    @if (a.Count == 0) { <tr><td colspan="6" class="muted">Nothing logged in this period.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    @if (a.Count > 0)
+    {
+        <section class="card fin-section">
+            <h2 class="section-title">Log</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Date</th><th>Rep</th><th class="num">Doors</th><th class="num">Leads</th><th class="num">Sold</th><th class="num">Sold $</th><th>Notes</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var x in a)
+                        {
+                            <tr><td>@Format.Date(x.Date)</td><td>@x.Rep</td><td class="num">@x.Doors</td><td class="num">@x.Leads</td><td class="num">@x.Sold</td><td class="num">@Format.Money(x.SoldAmount)</td><td class="muted">@x.Notes</td>
+                                <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeleteActivity" asp-route-period="@Model.Period" onsubmit="return confirm('Delete this entry?')"><input type="hidden" name="id" value="@x.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+else if (Model.Error is null)
+{
+    var totalSpend = Model.Spend.Sum(s => s.Amount);
+    var totalContract = Model.Sources.Sum(s => s.Contract);
+    <div class="kpis">
+        <div class="card kpi"><span class="kpi-label">Ad spend</span><span class="kpi-value num">@Format.Money(totalSpend)</span><span class="kpi-sub">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy")</span></div>
+        <div class="card kpi"><span class="kpi-label">Jobs sold (open + last year)</span><span class="kpi-value num">@Model.Sources.Sum(s => s.Jobs)</span></div>
+        <div class="card kpi"><span class="kpi-label">Contract value</span><span class="kpi-value num">@Format.Money(totalContract)</span></div>
+    </div>
+
+    <section class="card fin-section">
+        <h2 class="section-title">Lead sources</h2>
+        <p class="muted small">Jobs by JobTread's "How bid came in", next to ad spend for a channel with the same name. Which ad produced which lead isn't tracked yet (to decide), so this is side by side, not attribution.</p>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>Source</th><th class="num">Jobs</th><th class="num">Contract</th><th class="num">Spend</th><th class="num">Contract per $1 spent</th></tr></thead>
+                <tbody>
+                    @foreach (var s in Model.Sources)
+                    {
+                        <tr><td>@s.Source</td><td class="num">@s.Jobs</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    @if (Model.CanEdit)
+    {
+        <section class="card fin-section">
+            <h2 class="section-title">Enter monthly spend</h2>
+            <form method="post" asp-page-handler="Spend" asp-route-period="@Model.Period" class="inline-form wrap">
+                <label class="field"><span>Month</span><input type="month" name="month" value="@LocalClock.Today.ToString("yyyy-MM")" required></label>
+                <label class="field"><span>Channel</span><input name="channel" list="channels" required placeholder="e.g. Google Ads"></label>
+                <datalist id="channels">@foreach (var s in Model.Sources) { <option value="@s.Source"></option> }</datalist>
+                <label class="field"><span>Amount</span><input name="amount" inputmode="decimal" required style="width:120px"></label>
+                <label class="field"><span>Leads (optional)</span><input type="number" name="leads" min="0" style="width:110px"></label>
+                <button class="button" type="submit">Save</button>
+            </form>
+            <p class="muted small">Use the same channel names as JobTread's "How bid came in" so they line up. Saving the same month and channel again replaces it.</p>
+        </section>
+    }
+
+    @if (Model.Spend.Count > 0)
+    {
+        <section class="card fin-section">
+            <h2 class="section-title">Spend entered</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Month</th><th>Channel</th><th class="num">Amount</th><th class="num">Leads</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var s in Model.Spend)
+                        {
+                            <tr><td>@s.Month</td><td>@s.Channel</td><td class="num">@Format.Money(s.Amount)</td><td class="num">@(s.Leads?.ToString() ?? "—")</td>
+                                <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeleteSpend" asp-route-period="@Model.Period" onsubmit="return confirm('Delete?')"><input type="hidden" name="id" value="@s.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@functions {
+    static string IndexModelPct(decimal part, decimal whole) => whole == 0 ? "—" : Format.Percent(100m * part / whole);
+}
+
+@section Scripts {
+    <script src="~/js/site.js" asp-append-version="true"></script>
+}

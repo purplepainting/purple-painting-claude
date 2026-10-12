@@ -16,6 +16,10 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<JobTreadUserKey> JobTreadUserKeys => Set<JobTreadUserKey>();
     public DbSet<JobTreadOAuthClient> JobTreadOAuthClients => Set<JobTreadOAuthClient>();
     public DbSet<BonusPayout> BonusPayouts => Set<BonusPayout>();
+    public DbSet<CommissionRule> CommissionRules => Set<CommissionRule>();
+    public DbSet<CommissionPayment> CommissionPayments => Set<CommissionPayment>();
+    public DbSet<SalesActivity> SalesActivities => Set<SalesActivity>();
+    public DbSet<AdSpend> AdSpends => Set<AdSpend>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -57,6 +61,33 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.Status).HasMaxLength(20);
             e.Property(x => x.ApprovedBy).HasMaxLength(200);
             e.Property(x => x.PaidBy).HasMaxLength(200);
+        });
+        b.Entity<CommissionRule>(e =>
+        {
+            e.HasIndex(x => x.Person).IsUnique();
+            e.Property(x => x.Person).HasMaxLength(200);
+            e.Property(x => x.Basis).HasMaxLength(20);
+            e.Property(x => x.Percent).HasColumnType("decimal(6,3)");
+        });
+        b.Entity<CommissionPayment>(e =>
+        {
+            e.HasIndex(x => x.JobId);
+            e.Property(x => x.JobId).HasMaxLength(32);
+            e.Property(x => x.Person).HasMaxLength(200);
+            e.Property(x => x.Amount).HasColumnType("decimal(12,2)");
+        });
+        b.Entity<SalesActivity>(e =>
+        {
+            e.HasIndex(x => x.Date);
+            e.Property(x => x.Rep).HasMaxLength(200);
+            e.Property(x => x.SoldAmount).HasColumnType("decimal(12,2)");
+        });
+        b.Entity<AdSpend>(e =>
+        {
+            e.HasIndex(x => new { x.Month, x.Channel }).IsUnique();
+            e.Property(x => x.Month).HasMaxLength(7);
+            e.Property(x => x.Channel).HasMaxLength(100);
+            e.Property(x => x.Amount).HasColumnType("decimal(12,2)");
         });
         b.Entity<ChangeLogEntry>(e =>
         {
@@ -166,6 +197,61 @@ public sealed class BonusPayout
     public string? ApprovedBy { get; set; }
     public DateTime? PaidAt { get; set; }
     public string? PaidBy { get; set; }
+}
+
+/// <summary>A salesperson's commission rule. Person = the JobTread "Salesperson" value on jobs.</summary>
+public sealed class CommissionRule
+{
+    public int Id { get; set; }
+    public required string Person { get; set; }
+    public decimal Percent { get; set; }
+    /// <summary>"collected" (paid as the customer pays), "contract", or "profit".</summary>
+    public required string Basis { get; set; }
+    public string? Notes { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public string? UpdatedBy { get; set; }
+}
+
+/// <summary>A commission paid to a salesperson for a job.</summary>
+public sealed class CommissionPayment
+{
+    public int Id { get; set; }
+    public required string JobId { get; set; }
+    public string? JobName { get; set; }
+    public required string Person { get; set; }
+    public decimal Amount { get; set; }
+    public DateOnly PaidOn { get; set; }
+    public string? Note { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>A door-to-door / canvassing log entry.</summary>
+public sealed class SalesActivity
+{
+    public int Id { get; set; }
+    public DateOnly Date { get; set; }
+    public required string Rep { get; set; }
+    public int Doors { get; set; }
+    public int Leads { get; set; }
+    public int Sold { get; set; }
+    public decimal SoldAmount { get; set; }
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>Monthly ad spend per channel (entered by hand until ad platforms are connected).</summary>
+public sealed class AdSpend
+{
+    public int Id { get; set; }
+    /// <summary>yyyy-MM</summary>
+    public required string Month { get; set; }
+    public required string Channel { get; set; }
+    public decimal Amount { get; set; }
+    public int? Leads { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public string? UpdatedBy { get; set; }
 }
 
 /// <summary>Audit log: who changed what, and the result (schedule pushes, employee edits).</summary>
