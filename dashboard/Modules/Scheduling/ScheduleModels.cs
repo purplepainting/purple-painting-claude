@@ -31,13 +31,16 @@ public sealed record ScheduleTask
 
 /// <summary>
 /// Job colors for one screen: every job shown gets a different pastel. Hues are spaced evenly
-/// around the color wheel for the number of jobs; with more than 4 jobs, every other job gets a
+/// around the color wheel (greens left out) for the number of jobs; with more than 4 jobs, every other job gets a
 /// mid tone instead of a pastel so neighbors still stand apart. Jobs are ordered by id, so the same set of jobs
 /// gets the same colors. Jobs added later ("+ Add job" in the editor) fill in between.
 /// </summary>
 public sealed class JobColors
 {
     private const double Start = 268;   // first job is purple
+    // No greens (hues 70-170): crew chips are green, so green jobs would hide them.
+    // Jobs use the arc from 170 (teal-blue) round through purple, red and orange to 70 (yellow).
+    private const double ArcStart = 170, Arc = 260;
     private readonly Dictionary<string, (int Hue, bool Deep)> colors = [];
     private readonly int count;
 
@@ -60,8 +63,9 @@ public sealed class JobColors
     {
         var i = colors.Count;
         // Within the first `count` jobs: even spacing. Extra jobs land halfway between existing hues.
-        var step = 360.0 / count;
-        var hue = i < count ? Start + i * step : Start + ((i - count) * 2 + 1) * step / 2;
+        var step = Arc / count;
+        var along = i < count ? i * step : ((i - count) * 2 + 1) * step / 2;
+        var hue = ArcStart + (Start - ArcStart + along) % Arc;
         return colors[jobId] = ((int)Math.Round(hue % 360), count > 4 && i % 2 == 1);
     }
 }
