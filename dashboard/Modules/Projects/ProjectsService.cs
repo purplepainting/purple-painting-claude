@@ -39,7 +39,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         }))!;
     }
 
-    /// <summary>Budget and actual cost by cost code for one job.</summary>
+    /// <summary>Actual cost by cost code for one job, plus the codes on its estimate.</summary>
     public async Task<ProjectDetail> GetDetailAsync(string jobId, bool refresh = false, CancellationToken ct = default)
     {
         var key = "projects:detail:" + jobId;
@@ -73,7 +73,6 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
                         {
                           "id": {}, "name": {}, "number": {}, "actualCost": {}, "projectedPrice": {},
                           "location": { "address": {}, "account": { "name": {} } },
-                          "budgetCost": { "_": "costItems", "$": { "where": [["document", "id"], null] }, "sum": { "$": ["cost"] } },
                           "billed": { "_": "documents", "$": { "where": { "and": [["type", "customerInvoice"], ["status", "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } }
                         }
                         """),
@@ -115,7 +114,6 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             HowBidCameIn = fields.GetValueOrDefault(JobFields.HowBidCameIn),
             FolderUrl = fields.GetValueOrDefault(JobFields.FolderLink),
             Contract = job.Dec("projectedPrice"),
-            BudgetCost = job["budgetCost"].Dec("sum") ?? 0,
             ActualCost = job.Dec("actualCost") ?? 0,
             Billed = job["billed"].Dec("sum") ?? 0,
         };
@@ -192,7 +190,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
               "budget": {
                 "_": "costItems",
                 "$": { "where": [["document", "id"], null], "size": 100,
-                       "group": { "by": [["costCode", "id"], ["costCode", "name"], ["costCode", "number"]], "aggs": { "cost": { "sum": "cost" } } } },
+                       "group": { "by": [["costCode", "id"], ["costCode", "name"], ["costCode", "number"]], "aggs": { "n": { "count": "id" } } } },
                 "withValues": {}
               },
               "time": {
@@ -229,7 +227,8 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             return line;
         }
 
-        foreach (var row in job["budget"].GroupRows()) For(row["costCode"]).Budget += row.Dec("cost") ?? 0;
+        // The job's estimate lines only supply the list of codes on the job; their amounts aren't used.
+        foreach (var row in job["budget"].GroupRows()) For(row["costCode"]);
         foreach (var row in job["time"].GroupRows())
         {
             var line = For(row["costItem"]?["costCode"]);
@@ -240,7 +239,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             foreach (var row in bill["costItems"].GroupRows()) For(row["costCode"]).Bills += row.Dec("cost") ?? 0;
 
         var costCodes = lines.Values
-            .Select(l => new CostCodeLine(l.Number, l.Name, l.Budget, l.Labor, l.Bills, Math.Round(l.Minutes / 60m, 1)))
+            .Select(l => new CostCodeLine(l.Number, l.Name, l.Labor, l.Bills, Math.Round(l.Minutes / 60m, 1)))
             .OrderBy(l => l.Number is null)
             .ThenBy(l => l.Number, StringComparer.Ordinal)
             .ToList();
@@ -255,7 +254,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
     {
         public string? Number { get; } = number;
         public string Name { get; } = name;
-        public decimal Budget, Labor, Bills, Minutes;
+        public decimal Labor, Bills, Minutes;
     }
 }
 

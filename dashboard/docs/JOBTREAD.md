@@ -34,7 +34,7 @@ Open jobs: `organization.jobs` with `where: ["closedOn", null]`. Around 150 open
 | `projectedPrice` | Contract: total of approved customer orders |
 | `actualCost` | Costs to date: time entries + approved and pending vendor bills (verified to the cent) |
 | `projectedCost` | JobTread's projected final cost (not used yet) |
-| `costItems` where `document.id` is null | The job budget. Sum `cost` for budgeted cost |
+| `costItems` where `document.id` is null | The job budget (copied from the estimate). **Not used for numbers**: Purple Painting doesn't maintain it. The dashboard only uses it to list the cost codes on a job |
 | `closedOn` | Set when the job is closed |
 | `startTask`, `endTask` | Usually empty in our account. Use scheduled task dates instead (below) |
 
@@ -63,7 +63,6 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 | Contract | `job.projectedPrice` |
 | Billed | `documents` where `type = customerInvoice` and `status in [approved, pending]`, sum `price` |
 | Costs to date | `job.actualCost` |
-| Budgeted cost | `costItems` where `document.id` is null, sum `cost` |
 
 Document types seen: `customerOrder` (proposal/contract), `customerInvoice`, `vendorBill`. Statuses: `draft`, `pending`, `approved`, `denied`. Draft and denied are ignored everywhere.
 
@@ -71,7 +70,7 @@ Document types seen: `customerOrder` (proposal/contract), `customerInvoice`, `ve
 
 Three grouped queries on the job, merged by cost code id:
 
-- Budget: `costItems` where `document.id` is null, group by `costCode` → sum `cost`.
+- Codes on the job: `costItems` where `document.id` is null, group by `costCode` (amounts ignored).
 - Labor: `timeEntries`, group by `costItem.costCode` → sum `cost`, sum `minutes`.
 - Bills: `documents` where `type = vendorBill`, `status in [approved, pending]`, then each bill's `costItems` grouped by `costCode` → sum `cost`.
 

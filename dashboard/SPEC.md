@@ -100,23 +100,16 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 - Default view: **all active jobs**, sorted **most active first**: nearest clock-in or scheduled day to today. Jobs in Pre-Construction / Color Submittals haven't started, so they sort to the bottom. Each row shows that activity ("Today", "Next Wed 10/14", "Last time Oct 6").
 - Saved views as pills (e.g. All active, Starting this week, Over budget, Public works) plus "+ Save current view". Saved views are stored per user in the dashboard DB.
 - Filters: status, job type, project manager, text search (name/address).
-- Table columns: job, customer, stage (chip), dates, contract amount, budget used (bar + %, warning color over 100%), link to SharePoint folder.
-- **Expandable job rows.** Each job is a row (a card on phones) that expands in place when tapped; tap again to collapse. It must work by touch.
-  - **Collapsed row (the bar you tap)** also shows:
-    - a **% complete ring** (a small donut like QuickBooks Projects), with the number in the middle. **% complete = costs to date ÷ budgeted cost** (capped at 100% on the ring; over 100% shows the warning color).
-    - **billed %** (billed to date ÷ contract) in small text next to the ring. If billed % trails % complete by more than 10 points, flag it ("Under-billed: send a pay app").
-    - **profit %** = (billed to date − costs to date) ÷ billed to date, using JobTread billings and costs. Color bands (Kareem's numbers):
-      - **30% and up: strong** (green chip).
-      - **25–29.9%: okay** (green text, no chip).
-      - **20–24.9%: baseline** (no color).
-      - **Below 20% or negative: below baseline** (warning chip).
-
-      The three thresholds (30 / 25 / 20) are stored as settings, not hard-coded, so they can change without a code change (later per job type if needed).
-  - **Expanded panel:**
-    - **Costs by cost code:** one line per JobTread cost code on the job with budget, actual cost to date, remaining, and % of budget used (bar, warning color over 100%).
-    - **List of all cost codes on the job**, including codes with budget but no costs yet.
-    - Links to the job in JobTread and its SharePoint folder.
-  - Data: the job's budget, cost items and cost codes from JobTread, plus its billings and actual costs. Load the expanded detail when the row opens so the list stays fast.
+- **The JobTread budget is not used** (Purple Painting doesn't maintain it). Each job row shows two things:
+  - **Billing:** contract, billed, **left to bill**, and a **ring = billed ÷ contract**.
+  - **Costs against invoiced:** costs to date, **billed − costs** in dollars, and **profit % = (billed − costs) ÷ billed**, colored in bands: 30%+ strong (green chip), 25–29.9% okay (green text), 20–24.9% baseline (plain), below 20% or negative (warning chip). Thresholds are settings (`Projects:Margin`).
+  - Plus stage chip, job type, PM, activity, scheduled dates, and a "Costs over billed" flag when costs exceed invoices.
+- View pills include "Costs over billed" and "Left to bill".
+- **Expandable job rows.** Tap a row to expand it in place (works by touch):
+  - **Costs by cost code:** labor, bills, total, share of the job's costs, and hours per JobTread cost code.
+  - **Every cost code on the job**, including codes on the estimate with no costs yet (grayed out).
+  - Links to the job in JobTread and its SharePoint folder.
+  - Detail loads when the row opens, so the list stays fast.
 
 ### 2. Scheduling (JobTread)
 - Week view by default (Day / Week / Month toggle), with prev/next/today. Day and Week are built; Month comes later.
@@ -178,4 +171,5 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 - Which job types and crews exist in JobTread, and how crews are represented there.
 - QuickBooks API access: Intuit developer app setup and where OAuth tokens are stored.
 - Projects: whether public works needs its own margin bands (default is 30 / 25 / 20 for all jobs).
+- Projects: a work-based % complete (e.g. costs ÷ contract × 75%) was considered and set aside for now in favor of billing + costs-vs-billed.
 - Beyond scheduling (the first write-back), which fields should be editable from the dashboard, and in which system (JobTread or QuickBooks) each edit lands.
