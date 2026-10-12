@@ -53,7 +53,7 @@ else
                 var s = m.Staff;
                 <details class="job card emp" id="emp-@s.MembershipId" data-detail-url="/employees/@s.MembershipId/detail" data-error="Couldn’t load this person. Close and reopen to try again." open="@(Model.Open == s.MembershipId)">
                     <summary class="emp-row">
-                        <span class="avatar lvl-@m.Level" style="@(m.IsSupervisor ? $"background:{m.Color};color:#fff" : null)" aria-hidden="true">@IndexModel.Initials(s.Name)</span>
+                        <span class="avatar @m.ChipClass" style="@m.ChipStyle" aria-hidden="true">@IndexModel.Initials(s.Name)</span>
                         <div class="job-main">
                             <div class="job-title">@s.Name</div>
                             <div class="job-sub muted">
@@ -63,8 +63,8 @@ else
                             </div>
                         </div>
                         <span class="emp-figs">
-                            <span class="pchip lvl-@m.Level" title="@(m.LevelIsSet ? "Set on this page" : "Default (from settings / JobTread role)")">@Levels.Label(m.Level)@(m.LevelIsSet ? "" : "*")</span>
-                            @if (m.IsSupervisor) { <span class="pm-tag" style="@PmColorOptions.StyleFor(m.Color)">@s.FirstName</span> }
+                            <span class="pchip @m.ChipClass" style="@m.ChipStyle" title="@(m.LevelIsSet ? "Set on this page" : "Default (from settings / JobTread role)")">@Levels.Label(m.Level)@(m.LevelIsSet ? "" : "*")</span>
+                            @if (m.IsSupervisor && (m.Staff.Role == "Project Manager" || !string.IsNullOrEmpty(m.Profile?.Color))) { <span class="pm-tag" style="@PmColorOptions.StyleFor(m.Color)">@s.FirstName</span> }
                             <span class="emp-hours num muted">@(Model.Hours(m) > 0 ? Format.Number(Model.Hours(m)) + " hrs" : "—")</span>
                         </span>
                         <span class="chevron" aria-hidden="true"></span>

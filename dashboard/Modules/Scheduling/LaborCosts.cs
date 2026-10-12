@@ -7,8 +7,8 @@ using PurpleDashboard.Modules.People;
 
 namespace PurpleDashboard.Modules.Scheduling;
 
-/// <summary>Labor cost for one job on one day: actual from time entries, or an estimate for days ahead.</summary>
-public sealed record DayCost(decimal Amount, bool IsEstimate);
+/// <summary>Labor cost and hours for one job (or person) on one day: actual from time entries, or an estimate for days ahead.</summary>
+public sealed record DayCost(decimal Amount, bool IsEstimate, decimal Hours = 0);
 
 /// <summary>
 /// Labor costs for the schedule. Days up to today use actual time entries (JobTread's burdened cost).

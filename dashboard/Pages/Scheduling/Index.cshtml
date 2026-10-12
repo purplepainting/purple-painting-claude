@@ -52,7 +52,7 @@ else
 
         <div class="legend">
             <span class="legend-item">Each job has its own color.</span>
-            <span class="legend-item"><span class="pchip lvl-foreman">Foreman</span><span class="pchip lvl-painter">Painter</span><span class="pchip lvl-helper">Helper</span><span class="pchip lvl-supervisor">Supervisor</span></span>
+            <span class="legend-item"><span class="pchip lvl-foreman">Foreman</span><span class="pchip lvl-painter">Painter</span><span class="pchip lvl-helper">Helper</span><span class="pchip lvl-supervisor lvl-admin">Admin</span><span class="pchip lvl-supervisor lvl-office">Office</span><span class="pchip lvl-supervisor lvl-sales">Sales</span></span>
             <span class="legend-item"><span class="pchip lvl-painter no-show">Didn't clock in</span><span class="pchip lvl-painter unscheduled">Not scheduled</span> (past days)</span>
         </div>
 
@@ -83,25 +83,23 @@ else
                                         <th class="row-head" scope="row">
                                             @if (row.ColorStyle is not null) { <span class="swatch"></span> }
                                             <span class="row-title">@row.Title</span>
-                                            @if (Model.ByPerson) { <span class="pchip lvl-@Model.LevelOf(row.Title)">@Model.LevelOf(row.Title)</span> }
-                                            @if (row.Subtitle is not null || row.ProjectManager is not null)
-                                            {
-                                                <span class="row-sub muted">@row.Subtitle @if (row.ProjectManager is not null) { <span class="pm-tag" style="@Model.Team.PmStyle(row.ProjectManager)">PM @row.ProjectManager.Split(' ')[0]</span> }</span>
-                                            }
+                                            @if (Model.ByPerson) { <span style="@Model.Team.ChipStyle(row.Title)" class="pchip @Model.Team.ChipClass(row.Title)">@Model.LevelOf(row.Title)</span> }
+                                            @if (row.Subtitle is not null) { <span class="row-sub muted">@row.Subtitle</span> }
+                                            @if (row.ProjectManager is not null) { <span class="row-pm"><span class="pm-tag" style="@Model.Team.PmStyle(row.ProjectManager)">PM @row.ProjectManager.Split(' ')[0]</span></span> }
                                             @if (Model.ByPerson)
                                             {
                                                 var (pa, pe) = Model.PersonWeekCost(row.Title);
-                                                if (pa + pe > 0)
+                                                if (pa + pe > 0 || Model.PersonWeekHours(row.Title) > 0)
                                                 {
-                                                    <span class="row-cost num" title="Labor this week: actual @Format.Money(pa)@(pe > 0 ? $", estimated {Format.Money(pe)}" : "")">Week @Format.Money(pa + pe)@if (pe > 0) {<span class="muted"> · incl. est.</span>}</span>
+                                                    <span class="row-cost num" title="Labor this week: actual @Format.Money(pa)@(pe > 0 ? $", estimated {Format.Money(pe)}" : "")">Week @Format.Money(pa + pe)@if (Model.PersonWeekHours(row.Title) is > 0 and var ph) {<text> · @Format.Number(Math.Round(ph, 1))h</text>}@if (pe > 0) {<span class="muted"> · incl. est.</span>}</span>
                                                 }
                                             }
                                             @if (row.JobId is not null)
                                             {
                                                 var (wa, we) = Model.WeekCost(row.JobId);
-                                                if (wa + we > 0)
+                                                if (wa + we > 0 || Model.WeekHours(row.JobId) > 0)
                                                 {
-                                                    <span class="row-cost num" title="Labor this week: actual @Format.Money(wa)@(we > 0 ? $", estimated {Format.Money(we)}" : "")">Week @Format.Money(wa + we)@if (we > 0) {<span class="muted"> · incl. est.</span>}</span>
+                                                    <span class="row-cost num" title="Labor this week: actual @Format.Money(wa)@(we > 0 ? $", estimated {Format.Money(we)}" : "")">Week @Format.Money(wa + we)@if (Model.WeekHours(row.JobId) is > 0 and var wh) {<text> · @Format.Number(Math.Round(wh, 1))h</text>}@if (we > 0) {<span class="muted"> · incl. est.</span>}</span>
                                                 }
                                             }
                                         </th>
@@ -126,10 +124,9 @@ else
                                                                 @foreach (var c in Model.Ordered(t.Crew))
                                                                 {
                                                                     var noShow = Model.IsPastOrToday(day) && day < Model.Today && !Model.ClockedIn(t.JobId, day, c.Name);
-                                                                    <span class="pchip lvl-@Model.LevelOf(c.Name)@(noShow ? " no-show" : "")" title="@(noShow ? $"{c.Name} was scheduled but didn't clock in" : c.Name)">@c.Name.Split(' ')[0]</span>
+                                                                    <span style="@Model.Team.ChipStyle(c.Name)" class="pchip @Model.Team.ChipClass(c.Name)@(noShow ? " no-show" : "")" title="@(noShow ? $"{c.Name} was scheduled but didn't clock in" : c.Name)">@c.Name.Split(' ')[0]</span>
                                                                 }
                                                             </span>
-                                                            @if (Model.Balance(t) is { Length: > 0 } bal) { <span class="block-balance">@bal</span> }
                                                         }
                                                     </div>
                                                 }
@@ -141,18 +138,18 @@ else
                                                         <span class="pchips">
                                                             @foreach (var (name, hours) in Model.Ordered(actualCrew))
                                                             {
-                                                                <span class="pchip lvl-@Model.LevelOf(name)@(scheduled.Contains(name) ? "" : " unscheduled")" title="@name: @Format.Number(hours) hrs@(scheduled.Contains(name) ? "" : " (not scheduled)")">@name.Split(' ')[0] <span class="hrs">@Format.Number(hours)h</span></span>
+                                                                <span style="@Model.Team.ChipStyle(name)" class="pchip @Model.Team.ChipClass(name)@(scheduled.Contains(name) ? "" : " unscheduled")" title="@name: @Format.Number(hours) hrs@(scheduled.Contains(name) ? "" : " (not scheduled)")">@name.Split(' ')[0] <span class="hrs">@Format.Number(hours)h</span></span>
                                                             }
                                                         </span>
                                                     </div>
                                                 }
                                                 @if (Model.ByPerson && Model.PersonCosts.TryGetValue((row.Title, day), out var pc))
                                                 {
-                                                    <div class="day-cost num@(pc.IsEstimate ? " est" : "")" title="@(pc.IsEstimate ? "Estimated: scheduled hours × burdened rate" : "Actual labor from time entries")">@(pc.IsEstimate ? "est. " : "")@Format.Money(pc.Amount)</div>
+                                                    <div class="day-cost num@(pc.IsEstimate ? " est" : "")" title="@(pc.IsEstimate ? "Estimated: scheduled hours × burdened rate" : "Actual labor from time entries")">@(pc.IsEstimate ? "est. " : "")@IndexModel.CostLabel(pc)</div>
                                                 }
                                                 @if (row.JobId is not null && Model.Costs.TryGetValue((row.JobId, day), out var dc))
                                                 {
-                                                    <div class="day-cost num@(dc.IsEstimate ? " est" : "")" title="@(dc.IsEstimate ? "Estimated: crew × scheduled hours × burdened rate" : day == Model.Today ? "Actual labor so far today" : "Actual labor from time entries")">@(dc.IsEstimate ? "est. " : "")@Format.Money(dc.Amount)</div>
+                                                    <div class="day-cost num@(dc.IsEstimate ? " est" : "")" title="@(dc.IsEstimate ? "Estimated: crew × scheduled hours × burdened rate" : day == Model.Today ? "Actual labor so far today" : "Actual labor from time entries")">@(dc.IsEstimate ? "est. " : "")@IndexModel.CostLabel(dc)</div>
                                                 }
                                             </td>
                                         }
@@ -183,7 +180,7 @@ else
                                     <span class="block-title"><span class="swatch"></span> @job.JobName</span>
                                     <span class="agenda-meta">
                                         @if (job.ProjectManager is not null) { <span class="pm-tag" style="@Model.Team.PmStyle(job.ProjectManager)">PM @job.ProjectManager.Split(' ')[0]</span> }
-                                        @if (Model.Costs.TryGetValue((job.JobId, day), out var jc)) { <span class="day-cost num@(jc.IsEstimate ? " est" : "")">@(jc.IsEstimate ? "est. " : "")@Format.Money(jc.Amount)</span> }
+                                        @if (Model.Costs.TryGetValue((job.JobId, day), out var jc)) { <span class="day-cost num@(jc.IsEstimate ? " est" : "")">@(jc.IsEstimate ? "est. " : "")@IndexModel.CostLabel(jc)</span> }
                                     </span>
                                 </div>
                                 @foreach (var t in jobTasks)
@@ -196,7 +193,7 @@ else
                                             @foreach (var c in Model.Ordered(t.Crew))
                                             {
                                                 var noShow = day < Model.Today && !Model.ClockedIn(t.JobId, day, c.Name);
-                                                <span class="pchip lvl-@Model.LevelOf(c.Name)@(noShow ? " no-show" : "")">@c.Name.Split(' ')[0]</span>
+                                                <span style="@Model.Team.ChipStyle(c.Name)" class="pchip @Model.Team.ChipClass(c.Name)@(noShow ? " no-show" : "")">@c.Name.Split(' ')[0]</span>
                                             }
                                         </span>
                                     </div>
@@ -209,7 +206,7 @@ else
                                         <span class="pchips">
                                             @foreach (var (name, hours) in Model.Ordered(actualCrew))
                                             {
-                                                <span class="pchip lvl-@Model.LevelOf(name)@(scheduled.Contains(name) ? "" : " unscheduled")">@name.Split(' ')[0] <span class="hrs">@Format.Number(hours)h</span></span>
+                                                <span style="@Model.Team.ChipStyle(name)" class="pchip @Model.Team.ChipClass(name)@(scheduled.Contains(name) ? "" : " unscheduled")">@name.Split(' ')[0] <span class="hrs">@Format.Number(hours)h</span></span>
                                             }
                                         </span>
                                     </div>
