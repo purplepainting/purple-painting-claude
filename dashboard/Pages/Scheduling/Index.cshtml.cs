@@ -229,6 +229,15 @@ public partial class IndexModel(
 
     public string LevelOf(string name) => staffByName.TryGetValue(name, out var s) ? LevelOf(s) : "painter";
 
+    private static int Rank(string level) => level switch { "foreman" => 0, "painter" => 1, "helper" => 2, _ => 3 };
+
+    /// <summary>Crew in display order: foremen first, then painters, helpers, supervisors.</summary>
+    public IEnumerable<CrewAssignment> Ordered(IEnumerable<CrewAssignment> crew) =>
+        crew.OrderBy(c => Rank(LevelOf(c.Name))).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase);
+
+    public IEnumerable<(string Name, decimal Hours)> Ordered(IEnumerable<(string Name, decimal Hours)> crew) =>
+        crew.OrderBy(c => Rank(LevelOf(c.Name))).ThenByDescending(c => c.Hours);
+
     /// <summary>"1F · 2P · 1H": the crew balance on a task.</summary>
     public string Balance(ScheduleTask t)
     {

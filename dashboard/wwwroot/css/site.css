@@ -219,9 +219,10 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
 
 /* Crew levels, so balanced crews are easy to see. */
 .pchip { display: inline-flex; align-items: center; font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent; }
-.pchip.lvl-foreman { background: #5B21B6; color: #fff; }
-.pchip.lvl-painter { background: #15803D; color: #fff; }
-.pchip.lvl-helper { background: #FCD34D; color: #422006; }
+/* One green scale: darker = more senior. */
+.pchip.lvl-foreman { background: #14532D; color: #fff; }
+.pchip.lvl-painter { background: #22A35A; color: #fff; }
+.pchip.lvl-helper { background: #BBF7D0; color: #14532D; border-color: #86EFAC; }
 .pchip.lvl-supervisor { background: #E7E5EB; color: #3F3A47; }
 .pchips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
 .block-time { font-size: 11.5px; opacity: .8; }
