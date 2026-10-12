@@ -40,7 +40,7 @@ The app is the first shell to build on and will change a lot. Keep it easy to mo
 - **Azure only.** No AWS.
 - **Event-driven updates.** JobTread and QuickBooks webhooks push changes, instead of polling. Webhooks are received by the **function app**, which writes into the dashboard database. The dashboard reads from its database, so pages stay fast and API rate limits are respected.
 - **Own database** for (a) cached copies of JobTread and QuickBooks data that the dashboard displays, and (b) dashboard-only data (commissions, bonuses, sales activity, equipment, saved views).
-- **Main screen = launchpad of tiles.** There's no single summary page.
+- **Navigation = a left menu of module tiles** (icon, name, key number), always visible on desktop and behind a menu button on phones. **The home page is the Projects list.** (Changed from the original launchpad-of-tiles design at Kareem's request.)
 - **Each module opens on its main list**, with filters on top. **Saved filter views** (like JobTread's) are used only where they make sense: Projects and Vendors for now.
 - **No Documents tile.** Show a link to the relevant SharePoint folder next to a job or customer.
 
@@ -78,7 +78,7 @@ Mockups: https://claude.ai/artifact/DyfCdU6XShw45GyDAZyeJ9 (Kareem can export or
 
 These tokens live as CSS variables at the top of `dashboard/wwwroot/css/site.css`. Change them there, not in individual pages.
 
-Patterns: a sticky top bar with a "← Dashboard" back link and the module name; pill-shaped saved-view buttons; tables inside white cards that scroll horizontally on small screens; status chips; minimum touch target of 44px. Must work on a phone (crews and salespeople will use it in the field).
+Patterns: a left menu of module tiles and a sticky top bar with the module name (menu button on phones); pill-shaped saved-view buttons; tables inside white cards that scroll horizontally on small screens; status chips; minimum touch target of 44px. Must work on a phone (crews and salespeople will use it in the field).
 
 Phone checklist (iPhone Safari and Android Chrome), already handled in the shell; keep it true for every new screen:
 - Layout fits at 360px wide with no sideways page scroll. Wide tables scroll inside their card (`.table-wrap`).
@@ -90,10 +90,11 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 
 ## 6. Modules, in build order
 
-### Launchpad (home)
-- Greeting with the signed-in user's name, and a search box (global search comes later; it can be non-functional at first).
-- 8 tiles in this order. Each tile shows its name, a one-line description, its data source and one key number:
-  1. Projects · 2. Scheduling · 3. Financials · 4. Customers · 5. Sales and marketing · 6. Vendors and payables · 7. Employees · 8. Equipment and sundries
+### Left menu and home page
+- 8 module tiles in this order, each with its name, a short line (key-number label, or "Coming soon") and its key number:
+  1. Projects · 2. Scheduling · 3. Financials · 4. Customers · 5. Sales & Marketing · 6. Vendors and payables · 7. Employees · 8. Equipment & Sundries
+- The signed-in user's name at the bottom of the menu.
+- "/" opens the Projects list. Global search comes later.
 
 ### 1. Projects (JobTread)
 - Default view: **all active jobs**.
@@ -118,8 +119,8 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
   - Data: the job's budget, cost items and cost codes from JobTread, plus its billings and actual costs. Load the expanded detail when the row opens so the list stays fast.
 
 ### 2. Scheduling (JobTread)
-- Week view by default (Day / Week / Month toggle), with prev/next/today.
-- Rows = crews (plus an "Unassigned" row); job blocks span the days they cover.
+- Week view by default (Day / Week / Month toggle), with prev/next/today. Day and Week are built; Month comes later.
+- JobTread has no crew object (see docs/JOBTREAD.md): each job day is a task with painters assigned. So the week grid has two row modes: **by job** (default; each cell shows the day's task and who's on it) and **by person** (each cell shows the job they're on), plus an "Unassigned" row. On phones the week shows as a day-by-day list with times, people and a map link.
 - Color-coded by job type (interior / exterior / commercial-public works) using colors that differ in lightness, not hue alone.
 - Built from JobTread job dates and crew assignments.
 - **First write-back feature (Kareem's top priority for editing):** build and change the schedule here (drag a job to another crew or day, set start/end, assign crews), then push it to JobTread. JobTread stays the system of record; the dashboard is the editing surface. Plan it as:

@@ -94,7 +94,7 @@ public partial class IndexModel(ScheduleService schedule, ILogger<IndexModel> lo
 
     public string Heading => IsDay
         ? From.ToString("dddd, MMMM d")
-        : From.Month == To.Month ? $"{From:MMM d} – {To:d}" : $"{From:MMM d} – {To:MMM d}";
+        : From.Month == To.Month ? $"{From:MMM d} – {To.Day}" : $"{From:MMM d} – {To:MMM d}";
 
     /// <summary>Task names repeat the date ("Mon, 10.12 — Paint", "Day 6 (Mon 10/12) – Prep"); the grid already shows it.</summary>
     public static string ShortName(string name) => DatePrefix().Replace(name, "").Trim() is { Length: > 0 } s ? s : name;
