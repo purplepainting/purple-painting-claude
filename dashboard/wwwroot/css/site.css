@@ -493,7 +493,15 @@ table.data tr.row-off td { background: color-mix(in srgb, var(--warn-bg) 60%, tr
 .pill { cursor: pointer; transition: background-color .12s, border-color .12s, color .12s; }
 .pill:hover { border-color: var(--purple-600); }
 .pill.pressed, .segmented a.pressed { background: var(--purple-600); border-color: var(--purple-600); color: #fff; }
-.button.pressed { filter: brightness(.9); }
+.button.pressed, button.pressed { filter: brightness(.88); }
+.button.secondary.pressed, .button.danger.pressed { background: var(--purple-50); }
+button.link-button.pressed, a.pressed:not(.pill):not(.navtile):not(.button) { opacity: .6; }
+.navtile.pressed { background: rgba(255,255,255,.16); border-color: rgba(217,204,232,.5); }
+.navtile.pressed .navtile-icon { background: var(--purple-600); color: #fff; }
+/* Instant tactile response on press, before the click even fires. */
+.navtile:active { background: rgba(255,255,255,.14); }
+.pill:active, .segmented a:active { filter: brightness(.94); }
+.button, .pill, .navtile, .segmented a, button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 .nav-progress { position: fixed; top: 0; left: 0; height: 3px; width: 0; background: var(--purple-600); z-index: 100; opacity: 0; pointer-events: none; }
 body.navigating .nav-progress { opacity: 1; animation: nav-progress 8s cubic-bezier(.1, .7, .2, 1) forwards; }
 body.navigating .page { opacity: .6; transition: opacity .2s .15s; pointer-events: none; }
