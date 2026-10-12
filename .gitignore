@@ -1,0 +1,19 @@
+# Dependencies (CI installs these)
+node_modules/
+
+# Local secrets, never commit
+local.settings.json
+.env
+.env.*
+*.PublishSettings
+*.publishsettings
+
+# Azure Functions local artifacts
+bin/
+obj/
+.azurefunctions/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.zip

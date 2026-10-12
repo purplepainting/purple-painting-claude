@@ -1,0 +1,36 @@
+name: Deploy JobTread functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - '.github/workflows/functions-deploy.yml'
+  workflow_dispatch:
+
+env:
+  AZURE_FUNCTIONAPP_NAME: jobtread          # confirm this matches the Function App name in the portal
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: functions
+  NODE_VERSION: '22.x'                      # matches WEBSITE_NODE_DEFAULT_VERSION ~22
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install dependencies
+        working-directory: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        run: |
+          if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+
+      - name: Deploy to Azure
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
