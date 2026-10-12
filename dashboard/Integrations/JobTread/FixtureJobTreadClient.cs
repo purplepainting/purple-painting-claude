@@ -11,6 +11,8 @@ public sealed class FixtureJobTreadClient(IOptions<JobTreadOptions> options) : I
 {
     public bool IsConfigured => true;
 
+    public Task<JsonNode> QueryAsAsync(string name, JsonObject query, string grantKey, CancellationToken ct = default) => QueryAsync(name, query, ct);
+
     public async Task<JsonNode> QueryAsync(string name, JsonObject query, CancellationToken ct = default)
     {
         var path = Path.Combine(options.Value.FixtureDirectory!, name + ".json");

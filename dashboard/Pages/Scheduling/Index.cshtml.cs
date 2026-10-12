@@ -15,6 +15,7 @@ public partial class IndexModel(
     ScheduleService schedule,
     LaborCostService laborCosts,
     SchedulePushService pushService,
+    JobTreadUserKeys userKeys,
     TeamDirectory directory,
     ProjectsService projects,
     CurrentUser me,
@@ -128,7 +129,12 @@ public partial class IndexModel(
         if (request?.Changes is not { Count: > 0 }) return BadRequest(new { error = "No changes to push." });
         if (request.Changes.Count > 100) return BadRequest(new { error = "Too many changes at once. Push in smaller batches." });
 
-        var results = await pushService.PushAsync(request.Changes, me.Email ?? me.DisplayName ?? "unknown", ct);
+        // Changes go to JobTread as the person pushing, with their own linked key.
+        var linked = await userKeys.GetAsync(me.ObjectId, ct);
+        if (linked is null)
+            return BadRequest(new { error = "Link your JobTread account first: open Connections (bottom of the menu) and add your JobTread key. Your changes are kept in this browser." });
+
+        var results = await pushService.PushAsync(request.Changes, me.Email ?? me.DisplayName ?? "unknown", linked.GrantKey, ct);
         return new JsonResult(new { results });
     }
 
@@ -268,6 +274,7 @@ public partial class IndexModel(
             weekStart = From.ToString("yyyy-MM-dd"),
             who = Supervisors ? "supervisors" : "crew",
             today = Today.ToString("yyyy-MM-dd"),
+            jobTreadLinked = await userKeys.FindAsync(me.ObjectId, ct) is not null,
             days = Enumerable.Range(0, 7).Select(i => From.AddDays(i).ToString("yyyy-MM-dd")),
             jobs = jobsOnSchedule.OrderBy(j => j.JobName, StringComparer.OrdinalIgnoreCase).Select(j => new
             {

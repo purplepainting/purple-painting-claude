@@ -12,6 +12,9 @@ public interface IJobTreadClient
     /// <param name="query">Pave query without the grant key; the client adds it.</param>
     Task<JsonNode> QueryAsync(string name, JsonObject query, CancellationToken ct = default);
 
+    /// <summary>Same, but with someone's own grant key, so JobTread records the change as them.</summary>
+    Task<JsonNode> QueryAsAsync(string name, JsonObject query, string grantKey, CancellationToken ct = default);
+
     bool IsConfigured { get; }
 }
 

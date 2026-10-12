@@ -39,8 +39,20 @@ else
     });
 }
 
+// QuickBooks (read only). Intuit app keys come from QBO_CLIENT_ID / QBO_CLIENT_SECRET in Azure; see docs/QUICKBOOKS.md.
+builder.Services.Configure<PurpleDashboard.Integrations.QuickBooks.QuickBooksOptions>(o =>
+{
+    o.ClientId = builder.Configuration["QBO_CLIENT_ID"];
+    o.ClientSecret = builder.Configuration["QBO_CLIENT_SECRET"];
+    o.RedirectUri = builder.Configuration["QBO_REDIRECT_URI"];
+    o.ExtraScopes = builder.Configuration["QBO_EXTRA_SCOPES"];
+    o.Environment = builder.Configuration["QBO_ENVIRONMENT"] ?? "production";
+});
+builder.Services.AddHttpClient<PurpleDashboard.Integrations.QuickBooks.QuickBooksClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
+
 // Modules
 builder.Services.AddScoped<ChangeLogWriter>();
+builder.Services.AddScoped<JobTreadUserKeys>();
 builder.Services.AddScoped<PurpleDashboard.Modules.People.PeopleService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.People.TeamDirectory>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.People.TeamMembersMetric>();
