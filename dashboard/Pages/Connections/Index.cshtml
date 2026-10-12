@@ -22,30 +22,36 @@
             @if (Model.MyJobTread is not null) { <span class="chip good">Linked</span> }
             else { <span class="chip warn">Not linked</span> }
         </div>
-        <p class="muted">Schedule changes you push are sent to JobTread with your own key, so JobTread shows them as yours. Each person links their own; it's needed before you can push.</p>
+        <p class="muted">Schedule changes you push go to JobTread as you, so JobTread shows who made them. Each person signs in once; it's needed before you can push.</p>
         @if (!Model.Database.Available)
         {
             <p class="muted">The dashboard database isn't available right now.</p>
         }
         else if (Model.MyJobTread is { } k)
         {
-            <p>Linked as <b>@(k.JobTreadUserName ?? "your JobTread user")</b> on @Format.Date(DateOnly.FromDateTime(k.SavedAt.ToLocalTime())).</p>
+            <p>Linked as <b>@(k.JobTreadUserName ?? "your JobTread user")</b> on @Format.Date(DateOnly.FromDateTime(k.SavedAt.ToLocalTime()))@(k.AuthKind is "key" or null ? " (with a key)" : "").</p>
             <div class="form-actions">
-                <form method="post" asp-page-handler="UnlinkJobTread" onsubmit="return confirm('Remove your JobTread key from the dashboard?')">
-                    <button class="link-button" type="submit">Remove my key</button>
+                <a class="link-button" asp-page="/Connections/Index" asp-page-handler="JobTreadSignIn">Sign in again</a>
+                <form method="post" asp-page-handler="UnlinkJobTread" onsubmit="return confirm('Unlink your JobTread account from the dashboard?')">
+                    <button class="link-button" type="submit">Unlink</button>
                 </form>
             </div>
         }
         else
         {
-            <form method="post" asp-page-handler="LinkJobTread" class="link-form">
-                <label class="field">
-                    <span>Your JobTread grant key</span>
-                    <input type="password" name="grantKey" autocomplete="off" required placeholder="Paste the key from JobTread">
-                </label>
-                <button class="button" type="submit">Link my JobTread</button>
-            </form>
-            <p class="muted small">Create it in JobTread while signed in as yourself (the same place the dashboard's main key was made), then paste it here. It's stored encrypted and only used for your pushes.</p>
+            <div><a class="button" asp-page="/Connections/Index" asp-page-handler="JobTreadSignIn">Sign in with JobTread</a></div>
+            <p class="muted small">Opens JobTread's own sign-in page. After you approve, you come right back here.</p>
+            <details class="paste-key">
+                <summary class="muted small">Or paste a JobTread key instead</summary>
+                <form method="post" asp-page-handler="LinkJobTread" class="link-form">
+                    <label class="field">
+                        <span>Your JobTread grant key</span>
+                        <input type="password" name="grantKey" autocomplete="off" required placeholder="Paste the key from JobTread">
+                    </label>
+                    <button class="button secondary" type="submit">Link with key</button>
+                </form>
+                <p class="muted small">Create it in JobTread under API Grants while signed in as yourself. It's stored encrypted and only used for your pushes.</p>
+            </details>
         }
     </section>
 

@@ -137,11 +137,13 @@ public partial class IndexModel(
         if (request.Changes.Count > 100) return BadRequest(new { error = "Too many changes at once. Push in smaller batches." });
 
         // Changes go to JobTread as the person pushing, with their own linked key.
-        var linked = await userKeys.GetAsync(me.ObjectId, ct);
-        if (linked is null)
-            return BadRequest(new { error = "Link your JobTread account first: open Connections (bottom of the menu) and add your JobTread key. Your changes are kept in this browser." });
+        JobTreadUserKeys.Runner? runAs;
+        try { runAs = await userKeys.GetRunnerAsync(me.ObjectId, ct); }
+        catch (JobTreadException e) { return BadRequest(new { error = e.Message + " Your changes are kept in this browser." }); }
+        if (runAs is null)
+            return BadRequest(new { error = "Sign in with JobTread first: open Connections (bottom of the menu). Your changes are kept in this browser." });
 
-        var results = await pushService.PushAsync(request.Changes, me.Email ?? me.DisplayName ?? "unknown", linked.GrantKey, ct);
+        var results = await pushService.PushAsync(request.Changes, me.Email ?? me.DisplayName ?? "unknown", runAs, ct);
         return new JsonResult(new { results });
     }
 

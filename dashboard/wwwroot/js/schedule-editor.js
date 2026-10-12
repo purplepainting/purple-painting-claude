@@ -135,7 +135,7 @@
       + '</div>';
     html += '<p class="muted editor-help">Drag a box to another day to move the whole crew. Drag a painter (or tap a painter, then tap where they go) to move just them; '
       + 'drop on <b>Not scheduled</b> to take them off. Tap a box to change times, crew or name. Nothing goes to JobTread until you push.</p>';
-    if (!data.jobTreadLinked) html += '<div class="card notice warn">To push changes, link your JobTread account on <a href="/connections">Connections</a> first, so JobTread shows the changes as yours. You can still edit; the draft is kept.</div>';
+    if (!data.jobTreadLinked) html += '<div class="card notice warn">To push changes, sign in with JobTread on <a href="/connections">Connections</a> first, so JobTread shows the changes as yours. You can still edit; the draft is kept.</div>';
     if (selected) html += '<div class="select-hint">Moving <b>' + esc(first(selected.id)) + '</b> on ' + esc(dayLabel(selected.day)) + ': tap a job box that day, or Not scheduled. <button type="button" class="link-button" data-act="cancel-select">Cancel</button></div>';
 
     html += '<div class="card schedule-grid-card"><div class="table-wrap"><table class="schedule-grid editor-grid"><thead><tr><th class="row-head">Job</th>';

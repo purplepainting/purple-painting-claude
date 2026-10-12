@@ -112,6 +112,35 @@ namespace PurpleDashboard.Data.Migrations
                     b.ToTable("EmployeeProfiles");
                 });
 
+            modelBuilder.Entity("PurpleDashboard.Data.JobTreadOAuthClient", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("ClientSecretProtected")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RedirectUri")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("RegisteredAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("JobTreadOAuthClients");
+                });
+
             modelBuilder.Entity("PurpleDashboard.Data.JobTreadUserKey", b =>
                 {
                     b.Property<int>("Id")
@@ -119,6 +148,13 @@ namespace PurpleDashboard.Data.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("AccessExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AuthKind")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("GrantKeyProtected")
                         .IsRequired()
@@ -131,6 +167,9 @@ namespace PurpleDashboard.Data.Migrations
                     b.Property<string>("JobTreadUserName")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("RefreshTokenProtected")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<DateTime>("SavedAt")
                         .HasColumnType("datetime2");

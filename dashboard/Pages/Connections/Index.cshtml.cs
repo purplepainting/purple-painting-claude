@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using PurpleDashboard.Auth;
@@ -13,9 +14,10 @@ namespace PurpleDashboard.Pages.Connections;
 /// Connect: redirect to Intuit with a random state (also kept in a cookie); Intuit returns to
 /// /quickbooks/callback (Callback page), which checks the state and saves the connection.
 /// </summary>
-public class IndexModel(QuickBooksClient quickBooks, IJobTreadClient jobTread, JobTreadUserKeys userKeys, DatabaseStatus database, ChangeLogWriter changeLog, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(QuickBooksClient quickBooks, IJobTreadClient jobTread, JobTreadUserKeys userKeys, JobTreadOAuth jobTreadOAuth, IDataProtectionProvider protection, DatabaseStatus database, ChangeLogWriter changeLog, CurrentUser me, ILogger<IndexModel> logger) : PageModel
 {
     public const string StateCookie = "qbo_state";
+    public const string JobTreadCookie = "jt_signin";
 
     public bool JobTreadConfigured => jobTread.IsConfigured;
     public bool QuickBooksConfigured => quickBooks.IsConfigured;
@@ -69,6 +71,36 @@ public class IndexModel(QuickBooksClient quickBooks, IJobTreadClient jobTread, J
         return RedirectToPage();
     }
 
+    /// <summary>
+    /// "Sign in with JobTread": send the person to JobTread's sign-in. The state and PKCE verifier are
+    /// kept in a short-lived encrypted cookie and checked on the way back (/jobtread/callback).
+    /// </summary>
+    public async Task<IActionResult> OnGetJobTreadSignInAsync(CancellationToken ct)
+    {
+        if (!database.Available || me.ObjectId is null) { Message = "Can't sign in right now: the dashboard database isn't available."; return RedirectToPage(); }
+        var redirectUri = JobTreadRedirectUri(HttpContext);
+        try
+        {
+            var (clientId, _) = await jobTreadOAuth.GetClientAsync(redirectUri, ct);
+            var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+            var (verifier, challenge) = JobTreadOAuth.NewPkce();
+            Response.Cookies.Append(JobTreadCookie, protection.CreateProtector(JobTreadCookie).Protect($"{state}|{verifier}"), new CookieOptions
+            {
+                HttpOnly = true, Secure = true, SameSite = SameSiteMode.Lax, MaxAge = TimeSpan.FromMinutes(15), Path = "/jobtread",
+            });
+            return Redirect(jobTreadOAuth.AuthorizeUrl(clientId, redirectUri, state, challenge));
+        }
+        catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
+        {
+            logger.LogError(e, "Starting JobTread sign-in failed");
+            Message = e is JobTreadException ? e.Message : "Couldn't reach JobTread. Try again in a minute.";
+            return RedirectToPage();
+        }
+    }
+
+    /// <summary>Where JobTread sends people back after signing in.</summary>
+    public static string JobTreadRedirectUri(HttpContext http) => $"https://{http.Request.Host}/jobtread/callback";
+
     /// <summary>Link the signed-in person's own JobTread grant key (checked with JobTread first).</summary>
     public async Task<IActionResult> OnPostLinkJobTreadAsync(string? grantKey, CancellationToken ct)
     {
@@ -88,7 +120,7 @@ public class IndexModel(QuickBooksClient quickBooks, IJobTreadClient jobTread, J
     public async Task<IActionResult> OnPostUnlinkJobTreadAsync(CancellationToken ct)
     {
         if (me.ObjectId is not null && database.Available) await userKeys.RemoveAsync(me.ObjectId, ct);
-        Message = "Your JobTread key was removed from the dashboard.";
+        Message = "Your JobTread account was unlinked from the dashboard.";
         return RedirectToPage();
     }
 
