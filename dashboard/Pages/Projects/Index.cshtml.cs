@@ -2,11 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using PurpleDashboard.Infrastructure;
 using PurpleDashboard.Integrations.JobTread;
+using PurpleDashboard.Modules.People;
 using PurpleDashboard.Modules.Projects;
 
 namespace PurpleDashboard.Pages.Projects;
 
-public class IndexModel(ProjectsService projects, Microsoft.Extensions.Options.IOptions<PurpleDashboard.Modules.People.PmColorOptions> pmColors, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(ProjectsService projects, TeamDirectory directory, ILogger<IndexModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true)] public string? View { get; set; }
     [BindProperty(SupportsGet = true)] public string? Pm { get; set; }
@@ -20,7 +21,8 @@ public class IndexModel(ProjectsService projects, Microsoft.Extensions.Options.I
     public IReadOnlyList<string> JobTypes { get; private set; } = [];
     public string? Error { get; private set; }
     public DateTime LoadedAt { get; private set; }
-    public PurpleDashboard.Modules.People.PmColorOptions PmColors => pmColors.Value;
+    /// <summary>PM tag colors (Employees page, then settings).</summary>
+    public Team Team { get; private set; } = null!;
     public DateOnly Today { get; private set; }
 
     public async Task OnGetAsync(bool refresh, CancellationToken ct)
@@ -28,6 +30,7 @@ public class IndexModel(ProjectsService projects, Microsoft.Extensions.Options.I
         ViewData["Title"] = "Projects";
         ViewData["ModuleName"] = "Projects";
         CurrentView = ProjectViews.Find(View);
+        Team = directory.Fallback();
 
         IReadOnlyList<ProjectSummary> all;
         try
@@ -41,6 +44,11 @@ public class IndexModel(ProjectsService projects, Microsoft.Extensions.Options.I
             return;
         }
         LoadedAt = LocalClock.Now;
+        try { Team = await directory.GetAsync(ct); }
+        catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
+        {
+            logger.LogWarning(e, "Loading staff for PM colors failed; using settings colors");
+        }
 
         ProjectManagers = all.Select(j => j.ProjectManager).OfType<string>().Distinct().Order().ToList();
         JobTypes = all.Select(j => j.JobType).OfType<string>().Distinct().Order().ToList();

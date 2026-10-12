@@ -147,7 +147,9 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 ### 7. Employees (QuickBooks payroll + JobTread assignments)
 - One profile per person.
 - **Identity matching (solved):** every JobTread membership carries `qboEmployeeId`, so JobTread and QuickBooks people match by id. A manual override in the dashboard DB covers any missing link.
-- **Per-employee settings live here** (dashboard DB): crew level (Foreman / Painter / Helper / Supervisor; suggested from QuickBooks base rate: Helper $16–22, Painter $23–28, Foreman $29+, confirmable/overridable) and a color for each PM. The schedule, Projects crew list and foreman pick read from these profiles. Until this module exists they come from the `Crew` and `ProjectManagers` settings in appsettings.json.
+- **Per-employee settings live here** (dashboard DB): crew level (Foreman / Painter / Helper / Supervisor; suggested from QuickBooks base rate: Helper $16–22, Painter $23–28, Foreman $29+, confirmable/overridable) and a color for each PM. The schedule and Projects PM tags read from these profiles; anyone not set falls back to the `Crew` and `ProjectManagers` settings in appsettings.json, then to the JobTread role (non-field staff = Supervisor). (Projects' foreman pick still uses highest pay.)
+- **Built:** `/employees` lists everyone internal in JobTread, grouped Crew / Supervisors & office, with level chip (`*` = default, not set yet), PM color tag, hours this week and a flag when no QuickBooks employee is linked. Opening a row shows level, PM color (supervisors), notes, and jobs worked in the last 30 days (from time entries). Saving needs the database; without it the page is read only. Every save and every schedule push is written to the `ChangeLog` table (who, what, before/after, result).
+- **Later:** QuickBooks pay and the level suggestion from base rate (needs a QuickBooks connection in the app), certifications, viewing the change log.
 
 ### 8. Equipment and sundries (dashboard-owned)
 - Fully custom: items (sprayers, ladders, vehicles, supplies), status, location or assigned crew, low/out-of-stock flags.

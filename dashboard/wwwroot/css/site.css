@@ -364,3 +364,39 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
 /* Tasks marked for deletion (renamed DELETE, moved to Sunday): delete them in JobTread. */
 .block.marked-delete { background: #FDF1F1; color: #7F1D1D; border-left-color: #B91C1C; }
 .block.marked-delete .block-title { text-decoration: line-through; }
+
+/* Employees */
+.section-title { font-size: 15px; margin: 18px 0 8px; }
+.section-title .muted { font-weight: 500; margin-left: 4px; }
+.emp-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 8px 14px; min-height: 56px; cursor: pointer; list-style: none; }
+.emp-row::-webkit-details-marker { display: none; }
+.emp-row > * { min-width: 0; }
+.emp[open] > .emp-row { border-bottom: 1px solid var(--border); }
+.avatar { width: 36px; height: 36px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 13px; font-weight: 700; background: #E7E5EB; color: #3F3A47; }
+.avatar.lvl-foreman { background: #14532D; color: #fff; }
+.avatar.lvl-painter { background: #22A35A; color: #fff; }
+.avatar.lvl-helper { background: #BBF7D0; color: #14532D; }
+.emp-figs { display: flex; align-items: center; gap: 8px; }
+.emp-hours { min-width: 56px; text-align: right; font-size: 13px; }
+.emp-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.small-chip { font-size: 11px; padding: 1px 7px; margin-left: 6px; }
+.emp-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; padding: 12px 14px 14px; }
+.emp-form fieldset { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.emp-form fieldset[disabled] { opacity: .6; }
+.emp-form .field { display: grid; gap: 4px; align-content: start; }
+.emp-form .field > span { font-size: 12px; font-weight: 600; color: var(--muted, #6B6475); }
+.emp-form .wide { grid-column: 1 / -1; }
+.emp-form select, .emp-form textarea { width: 100%; font: inherit; }
+.emp-form input[type=color] { width: 48px; height: 32px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; }
+.color-row { display: flex; align-items: center; gap: 10px; }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.form-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.emp-jobs .crew-list { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 760px) {
+  .emp-detail { grid-template-columns: minmax(0, 1fr); padding: 10px 12px; }
+  .emp-form fieldset { grid-template-columns: minmax(0, 1fr); }
+  .emp-row { grid-template-columns: auto minmax(0, 1fr) auto; padding: 8px 12px; }
+  .emp-row .chevron { display: none; }
+  .emp-figs .pm-tag { display: none; }
+}
+.emp .job-sub { white-space: normal; overflow: visible; }

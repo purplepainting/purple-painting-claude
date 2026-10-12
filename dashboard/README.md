@@ -19,6 +19,9 @@ To see real JobTread data locally, set the grant key first: `dotnet user-secrets
 `JobTread__FixtureDirectory=/path/to/folder dotnet run`, where the folder has one `{query name}.json`
 per query (`projects-list`, `projects-activity`, `projects-detail`, `schedule-week`, `people-staff`, `labor-entries`, and for pushes `schedule-current`, `schedule-update`, `schedule-create`, `schedule-delete`).
 
+**Database locally:** without a connection string the app runs with no database (Employees is read only).
+For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboard.db" dotnet run`. It's created on first run.
+
 ## Layout
 
 | Path | What it is |
@@ -28,6 +31,10 @@ per query (`projects-list`, `projects-activity`, `projects-detail`, `schedule-we
 | `Auth/CurrentUser.cs` | The signed-in user, from Easy Auth headers. Inject `CurrentUser` anywhere |
 | `Pages/ComingSoon.cshtml` | Placeholder page for any module that isn't built yet |
 | `Pages/Shared/_Layout.cshtml` | Left menu, top bar and page frame used by every page |
+| `Data/DashboardDb.cs` | The dashboard database (EF Core): tables and the `DatabaseStatus` pages check before saving |
+| `Data/DatabaseSetup.cs` | Picks Azure SQL or SQLite from the connection string; applies migrations at startup |
+| `Data/Migrations/` | Schema history. Add one with `dotnet ef migrations add <Name> -o Data/Migrations` |
+| `Modules/People/TeamDirectory.cs` | Everyone's crew level and PM color (Employees page, then settings, then JobTread role) |
 | `ViewComponents/SideNavViewComponent.cs` | Builds the left menu tiles and their numbers |
 | `Pages/Shared/_Icon.cshtml` | Line icons used on menu tiles |
 | `wwwroot/css/site.css` | All styles. Colors, fonts and sizes are CSS variables at the top |
@@ -60,7 +67,9 @@ straight away with a "Coming soon" page.
 
 **Change the profit % colors:** edit the stops in `Modules/Projects/ProfitScale.cs`.
 
-**Crew levels and PM colors (temporary):** `Crew:Foremen` / `Crew:Helpers` and `ProjectManagers:Colors` in `appsettings.json`. These move to the Employees module once the database exists.
+**Crew levels and PM colors:** set per person on the Employees page. `Crew:Foremen` / `Crew:Helpers` and `ProjectManagers:Colors` in `appsettings.json` are only the defaults for anyone not set there. Pages get both from `TeamDirectory.GetAsync()` (`team.LevelOf(name)`, `team.PmStyle(name)`).
+
+**Add a table:** add the class and `DbSet` in `Data/DashboardDb.cs`, then `dotnet ef migrations add <Name> -o Data/Migrations` and commit the migration. It's applied on the next deploy. Check `DatabaseStatus.Available` before writing.
 
 **Change colors or fonts:** edit the variables in `:root` at the top of `wwwroot/css/site.css`.
 
@@ -73,6 +82,8 @@ straight away with a "Coming soon" page.
 
 Never commit secrets. Settings go in Azure: PurpleDashboard > Settings > Environment variables,
 and are read with `builder.Configuration`. List any new setting names in the PR description.
+
+The database connection string is under PurpleDashboard > Settings > Environment variables > **Connection strings**, name `Dashboard`, type SQLAzure.
 
 ## Deploy
 

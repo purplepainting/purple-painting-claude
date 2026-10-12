@@ -1,0 +1,84 @@
+@page "/employees"
+@model PurpleDashboard.Pages.Employees.IndexModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Modules.People
+
+<div class="module-head">
+    <div class="pills" role="tablist" aria-label="Who to show">
+        @foreach (var (key, label) in new[] { ((string?)null, "Everyone"), ("crew", "Crew"), ("supervisors", "Supervisors & office") })
+        {
+            var active = Model.Show == key;
+            <a class="pill@(active ? " active" : "")" asp-page="/Employees/Index" asp-all-route-data="Model.RouteFor(key)" aria-current="@(active ? "page" : null)">@label</a>
+        }
+    </div>
+    <form class="filters" method="get">
+        @if (Model.Show is not null) { <input type="hidden" name="show" value="@Model.Show"> }
+        <input type="search" name="q" value="@Model.Q" placeholder="Search name, role or level" aria-label="Search employees">
+        <button class="button secondary" type="submit">Search</button>
+        @if (!string.IsNullOrWhiteSpace(Model.Q)) { <a class="link-button" asp-page="/Employees/Index" asp-route-show="@Model.Show">Clear</a> }
+    </form>
+</div>
+
+@if (!Model.CanEdit)
+{
+    <div class="card notice warn">
+        <strong>Read only for now.</strong>
+        <p>
+            @if (!Model.Database.Configured) { <text>The dashboard database isn't connected yet, so levels and colors come from settings and can't be changed here.</text> }
+            else { <text>The dashboard database couldn't be reached, so changes can't be saved. Levels and colors come from settings until it's back.</text> }
+        </p>
+    </div>
+}
+
+@if (Model.Error is not null)
+{
+    <div class="card notice warn">
+        <strong>Couldn't load employees.</strong>
+        <p>@Model.Error</p>
+    </div>
+}
+else
+{
+    <p class="list-meta muted">
+        @Model.Total people in JobTread · level sets chip color and order on the schedule · hours are this week
+    </p>
+
+    @foreach (var (title, members) in new[] { ("Crew", Model.Crew), ("Supervisors & office", Model.Supervisors) })
+    {
+        if (members.Count == 0) continue;
+        <h2 class="section-title">@title <span class="muted">@members.Count</span></h2>
+        <div class="job-list">
+            @foreach (var m in members)
+            {
+                var s = m.Staff;
+                <details class="job card emp" id="emp-@s.MembershipId" data-detail-url="/employees/@s.MembershipId/detail" data-error="Couldn’t load this person. Close and reopen to try again." open="@(Model.Open == s.MembershipId)">
+                    <summary class="emp-row">
+                        <span class="avatar lvl-@m.Level" style="@(m.IsSupervisor ? $"background:{m.Color};color:#fff" : null)" aria-hidden="true">@IndexModel.Initials(s.Name)</span>
+                        <div class="job-main">
+                            <div class="job-title">@s.Name</div>
+                            <div class="job-sub muted">
+                                @s.Role
+                                @if (s.QboEmployeeId is null) { <span class="chip warn small-chip" title="No QuickBooks employee linked in JobTread">No QuickBooks link</span> }
+                                @if (m.Profile?.Notes is { } notes) { <span class="emp-note" title="@notes">· @notes</span> }
+                            </div>
+                        </div>
+                        <span class="emp-figs">
+                            <span class="pchip lvl-@m.Level" title="@(m.LevelIsSet ? "Set on this page" : "Default (from settings / JobTread role)")">@Levels.Label(m.Level)@(m.LevelIsSet ? "" : "*")</span>
+                            @if (m.IsSupervisor) { <span class="pm-tag" style="@PmColorOptions.StyleFor(m.Color)">@s.FirstName</span> }
+                            <span class="emp-hours num muted">@(Model.Hours(m) > 0 ? Format.Number(Model.Hours(m)) + " hrs" : "—")</span>
+                        </span>
+                        <span class="chevron" aria-hidden="true"></span>
+                    </summary>
+                    <div class="job-detail">
+                        <div class="job-detail-body" aria-live="polite"><p class="muted">Loading…</p></div>
+                    </div>
+                </details>
+            }
+        </div>
+    }
+    <p class="muted small">* Not set here yet: the level comes from settings (Crew lists) or the JobTread role.</p>
+}
+
+@section Scripts {
+    <script src="~/js/site.js" asp-append-version="true"></script>
+}
