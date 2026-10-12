@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__JobTread_Orginization__query"
+    ]
+  }
+}

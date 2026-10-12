@@ -200,3 +200,59 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
   .job-budget .bar { width: 56px; }
   .profit-band { display: none; }
 }
+
+/* ---------- Scheduling ---------- */
+/* Job type colors differ in lightness, not just hue, so they read in grayscale too. */
+.jc-residential { --jc-bg: #EFE7F8; --jc-fg: #2E1248; --jc-edge: #B79AD9; }
+.jc-commercial  { --jc-bg: #B79AD9; --jc-fg: #1C1726; --jc-edge: #6B2FA3; }
+.jc-publicworks { --jc-bg: #4A1F73; --jc-fg: #FFFFFF; --jc-edge: #2E1248; }
+.jc-other       { --jc-bg: #F1F0F4; --jc-fg: #1C1726; --jc-edge: #C9C3D3; }
+
+.schedule-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.schedule-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.schedule-title { font-size: 20px; margin-left: 6px; }
+.button.icon { width: var(--touch); padding: 0; font-size: 22px; line-height: 1; }
+.schedule-toggles { display: flex; gap: 8px; flex-wrap: wrap; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; background: var(--card); padding: 3px; }
+.segmented a, .segmented span { display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--text); text-decoration: none; }
+.segmented a.active { background: var(--purple-600); color: #fff; }
+.segmented .disabled { color: var(--muted); opacity: .6; cursor: default; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 12px; font-size: 13px; color: var(--muted); }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; background: var(--jc-bg); border: 1px solid var(--jc-edge); flex: none; }
+
+.schedule-grid-card { overflow: hidden; }
+.schedule-grid { border-collapse: collapse; width: 100%; min-width: 760px; table-layout: fixed; font-size: 13px; }
+.schedule-grid th, .schedule-grid td { border-bottom: 1px solid var(--border); border-left: 1px solid var(--border); padding: 6px; vertical-align: top; text-align: left; }
+.schedule-grid thead th { font-size: 12px; color: var(--muted); font-weight: 600; padding: 10px 8px; background: #FBFAFD; }
+.schedule-grid .row-head { width: 200px; border-left: 0; font-weight: 600; }
+.schedule-grid tbody .row-head { display: table-cell; }
+.schedule-grid .row-head .swatch { vertical-align: -2px; margin-right: 6px; }
+.row-title { overflow-wrap: anywhere; }
+.row-sub { display: block; font-weight: 400; font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schedule-grid .today { background: #FAF7FD; }
+.schedule-grid thead th.today { color: var(--purple-600); }
+.schedule-grid tr:last-child > * { border-bottom: 0; }
+.block { display: grid; gap: 1px; padding: 5px 7px; margin-bottom: 4px; border-radius: 6px; background: var(--jc-bg); color: var(--jc-fg); border-left: 3px solid var(--jc-edge); }
+.block-title { font-weight: 600; overflow-wrap: anywhere; }
+.block-sub { font-size: 12px; opacity: .85; overflow-wrap: anywhere; }
+.block.done, .agenda-item.done { opacity: .55; }
+
+.agenda { display: none; gap: 18px; }
+.agenda.always { display: grid; }
+.agenda-day h2 { font-size: 15px; margin: 0 0 8px; }
+.agenda-day h2.today { color: var(--purple-600); }
+.agenda-item { padding: 12px 14px; margin-bottom: 8px; border-left: 5px solid var(--jc-edge); display: grid; gap: 3px; }
+.agenda-top { display: flex; justify-content: space-between; gap: 8px; }
+.agenda-time { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.agenda-task { font-size: 14px; }
+.agenda-people { font-size: 13px; color: var(--muted); }
+.agenda-address { font-size: 13px; display: inline-flex; min-height: 32px; align-items: center; }
+
+@media (max-width: 760px) {
+  .schedule-grid-card { display: none; }
+  .agenda { display: grid; }
+  .schedule-head { align-items: flex-start; }
+  .schedule-title { width: 100%; margin: 4px 0 0; font-size: 18px; order: 5; }
+}
