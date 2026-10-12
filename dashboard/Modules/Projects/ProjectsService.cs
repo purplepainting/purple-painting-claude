@@ -32,6 +32,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         return (await cache.GetOrCreateAsync(ListCacheKey, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = CacheFor;
+            entry.AddExpirationToken(PurpleDashboard.Infrastructure.CacheSignals.Token(PurpleDashboard.Infrastructure.CacheSignals.Projects));
             var jobs = await LoadJobsAsync(Json("""["closedOn", null]"""), "projects-list", ct);
             var activity = await LoadActivityAsync(jobs.Where(j => j.Stage is not null).Select(j => j.Id).ToList(), ct);
             return (IReadOnlyList<ProjectSummary>)jobs
@@ -50,6 +51,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         return (await cache.GetOrCreateAsync(key, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = CacheFor;
+            entry.AddExpirationToken(PurpleDashboard.Infrastructure.CacheSignals.Token(PurpleDashboard.Infrastructure.CacheSignals.Projects));
             return (IReadOnlyList<ProjectSummary>)await LoadJobsAsync(new JsonArray("closedOn", ">=", since.ToString("yyyy-MM-dd")), "projects-closed", ct);
         }))!;
     }
@@ -62,6 +64,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         return (await cache.GetOrCreateAsync(key, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = CacheFor;
+            entry.AddExpirationToken(PurpleDashboard.Infrastructure.CacheSignals.Token(PurpleDashboard.Infrastructure.CacheSignals.Projects));
             return await LoadDetailAsync(jobId, ct);
         }))!;
     }

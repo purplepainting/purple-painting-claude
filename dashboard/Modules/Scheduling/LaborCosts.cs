@@ -27,6 +27,7 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
         return (await cache.GetOrCreateAsync(key, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
+            entry.AddExpirationToken(PurpleDashboard.Infrastructure.CacheSignals.Token(PurpleDashboard.Infrastructure.CacheSignals.Labor));
             var result = new Dictionary<(string, DateOnly), ActualDay>();
             await foreach (var e in TimeEntriesAsync(LocalClock.StartOfDayUtc(from), LocalClock.StartOfDayUtc(to.AddDays(1)), ct))
             {
@@ -51,6 +52,7 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
         return (await cache.GetOrCreateAsync(key, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
+            entry.AddExpirationToken(PurpleDashboard.Infrastructure.CacheSignals.Token(PurpleDashboard.Infrastructure.CacheSignals.Labor));
             var result = new Dictionary<(string, DateOnly), (decimal, decimal)>();
             await foreach (var e in TimeEntriesAsync(LocalClock.StartOfDayUtc(from), LocalClock.StartOfDayUtc(to.AddDays(1)), ct))
             {
@@ -104,6 +106,7 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
         (await cache.GetOrCreateAsync("labor:recent", async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30);
+            entry.AddExpirationToken(PurpleDashboard.Infrastructure.CacheSignals.Token(PurpleDashboard.Infrastructure.CacheSignals.Labor));
             var list = new List<Entry>();
             await foreach (var e in TimeEntriesAsync(DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow.AddDays(1), ct)) list.Add(e);
             return (IReadOnlyList<Entry>)list;
@@ -114,6 +117,7 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
         (await cache.GetOrCreateAsync("labor:rates", async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30);
+            entry.AddExpirationToken(PurpleDashboard.Infrastructure.CacheSignals.Token(PurpleDashboard.Infrastructure.CacheSignals.Labor));
             var byUserJob = new Dictionary<(string, string), (DateTimeOffset At, decimal Rate)>();
             var byUser = new Dictionary<string, (DateTimeOffset At, decimal Rate)>();
             foreach (var e in await GetRecentEntriesAsync(ct))

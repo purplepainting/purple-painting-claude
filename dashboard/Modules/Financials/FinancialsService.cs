@@ -69,6 +69,7 @@ public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClie
         return cache.GetOrCreateAsync(key, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+            entry.AddExpirationToken(PurpleDashboard.Infrastructure.CacheSignals.Token(PurpleDashboard.Infrastructure.CacheSignals.Financials));
             return await LoadAsync(from, to, basis, ct);
         })!;
     }
