@@ -54,7 +54,6 @@ builder.Services.Configure<PurpleDashboard.Modules.People.PmColorOptions>(builde
 builder.Services.AddScoped<ITileMetric, JobsThisWeekMetric>();
 
 var app = builder.Build();
-await app.PrepareDashboardDatabaseAsync();
 
 // Sign-in is handled by Azure App Service Authentication (Entra ID) in front of
 // this app, so every request that reaches here is already a signed-in team member.
@@ -70,7 +69,12 @@ app.UseStatusCodePagesWithReExecute("/error/{0}");
 app.MapStaticAssets();
 
 // Simple health check for deploy verification.
-app.MapGet("/health", (DatabaseStatus db) => Results.Ok(new { status = "ok", database = db.Available ? "ok" : db.Configured ? "error" : "not set up" }));
+app.MapGet("/health", (DatabaseStatus db) => Results.Ok(new
+{
+    status = "ok",
+    database = db.Available ? "ok" : !db.Configured ? "not set up" : db.Problem is null ? "connecting" : "error",
+    databaseProblem = db.Available ? null : db.Problem,
+}));
 
 app.MapRazorPages().WithStaticAssets();
 
