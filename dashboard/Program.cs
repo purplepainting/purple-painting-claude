@@ -53,6 +53,7 @@ builder.Services.AddHttpClient<PurpleDashboard.Integrations.QuickBooks.QuickBook
 // Modules
 builder.Services.AddScoped<ChangeLogWriter>();
 builder.Services.AddScoped<JobTreadUserKeys>();
+builder.Services.AddHttpClient<JobTreadOAuth>(c => c.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddScoped<PurpleDashboard.Modules.People.PeopleService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.People.TeamDirectory>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.People.TeamMembersMetric>();

@@ -46,18 +46,18 @@ public sealed record PushResult(string? Label, string Kind, PushStatus Status, s
 /// Sends schedule changes to JobTread. Each change is checked against JobTread first: if the task
 /// changed there since the editor loaded it, the change is skipped (not overwritten).
 /// JobTread moves dependent tasks and notifies assigned crew (its defaults). Changes are sent with the
-/// pushing person's own grant key, so JobTread shows them as making the change.
+/// pushing person's own JobTread sign-in (or key), so JobTread shows them as making the change.
 /// </summary>
-public sealed class SchedulePushService(IJobTreadClient jobTread, PurpleDashboard.Data.ChangeLogWriter changeLog, ILogger<SchedulePushService> logger)
+public sealed class SchedulePushService(PurpleDashboard.Data.ChangeLogWriter changeLog, ILogger<SchedulePushService> logger)
 {
-    public async Task<IReadOnlyList<PushResult>> PushAsync(IReadOnlyList<ScheduleChange> changes, string user, string grantKey, CancellationToken ct)
+    public async Task<IReadOnlyList<PushResult>> PushAsync(IReadOnlyList<ScheduleChange> changes, string user, PurpleDashboard.Integrations.JobTread.JobTreadUserKeys.Runner runAs, CancellationToken ct)
     {
-        var current = await LoadCurrentAsync(changes.Where(c => c.TaskId is not null).Select(c => c.TaskId!).Distinct().ToList(), grantKey, ct);
+        var current = await LoadCurrentAsync(changes.Where(c => c.TaskId is not null).Select(c => c.TaskId!).Distinct().ToList(), runAs, ct);
         var results = new List<PushResult>();
 
         foreach (var change in changes)
         {
-            var result = await PushOneAsync(change, current, grantKey, ct);
+            var result = await PushOneAsync(change, current, runAs, ct);
             results.Add(result);
             logger.LogInformation("Schedule push by {User}: {Kind} {Label} ({TaskId}) → {Status}: {Message}",
                 user, change.Kind, change.Label, change.TaskId ?? change.JobId, result.Status, result.Message);
@@ -69,7 +69,7 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, PurpleDashboar
         return results;
     }
 
-    private async Task<PushResult> PushOneAsync(ScheduleChange c, Dictionary<string, TaskFields> current, string grantKey, CancellationToken ct)
+    private async Task<PushResult> PushOneAsync(ScheduleChange c, Dictionary<string, TaskFields> current, PurpleDashboard.Integrations.JobTread.JobTreadUserKeys.Runner runAs, CancellationToken ct)
     {
         try
         {
@@ -90,7 +90,7 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, PurpleDashboar
                     if (!u.Crew.Order().SequenceEqual(o.Crew.Order())) args["assignedMembershipIds"] = Ids(u.Crew);
                     if (args.Count == 1) return new(c.Label, c.Kind, PushStatus.Done, "Nothing to change.");
 
-                    await jobTread.QueryAsAsync("schedule-update", new JsonObject { ["r"] = new JsonObject { ["_"] = "updateTask", ["$"] = args } }, grantKey, ct);
+                    await runAs("schedule-update", new JsonObject { ["r"] = new JsonObject { ["_"] = "updateTask", ["$"] = args } }, ct);
                     return new(c.Label, c.Kind, PushStatus.Done, "Updated.");
                 }
                 case "create" when c.JobId is not null && c.Updated is { } n:
@@ -108,7 +108,7 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, PurpleDashboar
                     };
                     if (c.ParentTaskId is not null) args["parentTaskId"] = c.ParentTaskId;
                     if (c.TaskTypeId is not null) args["taskTypeId"] = c.TaskTypeId;
-                    var r = await jobTread.QueryAsAsync("schedule-create", new JsonObject { ["r"] = new JsonObject { ["_"] = "createTask", ["$"] = args, ["createdTask"] = new JsonObject { ["id"] = new JsonObject() } } }, grantKey, ct);
+                    var r = await runAs("schedule-create", new JsonObject { ["r"] = new JsonObject { ["_"] = "createTask", ["$"] = args, ["createdTask"] = new JsonObject { ["id"] = new JsonObject() } } }, ct);
                     return r["r"]?["createdTask"].Str("id") is not null
                         ? new(c.Label, c.Kind, PushStatus.Done, "Added.")
                         : new(c.Label, c.Kind, PushStatus.Failed, "JobTread didn't confirm the new task.");
@@ -119,7 +119,7 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, PurpleDashboar
                     if (!now.SameAs(c.Original)) return new(c.Label, c.Kind, PushStatus.Conflict, "Someone changed this task in JobTread after you loaded the schedule, so it wasn't deleted.");
                     try
                     {
-                        await jobTread.QueryAsAsync("schedule-delete", new JsonObject { ["r"] = new JsonObject { ["_"] = "deleteTask", ["$"] = new JsonObject { ["id"] = c.TaskId } } }, grantKey, ct);
+                        await runAs("schedule-delete", new JsonObject { ["r"] = new JsonObject { ["_"] = "deleteTask", ["$"] = new JsonObject { ["id"] = c.TaskId } } }, ct);
                         return new(c.Label, c.Kind, PushStatus.Done, "Deleted.");
                     }
                     catch (JobTreadException e) when (IsNotAllowed(e) && c.Updated is { } f)
@@ -130,7 +130,7 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, PurpleDashboar
                             ["id"] = c.TaskId, ["name"] = f.Name, ["startDate"] = f.StartDate, ["endDate"] = f.EndDate,
                             ["assignedMembershipIds"] = Ids(f.Crew), ["notify"] = false,
                         };
-                        await jobTread.QueryAsAsync("schedule-mark-delete", new JsonObject { ["r"] = new JsonObject { ["_"] = "updateTask", ["$"] = args } }, grantKey, ct);
+                        await runAs("schedule-mark-delete", new JsonObject { ["r"] = new JsonObject { ["_"] = "updateTask", ["$"] = args } }, ct);
                         return new(c.Label, c.Kind, PushStatus.Done, "JobTread didn't allow deleting, so it was renamed DELETE and moved to Sunday for someone to delete in JobTread.");
                     }
                 }
@@ -148,7 +148,7 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, PurpleDashboar
     }
 
     /// <summary>Current JobTread values for the tasks being changed, 25 at a time.</summary>
-    private async Task<Dictionary<string, TaskFields>> LoadCurrentAsync(List<string> ids, string grantKey, CancellationToken ct)
+    private async Task<Dictionary<string, TaskFields>> LoadCurrentAsync(List<string> ids, PurpleDashboard.Integrations.JobTread.JobTreadUserKeys.Runner runAs, CancellationToken ct)
     {
         var result = new Dictionary<string, TaskFields>();
         foreach (var chunk in ids.Chunk(25))
@@ -166,7 +166,7 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, PurpleDashboar
                     },
                 },
             };
-            var nodes = (await jobTread.QueryAsAsync("schedule-current", query, grantKey, ct))["organization"]?["tasks"].Nodes() ?? [];
+            var nodes = (await runAs("schedule-current", query, ct))["organization"]?["tasks"].Nodes() ?? [];
             foreach (var t in nodes)
             {
                 if (t.Str("id") is not { } id) continue;

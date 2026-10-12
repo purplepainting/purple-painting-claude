@@ -33,8 +33,18 @@ developer support for the app above, requesting the payroll compensation / paysl
 If approved, add the scopes to `QBO_EXTRA_SCOPES`, reconnect, and the dashboard can fill QB base pay on Employees from
 the latest pay stub (not built until access is granted).
 
-# Per-person JobTread keys
+# Per-person JobTread sign-in
 
-Schedule pushes are sent with the pushing person's own JobTread grant key (Connections > Your JobTread account), so
-JobTread records the change as them. Keys are checked with JobTread (must be the Purple Painting organization) and
-saved encrypted in `JobTreadUserKeys`, per Entra user. Reading pages still uses the shared `JOBTREAD_API_KEY`.
+Schedule pushes go to JobTread as the person pushing, so JobTread records the change as them. On Connections each person
+clicks **Sign in with JobTread** (or, as a backup, pastes their own grant key). Reading pages still uses the shared
+`JOBTREAD_API_KEY`.
+
+- Sign-in is JobTread's OAuth, the same one its Claude connector uses. Discovery:
+  `https://api.jobtread.com/.well-known/oauth-authorization-server` (authorize at app.jobtread.com/oauth/authorize,
+  token at api.jobtread.com/oauth/token, dynamic registration at api.jobtread.com/oauth/register, PKCE S256).
+- The dashboard registers itself automatically the first time anyone signs in (`JobTreadOAuthClients` table); no
+  settings needed. Redirect: `https://dashboard.purplepainting.net/jobtread/callback`.
+- After sign-in the token is tried straight against Pave; if JobTread doesn't accept it there, queries go through
+  JobTread's MCP server (`https://api.jobtread.com/mcp`, tool `query`). Which one is saved per person (`AuthKind`).
+- Tokens (and pasted keys) are saved encrypted in `JobTreadUserKeys`, per Entra user, and refreshed automatically.
+- Code: `Integrations/JobTread/JobTreadOAuth.cs`, `JobTreadUserKeys.cs`, `Pages/Connections/JobTreadCallback.cshtml.cs`.

@@ -426,3 +426,4 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
 .link-form .field { display: grid; gap: 4px; flex: 1 1 260px; }
 .link-form .field > span { font-size: 12px; font-weight: 600; }
 .link-form input { width: 100%; font: inherit; }
+.paste-key { margin-top: 4px; } .paste-key > summary { cursor: pointer; } .paste-key .link-form { margin-top: 8px; }

@@ -14,6 +14,7 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<QuickBooksConnection> QuickBooksConnections => Set<QuickBooksConnection>();
     public DbSet<JobTreadUserKey> JobTreadUserKeys => Set<JobTreadUserKey>();
+    public DbSet<JobTreadOAuthClient> JobTreadOAuthClients => Set<JobTreadOAuthClient>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -40,6 +41,12 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.UserEmail).HasMaxLength(200);
             e.Property(x => x.JobTreadUserId).HasMaxLength(32);
             e.Property(x => x.JobTreadUserName).HasMaxLength(200);
+            e.Property(x => x.AuthKind).HasMaxLength(20);
+        });
+        b.Entity<JobTreadOAuthClient>(e =>
+        {
+            e.Property(x => x.ClientId).HasMaxLength(200);
+            e.Property(x => x.RedirectUri).HasMaxLength(300);
         });
         b.Entity<ChangeLogEntry>(e =>
         {
@@ -105,6 +112,28 @@ public sealed class JobTreadUserKey
     public string? JobTreadUserId { get; set; }
     public string? JobTreadUserName { get; set; }
     public DateTime SavedAt { get; set; }
+
+    /// <summary>
+    /// How they linked: null or "key" (pasted grant key, in GrantKeyProtected); "oauth-pave" (signed in;
+    /// the access token works as a Pave grant key); "oauth-mcp" (signed in; queries go through JobTread's
+    /// MCP server at api.jobtread.com/mcp with the access token).
+    /// </summary>
+    public string? AuthKind { get; set; }
+    public string? RefreshTokenProtected { get; set; }
+    public DateTime? AccessExpiresAt { get; set; }
+}
+
+/// <summary>
+/// The dashboard's registration with JobTread's OAuth server (dynamic client registration, done
+/// automatically the first time someone signs in). One row per redirect URI.
+/// </summary>
+public sealed class JobTreadOAuthClient
+{
+    public int Id { get; set; }
+    public required string ClientId { get; set; }
+    public string? ClientSecretProtected { get; set; }
+    public required string RedirectUri { get; set; }
+    public DateTime RegisteredAt { get; set; }
 }
 
 /// <summary>Audit log: who changed what, and the result (schedule pushes, employee edits).</summary>
