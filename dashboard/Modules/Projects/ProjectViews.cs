@@ -13,17 +13,23 @@ public static class ProjectViews
     public static readonly string[] ActiveStages =
         ["Pre-Construction / Color Submittals", "Scheduled", "In Progress", "On Hold - Phasing"];
 
-    private static bool IsActive(ProjectSummary p) => p.Stage is not null && ActiveStages.Contains(p.Stage);
+    /// <summary>
+    /// Active = working stages, plus completed jobs that still have money to bill or collect.
+    /// A completed job drops off once it's fully billed and paid.
+    /// </summary>
+    private static bool IsActive(ProjectSummary p) =>
+        (p.Stage is not null && ActiveStages.Contains(p.Stage)) || (p.IsCompleted && p.HasMoneyOutstanding);
 
     public static readonly IReadOnlyList<ProjectView> All =
     [
         new("active",      "All active",          IsActive),
         new("inprogress",  "In progress",         p => p.Stage == "In Progress"),
         new("starting",    "Starting this week",  p => IsActive(p) && p.Start is { } s && s >= WeekStart() && s < WeekStart().AddDays(7)),
-        new("costsover",   "Costs ahead of billing",   p => (IsActive(p) || p.Stage == "Completed") && p.CostsOverBilled),
-        new("lefttobill",  "Left to bill",        p => (IsActive(p) || p.Stage == "Completed") && p.LeftToBill > 0),
+        new("costsover",   "Costs ahead of billing",   p => IsActive(p) && p.CostsOverBilled),
+        new("lefttobill",  "Left to bill",        p => IsActive(p) && p.LeftToBill >= 1),
+        new("owed",        "Done, money owed",    p => p.IsCompleted && p.HasMoneyOutstanding),
         new("publicworks", "Public works",        p => IsActive(p) && p.JobType == "Prevailing Wage"),
-        new("closeout",    "Completed, not closed", p => p.Stage == "Completed"),
+        new("closeout",    "Completed, not closed", p => p.IsCompleted),
         new("bids",        "Bids",                p => p.Stage is null),
     ];
 

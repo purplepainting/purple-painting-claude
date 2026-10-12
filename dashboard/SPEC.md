@@ -97,7 +97,7 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 - "/" opens the Projects list. Global search comes later.
 
 ### 1. Projects (JobTread)
-- Default view: **all active jobs**, sorted **most active first**: nearest clock-in or scheduled day to today. Jobs in Pre-Construction / Color Submittals haven't started, so they sort to the bottom. Each row shows that activity ("Today", "Next Wed 10/14", "Last time Oct 6").
+- Default view: **all active jobs** = Pre-Construction, Scheduled, In Progress, On Hold, **plus Completed jobs that still have money to bill or collect** (left to bill, unpaid invoices, or retention held). A completed job leaves the active list once it's fully billed and paid. Sorted **most active first**: nearest clock-in or scheduled day to today. Jobs in Pre-Construction / Color Submittals haven't started, so they sort to the bottom. Each row shows that activity ("Today", "Next Wed 10/14", "Last time Oct 6").
 - Saved views as pills (e.g. All active, Starting this week, Over budget, Public works) plus "+ Save current view". Saved views are stored per user in the dashboard DB.
 - Filters: status, job type, project manager, text search (name/address).
 - **The JobTread budget is not used** (Purple Painting doesn't maintain it). Each job row shows two things:
@@ -107,7 +107,7 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
   - **Change orders:** **contract = approved orders + pending change orders** (sent, awaiting approval; usually agreed, just not signed), shown as two parts under the total: **Approved** and **Pending**. Profit and left to bill use the total (pending COs usually go through, e.g. T&M), and a small "On approved only" line shows profit if none of the pending ones do. On bids, a pending order is the proposal, so it shows as "Proposal pending" instead. **Unsent change orders** (drafts named "Change Order") get a warning chip with count and amount. Denied ones are ignored.
   - Early in a job, contract − costs reads high because most costs aren't in yet; the billed ring shows how far along it is.
   - Plus stage chip, job type, PM, activity and scheduled dates.
-- View pills include "Costs ahead of billing" and "Left to bill".
+- View pills include "Costs ahead of billing", "Left to bill" and "Done, money owed". Rows show **Unpaid** (invoice balances) and completed jobs with money outstanding get a "Done, $X to bill or collect" chip.
 - **Expandable job rows.** Tap a row to expand it in place (works by touch):
   - **Costs by cost code:** labor, bills, total, share of the job's costs, and hours per JobTread cost code.
   - **Every cost code on the job**, including codes on the estimate with no costs yet (grayed out).

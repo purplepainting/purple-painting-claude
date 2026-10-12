@@ -64,6 +64,7 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 | Pending change orders | `documents` where `type = customerOrder`, `status = pending`, sum `price`. On a bid this is the proposal waiting on the customer |
 | Unsent change orders | `documents` where `type = customerOrder`, `status = draft`, `name like "%Change Order%"`. The name filter skips old draft proposals |
 | Invoiced (net) | `documents` where `type = customerInvoice` and `status in [approved, pending]`, sum `price`. **This is after retention is held back** |
+| Unpaid | `documents` where `type = customerInvoice`, `status in [approved, pending]`, sum `balance` |
 | Retention held | `job.retainageCostItem.documentCostItems` where `document.type = customerInvoice`, `document.status in [approved, pending]`, sum `price` (negative; flip the sign). `job.defaultRetainagePercentage` is the rate (e.g. 0.1) |
 | Billed (earned) | Invoiced (net) + retention held. Used for the billed ring and left to bill |
 | Costs to date | `job.actualCost` |

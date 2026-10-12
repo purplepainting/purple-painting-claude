@@ -34,6 +34,7 @@ public sealed record ProjectSummary
     public int UnsentChangeOrderCount { get; init; }
     public decimal ActualCost { get; init; }       // time entries + approved/pending vendor bills
     public decimal InvoicedNet { get; init; }      // approved/pending customer invoices, after retention held back
+    public decimal Unpaid { get; init; }           // balance still owed on approved/pending invoices
     public decimal RetentionHeld { get; init; }    // retention withheld on those invoices (earned, collected at the end)
 
     /// <summary>Earned and billed: invoices plus the retention held back on them.</summary>
@@ -78,6 +79,14 @@ public sealed record ProjectSummary
 
     /// <summary>Invoiced (after retention) − costs: cash position on the job so far.</summary>
     public decimal CashPosition => InvoicedNet - ActualCost;
+
+    /// <summary>Contract left to bill, unpaid invoices, or retention not collected yet.</summary>
+    public bool HasMoneyOutstanding => LeftToBill >= 1 || Unpaid >= 1 || RetentionHeld >= 1;
+
+    /// <summary>Total still to come in: left to bill + unpaid invoices + retention held.</summary>
+    public decimal Outstanding => Math.Max(LeftToBill ?? 0, 0) + Unpaid + RetentionHeld;
+
+    public bool IsCompleted => Stage == "Completed";
 
     /// <summary>Costs so far are more than what's been invoiced.</summary>
     public bool CostsOverBilled => ActualCost > Billed && ActualCost > 0;

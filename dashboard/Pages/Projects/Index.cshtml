@@ -78,6 +78,7 @@ else
                         <div class="job-sub muted">@job.Customer@(job.Address is null ? "" : " · " + job.Address)</div>
                         <div class="job-chips">
                             <span class="chip @IndexModel.StageCss(job.Stage)">@(job.Stage ?? job.BidStage ?? "Bid")</span>
+                            @if (job.IsCompleted && job.HasMoneyOutstanding) { <span class="chip warn">Done, @Format.Money(job.Outstanding) to bill or collect</span> }
                             @if (job.UnsentChangeOrderCount > 0) { <span class="chip warn">@job.UnsentChangeOrderCount unsent @(job.UnsentChangeOrderCount == 1 ? "change order" : "change orders") · @Format.Money(job.UnsentChangeOrders)</span> }
                             @if (job.CostsOverBilled) { <span class="chip warn">Costs ahead of billing</span> }
                             @if (job.JobType is not null) { <span class="tag">@job.JobType</span> }
@@ -103,6 +104,10 @@ else
                         }
                         <div><dt>Left to bill</dt><dd class="num">@Format.Money(job.LeftToBill)</dd></div>
                         <div><dt>Billed</dt><dd class="num">@Format.Money(job.Billed)</dd></div>
+                        @if (job.Unpaid >= 1)
+                        {
+                            <div><dt>Unpaid</dt><dd class="num">@Format.Money(job.Unpaid)</dd></div>
+                        }
                         @if (job.RetentionHeld > 0)
                         {
                             <div><dt>Retention held</dt><dd class="num">@Format.Money(job.RetentionHeld)</dd></div>
