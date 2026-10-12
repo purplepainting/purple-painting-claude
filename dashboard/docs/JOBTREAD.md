@@ -16,6 +16,7 @@ Code: `Integrations/JobTread/` (client, ids, JSON helpers). Field ids live in `J
 
 ## Gotchas
 
+- **"Request Entity Too Large" (413) means the *response* is too big**, not the request. Ask for fewer rows (smaller `size`, more pages) or group/sum on the JobTread side instead of pulling raw rows.
 - **Lists return 10 items unless you pass `size`** (max 100). Always set `size`, and follow `nextPage` (pass it back as `page`) when there can be more. Grouped results (`group`) are paged the same way.
 - `where` on a related field uses a path array: `[["document", "id"], null]`, `[["job", "id"], "in", [...]]`.
 - Not every relation can be filtered on. `costItems` can't filter on `["document", "type"]` ("document is not queryable"); go through `documents` instead.
@@ -107,3 +108,9 @@ Where-clause note: a single condition is passed bare (`"where": [["job","id"], "
 ## Time entries
 
 `timeEntries` fields: `startedAt`, `endedAt` (UTC timestamps), `minutes`, `cost`, `hourlyRate`, `isApproved`, `type`, `user`, `job`, `costItem`, `notes`.
+
+## People and roles
+
+- `organization.memberships` where `isInternal = true`: staff. `role.name` is one of Admin, Project Manager, Salesperson, Office Administrator, Field Employee. There is **no foreman role**; every painter is "Field Employee".
+- Crew on a job: `job.timeEntries` grouped by `user.id`, `user.name` → sum `minutes`, max `hourlyRate`, max `startedAt`. `hourlyRate` is the cost rate on each entry.
+- Foreman (dashboard rule): highest `hourlyRate` among Field Employees on the job, ties by hours.

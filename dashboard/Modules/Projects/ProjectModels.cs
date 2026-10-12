@@ -112,8 +112,22 @@ public sealed record CostCodeLine(string? Number, string Name, decimal Labor, de
     public bool HasCosts => Actual != 0;
 }
 
-public sealed record ProjectDetail(string JobId, IReadOnlyList<CostCodeLine> CostCodes)
+/// <summary>Someone who has clocked time on the job. Pay rate is used only to pick the foreman; it's never shown.</summary>
+public sealed record CrewMember(string Name, decimal Hours, DateOnly? LastWorked, bool IsSupervisor, decimal Rate);
+
+public sealed record ProjectDetail(string JobId, IReadOnlyList<CostCodeLine> CostCodes, IReadOnlyList<CrewMember> Crew)
 {
+    /// <summary>
+    /// Foreman = the highest-paid field person on the job (supervisors left out); ties go to
+    /// whoever has the most hours. JobTread has no foreman field, so this is inferred.
+    /// </summary>
+    public CrewMember? Foreman => Crew.Where(c => !c.IsSupervisor && c.Rate > 0)
+        .OrderByDescending(c => c.Rate).ThenByDescending(c => c.Hours).FirstOrDefault();
+
+    /// <summary>Field crew, most hours first. Supervisors are listed separately.</summary>
+    public IEnumerable<CrewMember> FieldCrew => Crew.Where(c => !c.IsSupervisor).OrderByDescending(c => c.Hours);
+    public IEnumerable<CrewMember> Supervisors => Crew.Where(c => c.IsSupervisor).OrderByDescending(c => c.Hours);
+
     public decimal TotalActual => CostCodes.Sum(c => c.Actual);
     public decimal TotalHours => CostCodes.Sum(c => c.Hours);
 

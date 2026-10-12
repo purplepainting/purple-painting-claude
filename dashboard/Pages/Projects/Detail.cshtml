@@ -10,6 +10,32 @@
 }
 else if (Model.Detail is { } d)
 {
+    <div class="crew">
+        <h3 class="detail-title">Crew</h3>
+        @if (!d.Crew.Any())
+        {
+            <p class="muted">Nobody has clocked time on this job yet.</p>
+        }
+        else
+        {
+            var foreman = d.Foreman;
+            <ul class="crew-list">
+                @foreach (var c in d.FieldCrew)
+                {
+                    <li class="@(c == foreman ? "is-foreman" : "")">
+                        <span class="crew-name">@c.Name</span>
+                        @if (c == foreman) { <span class="chip active" title="Highest-paid person on the job (supervisors left out)">Foreman</span> }
+                        <span class="crew-meta num">@Format.Number(c.Hours) hrs · last @Format.Date(c.LastWorked)</span>
+                    </li>
+                }
+            </ul>
+            @if (d.Supervisors.Any())
+            {
+                <p class="muted small">Supervisors: @string.Join(", ", d.Supervisors.Select(c => $"{c.Name} ({Format.Number(c.Hours)} hrs)"))</p>
+            }
+        }
+    </div>
+
     @if (d.CostCodes.Count == 0)
     {
         <p class="muted">No cost codes or costs on this job yet.</p>

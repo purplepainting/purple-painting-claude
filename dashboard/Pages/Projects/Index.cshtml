@@ -71,13 +71,15 @@ else
                     <div class="job-main">
                         <div class="job-title">
                             <span class="job-num num">#@job.Number</span> @job.Name
-                            @if (job.NeedsAttention) { <span class="attention-dot" title="Needs attention: open to see why"></span> }
+                            @if (job.NeedsAttention) { <span class="attention-dot" title="Money waiting on us: open to see why"></span> }
                         </div>
-                        <div class="job-sub muted">@(job.JobTypeShort ?? "No type")@(job.Stage is "Completed" ? " · Done" : "")</div>
+                        <div class="job-sub muted">@(job.Customer ?? "No client")</div>
+                        <div class="job-contract num">@(job.Contract is null ? "No contract yet" : Format.Money(job.Contract) + " contract")</div>
                     </div>
-                    <div class="job-line-figs">
-                        <span class="line-fig"><span class="line-label">Billed</span> <span class="num">@Format.Money(job.Billed)</span></span>
-                    </div>
+                    <dl class="job-line-figs">
+                        <div><dt>Costs</dt><dd class="num">@Format.Money(job.ActualCost)</dd></div>
+                        <div><dt>Billed</dt><dd class="num">@Format.Money(job.Billed)</dd></div>
+                    </dl>
                     <span class="profit num" style="@ProfitScale.Style(job.ProfitPercent)" title="Profit: (contract − costs) ÷ contract">@Format.Percent(job.ProfitPercent)</span>
                     <span class="chevron" aria-hidden="true"></span>
                 </summary>
@@ -93,10 +95,11 @@ else
                     }
 
                     <dl class="detail-grid">
-                        <div><dt>Customer</dt><dd>@(job.Customer ?? "—")</dd></div>
+                        <div><dt>Job type</dt><dd>@(job.JobTypeShort ?? "—")</dd></div>
                         <div><dt>Address</dt><dd>@(job.Address ?? "—")</dd></div>
                         <div><dt>Stage</dt><dd>@(job.Stage ?? job.BidStage ?? "Bid")</dd></div>
                         <div><dt>Project manager</dt><dd>@(job.ProjectManager ?? "—")</dd></div>
+                        <div><dt>Salesperson</dt><dd>@(job.SalesPerson ?? "—")</dd></div>
                         <div><dt>Activity</dt><dd>@Model.Activity(job)</dd></div>
                         <div><dt>Scheduled</dt><dd>@Format.DateRange(job.Start, job.End)</dd></div>
                     </dl>
@@ -137,7 +140,7 @@ else
                             <a class="button secondary" href="@job.FolderUrl" target="_blank" rel="noopener">SharePoint folder</a>
                         }
                     </div>
-                    <div class="job-detail-body" aria-live="polite"><p class="muted">Loading cost codes…</p></div>
+                    <div class="job-detail-body" aria-live="polite"><p class="muted">Loading crew and cost codes…</p></div>
                 </div>
             </details>
         }
