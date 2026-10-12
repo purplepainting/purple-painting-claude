@@ -8,6 +8,12 @@ on:
       - '.github/workflows/dashboard-deploy.yml'
   workflow_dispatch:
 
+# One deploy at a time, in order. Two merges close together must not race,
+# or an older build can finish last and overwrite the newer one.
+concurrency:
+  group: dashboard-deploy
+  cancel-in-progress: false
+
 env:
   AZURE_WEBAPP_NAME: PurpleDashboard
   PROJECT_PATH: dashboard/Dashboard.csproj
