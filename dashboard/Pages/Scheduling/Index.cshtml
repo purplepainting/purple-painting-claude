@@ -82,7 +82,7 @@ else
                                     <tr style="@row.ColorStyle">
                                         <th class="row-head" scope="row">
                                             @if (row.ColorStyle is not null) { <span class="swatch"></span> }
-                                            <span class="row-title">@row.Title</span>
+                                            @if (row.JobId is not null) { <a class="row-title" href="/scheduling/job/@row.JobId" title="Open the job's timeline">@row.Title</a> } else { <span class="row-title">@row.Title</span> }
                                             @if (Model.ByPerson) { <span style="@Model.Team.ChipStyle(row.Title)" class="pchip @Model.Team.ChipClass(row.Title)">@Model.LevelOf(row.Title)</span> }
                                             @if (row.Subtitle is not null) { <span class="row-sub muted">@row.Subtitle</span> }
                                             @if (row.ProjectManager is not null) { <span class="row-pm"><span class="pm-tag" style="@Model.Team.PmStyle(row.ProjectManager)">PM @row.ProjectManager.Split(' ')[0]</span></span> }
@@ -177,7 +177,7 @@ else
                         {
                             <div class="card agenda-job" style="@Model.Colors.Style(job.JobId)">
                                 <div class="agenda-top">
-                                    <span class="block-title"><span class="swatch"></span> @job.JobName</span>
+                                    <a class="block-title" href="/scheduling/job/@job.JobId"><span class="swatch"></span> @job.JobName</a>
                                     <span class="agenda-meta">
                                         @if (job.ProjectManager is not null) { <span class="pm-tag" style="@Model.Team.PmStyle(job.ProjectManager)">PM @job.ProjectManager.Split(' ')[0]</span> }
                                         @if (Model.Costs.TryGetValue((job.JobId, day), out var jc)) { <span class="day-cost num@(jc.IsEstimate ? " est" : "")">@(jc.IsEstimate ? "est. " : "")@IndexModel.CostLabel(jc)</span> }
