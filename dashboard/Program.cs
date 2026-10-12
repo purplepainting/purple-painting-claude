@@ -17,6 +17,7 @@ builder.Services.AddRazorPages(options =>
 });
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient();
 builder.Services.AddScoped<CurrentUser>();
 builder.AddDashboardDatabase();
 
@@ -54,6 +55,7 @@ builder.Services.AddHttpClient<PurpleDashboard.Integrations.QuickBooks.QuickBook
 // Modules
 builder.Services.AddScoped<ChangeLogWriter>();
 builder.Services.AddScoped<JobTreadUserKeys>();
+builder.Services.AddHostedService<JobTreadChangeWatcher>();
 builder.Services.AddHttpClient<JobTreadOAuth>(c => c.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddScoped<PurpleDashboard.Modules.People.PeopleService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.People.TeamDirectory>();
@@ -103,6 +105,8 @@ app.MapGet("/health", (DatabaseStatus db) => Results.Ok(new
     status = "ok",
     database = db.Available ? "ok" : !db.Configured ? "not set up" : db.Problem is null ? "connecting" : "error",
     databaseProblem = db.Available ? null : db.Problem,
+    jobTreadLiveUpdates = JobTreadChangeWatcher.Enabled ? "on" : "off",
+    lastJobTreadChange = JobTreadChangeWatcher.LastChangeAt,
 }));
 
 app.MapRazorPages().WithStaticAssets();

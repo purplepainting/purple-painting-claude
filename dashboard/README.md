@@ -83,6 +83,15 @@ straight away with a "Coming soon" page.
 **Shared UI pieces** already styled in `site.css`: `.card`, `.chip` (`.warn`, `.good`, `.active`),
 `.button` (`.secondary`), and `.table-wrap` + `table.data` for tables that scroll on phones.
 
+## Live updates from JobTread
+
+The function app's `JobTreadWebhook` writes every JobTread event to a `DashboardEvents` table; the `DashboardChanges`
+function returns new ones. The dashboard (`Integrations/JobTread/JobTreadChangeWatcher.cs`) polls it every 20 seconds
+and drops the cached data that changed (`Infrastructure/CacheSignals.cs`). Setting: `JOBTREAD_CHANGES_URL` = the
+DashboardChanges function URL with its `?code=` key. Without it, pages refresh on their 2-minute cache. `/health`
+shows `jobTreadLiveUpdates` and the last change seen. Only event types JobTread's webhook is subscribed to arrive
+(tasks for the schedule, time entries, jobs, documents).
+
 ## Settings and secrets
 
 Never commit secrets. Settings go in Azure: PurpleDashboard > Settings > Environment variables,

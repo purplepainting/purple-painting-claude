@@ -289,6 +289,37 @@ function sanitizePathSegment(name) {
     .trim();
 }
 
+/*
+ * DASHBOARD CHANGE FEED (2026-10-12)
+ * Each webhook event is also written to the DashboardEvents table (type, job id, time). The dashboard
+ * reads new rows through the DashboardChanges function every ~20 seconds and refreshes only what changed.
+ * Row keys count down from a fixed number so the newest events sort first. Best effort: any failure is
+ * logged and ignored, so it can never affect the SharePoint sync.
+ */
+const DASHBOARD_EVENTS_TABLE = 'DashboardEvents';
+const REVERSE_TICKS = 9999999999999;
+let dashboardTableReady = false;
+
+async function recordDashboardEvent(context, eventType, jobId) {
+  try {
+    const table = getStorageClient(DASHBOARD_EVENTS_TABLE);
+    if (!dashboardTableReady) {
+      try { await table.createTable(); } catch (e) { if (e.statusCode !== 409) throw e; }
+      dashboardTableReady = true;
+    }
+    const now = Date.now();
+    await table.createEntity({
+      partitionKey: 'e',
+      rowKey: String(REVERSE_TICKS - now).padStart(13, '0') + '-' + Math.random().toString(36).slice(2, 8),
+      type: String(eventType || ''),
+      jobId: jobId ? String(jobId) : '',
+      at: now,
+    });
+  } catch (err) {
+    context.log.warn('Dashboard change feed write failed (ignored): ' + (err && err.message));
+  }
+}
+
 module.exports = async function (context, req) {
   context.log('JobTread webhook received');
 
@@ -305,6 +336,9 @@ module.exports = async function (context, req) {
   const fileData = event.file;
 
   context.log('Event: ' + eventType + ', Job ID: ' + jobId);
+
+  // Tell the dashboard something changed (it polls DashboardChanges). Never blocks or breaks the sync below.
+  await recordDashboardEvent(context, eventType, jobId);
 
   try {
     const token = await getAccessToken();
