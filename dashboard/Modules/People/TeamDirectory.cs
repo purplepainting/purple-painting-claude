@@ -13,13 +13,37 @@ public static class Levels
     public static readonly IReadOnlyList<string> All = [Foreman, Painter, Helper, Supervisor];
 
     public static int Rank(string level) => level switch { Foreman => 0, Painter => 1, Helper => 2, _ => 3 };
-    public static string Label(string level) => level.Length == 0 ? level : char.ToUpperInvariant(level[0]) + level[1..];
+    /// <summary>"Foreman", "Painter", "Helper", or "Management" (the "supervisor" level: anyone in the office or management).</summary>
+    public static string Label(string level) => level == Supervisor ? "Management" : level.Length == 0 ? level : char.ToUpperInvariant(level[0]) + level[1..];
+
+    /// <summary>Crew level suggested by QuickBooks base hourly pay: Helper $16–22, Painter $23–28, Foreman $29+.</summary>
+    public static string? FromBasePay(decimal? hourly) => hourly switch
+    {
+        null or <= 0 => null,
+        >= 29 => Foreman,
+        >= 23 => Painter,
+        _ => Helper,
+    };
 }
 
 /// <summary>One person: JobTread staff record plus their dashboard profile (if any).</summary>
 public sealed record TeamMember(StaffMember Staff, EmployeeProfile? Profile, string Level, bool LevelIsSet, string Color)
 {
     public bool IsSupervisor => Level == Levels.Supervisor;
+
+    /// <summary>What the chip says: crew level, or the JobTread role for management (Admin, PM, Office, Sales).</summary>
+    public string LevelLabel => !IsSupervisor ? Levels.Label(Level) : Staff.Role switch
+    {
+        "Admin" => "Admin",
+        "Project Manager" => "PM",
+        "Office Administrator" => "Office",
+        "Salesperson" => "Sales",
+        _ => "Management",
+    };
+
+    /// <summary>Level the QuickBooks base pay points to (hourly field staff only), when it differs from the current one.</summary>
+    public string? SuggestedLevel =>
+        !IsSupervisor && Profile?.QbPayType != "Salary" && Levels.FromBasePay(Profile?.QbBasePay) is { } l && l != Level ? l : null;
 
     /// <summary>
     /// Chip color class. Crew: green by level. Management: purple by JobTread role (Admin dark,
@@ -116,24 +140,27 @@ public sealed class TeamDirectory(
     /// <summary>The level someone gets when no one has set it on the Employees page.</summary>
     public string DefaultLevel(StaffMember s) => !s.IsField ? Levels.Supervisor : crewLevels.Value.For(s.Name).ToString().ToLowerInvariant();
 
-    public async Task SaveAsync(string membershipId, string? level, string? color, string? notes, string user, CancellationToken ct)
+    public async Task SaveAsync(string membershipId, string? level, string? color, string? notes, decimal? qbBasePay, string? qbPayType, string user, CancellationToken ct)
     {
         var db = services.GetRequiredService<DashboardDb>();
         var profile = await db.EmployeeProfiles.FirstOrDefaultAsync(p => p.MembershipId == membershipId, ct);
         if (profile is null) db.EmployeeProfiles.Add(profile = new EmployeeProfile { MembershipId = membershipId });
-        var before = new { profile.Level, profile.Color, profile.Notes };
+        var before = new { profile.Level, profile.Color, profile.Notes, profile.QbBasePay, profile.QbPayType };
 
         profile.Level = level;
         profile.Color = color;
         profile.Notes = notes;
+        profile.QbBasePay = qbBasePay;
+        profile.QbPayType = qbBasePay is null ? null : qbPayType;
         profile.UpdatedAt = DateTime.UtcNow;
         profile.UpdatedBy = user;
         await db.SaveChangesAsync(ct);
         cache.Remove(ProfilesKey);
 
         var name = (await people.GetStaffAsync(ct)).FirstOrDefault(s => s.MembershipId == membershipId)?.Name ?? membershipId;
-        await changeLog.WriteAsync([ChangeLogWriter.Entry(user, "employees", "save", name, new { before, after = new { level, color, notes } }, "Done")], ct);
+        await changeLog.WriteAsync([ChangeLogWriter.Entry(user, "employees", "save", name, new { before, after = new { level, color, notes, qbBasePay, qbPayType = profile.QbPayType } }, "Done")], ct);
     }
+
 
     private async Task<IReadOnlyDictionary<string, EmployeeProfile>> GetProfilesAsync(CancellationToken ct)
     {

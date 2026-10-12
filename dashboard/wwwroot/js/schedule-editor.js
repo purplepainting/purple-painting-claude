@@ -172,7 +172,7 @@
     });
 
     // Not scheduled: field staff not on any task that day.
-    html += '<tr class="free-row"><th class="row-head" scope="row">Not scheduled<span class="row-sub muted">Drag or tap ' + (data.who === 'supervisors' ? 'a supervisor' : 'a painter') + ' onto a job</span></th>';
+    html += '<tr class="free-row"><th class="row-head" scope="row">Not scheduled<span class="row-sub muted">Drag or tap ' + (data.who === 'supervisors' ? 'someone' : 'a painter') + ' onto a job</span></th>';
     days.forEach(function (d) {
       var busy = {};
       live().filter(function (t) { return covers(t, d); }).forEach(function (t) { t.crew.forEach(function (id) { busy[id] = true; }); });
@@ -198,7 +198,7 @@
 
   function openPanel(t, isCreate) {
     var jobOptions = shownJobs.map(function (id) { var j = allJobs[id]; return '<option value="' + esc(id) + '"' + (t.jobId === id ? ' selected' : '') + '>' + esc(j.name) + '</option>'; }).join('');
-    var groups = { foreman: 'Foremen', painter: 'Painters', helper: 'Helpers', supervisor: 'Supervisors' };
+    var groups = { foreman: 'Foremen', painter: 'Painters', helper: 'Helpers', supervisor: 'Management' };
     var crewHtml = Object.keys(groups).map(function (lvl) {
       var list = data.people.filter(function (p) { return p.level === lvl; });
       if (!list.length) return '';

@@ -66,7 +66,7 @@ public partial class IndexModel(TeamDirectory directory, LaborCostService laborC
             .OrderBy(m => m.Staff.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
-    public async Task<IActionResult> OnPostSaveAsync(string membershipId, string? level, string? color, bool defaultColor, string? notes, CancellationToken ct)
+    public async Task<IActionResult> OnPostSaveAsync(string membershipId, string? level, string? color, bool defaultColor, string? notes, string? qbBasePay, string? qbPayType, CancellationToken ct)
     {
         if (!directory.CanEdit) return BadRequest("The dashboard database isn't set up, so changes can't be saved yet.");
 
@@ -76,15 +76,23 @@ public partial class IndexModel(TeamDirectory directory, LaborCostService laborC
         color = !defaultColor && color is not null && HexColor().IsMatch(color) ? color.ToUpperInvariant() : null;
         notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim()[..Math.Min(notes.Trim().Length, 2000)];
 
-        await directory.SaveAsync(membershipId, level, color, notes, me.Email ?? me.DisplayName ?? "unknown", ct);
+        decimal? pay = decimal.TryParse(qbBasePay?.Replace("$", "").Replace(",", "").Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var p) && p > 0 ? Math.Round(p, 2) : null;
+        var payType = qbPayType == "Salary" ? "Salary" : "Hourly";
+
+        await directory.SaveAsync(membershipId, level, color, notes, pay, payType, me.Email ?? me.DisplayName ?? "unknown", ct);
         return RedirectToPage(new { show = Show, q = Q, open = membershipId });
     }
+
+    /// <summary>"$41.66/hr" or "$62,000/yr".</summary>
+    public static string Pay(decimal? amount, string? type) => amount is null ? "—"
+        : type == "Salary" ? amount.Value.ToString("$#,0", System.Globalization.CultureInfo.InvariantCulture) + "/yr"
+        : amount.Value.ToString("$#,0.00", System.Globalization.CultureInfo.InvariantCulture) + "/hr";
 
     private bool Matches(TeamMember m) =>
         string.IsNullOrWhiteSpace(Q)
         || m.Staff.Name.Contains(Q.Trim(), StringComparison.OrdinalIgnoreCase)
         || m.Staff.Role.Contains(Q.Trim(), StringComparison.OrdinalIgnoreCase)
-        || m.Level.Contains(Q.Trim(), StringComparison.OrdinalIgnoreCase);
+        || m.LevelLabel.Contains(Q.Trim(), StringComparison.OrdinalIgnoreCase);
 
     public decimal Hours(TeamMember m) => Math.Round(HoursThisWeek.GetValueOrDefault(m.Staff.UserId), 1);
 

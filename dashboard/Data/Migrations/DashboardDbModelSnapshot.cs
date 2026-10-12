@@ -90,6 +90,13 @@ namespace PurpleDashboard.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<decimal?>("QbBasePay")
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<string>("QbPayType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("datetime2");
 
