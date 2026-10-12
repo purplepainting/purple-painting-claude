@@ -78,9 +78,9 @@ else
                     </div>
                     <dl class="job-line-figs">
                         <div><dt>Costs</dt><dd class="num">@Format.Money(job.ActualCost)</dd></div>
-                        <div><dt>Billed</dt><dd class="num">@Format.Money(job.Billed)</dd></div>
+                        <div><dt>Billed</dt><dd class="num@(job.BilledIncludesRetention ? " retention" : "")" title="@(job.BilledIncludesRetention ? $"Includes {Format.Money(job.RetentionHeld)} retention held, earned but not collected yet" : null)">@Format.Money(job.Billed)</dd></div>
                     </dl>
-                    <span class="profit num" style="@ProfitScale.Style(job.ProfitPercent)" title="Profit: (contract − costs) ÷ contract">@Format.Percent(job.ProfitPercent)</span>
+                    <span class="profit num" style="@ProfitScale.Style(job.ProfitPercent)" title="Profit: (billed − costs) ÷ billed. Billed includes retention held.">@Format.Percent(job.ProfitPercent)</span>
                     <span class="chevron" aria-hidden="true"></span>
                 </summary>
 
@@ -135,8 +135,8 @@ else
                             </div>
                             <div>
                                 <dt>Billed</dt>
-                                <dd class="num">@Format.Money(job.Billed) <span class="muted">(@Format.Percent(job.BilledPercent))</span></dd>
-                                @if (job.RetentionHeld >= 1) { <dd class="fig-note num">Incl. @Format.Money(job.RetentionHeld) retention held</dd> }
+                                <dd class="num"><span class="@(job.BilledIncludesRetention ? "retention" : "")">@Format.Money(job.Billed)</span> <span class="muted">(@Format.Percent(job.BilledPercent))</span></dd>
+                                @if (job.BilledIncludesRetention) { <dd class="fig-note num retention">Incl. @Format.Money(job.RetentionHeld) retention held, earned, not collected yet</dd> }
                             </div>
                             <div><dt>Left to bill</dt><dd class="num">@Format.Money(job.LeftToBill)</dd></div>
                             <div><dt>Unpaid</dt><dd class="num">@Format.Money(job.Unpaid)</dd></div>
@@ -144,7 +144,7 @@ else
                             <div>
                                 <dt>Profit</dt>
                                 <dd class="num@(job.Profit < 0 ? " neg" : "")">@Format.Money(job.Profit) <span class="muted">(@Format.Percent(job.ProfitPercent))</span></dd>
-                                @if (job.ContractIncludesPending) { <dd class="fig-note num">On approved only @Format.Money(job.ProfitOnApproved)</dd> }
+                                <dd class="fig-note num">Billed − costs · at full contract @Format.Money(job.ProfitAtContract)</dd>
                             </div>
                             <div><dt>Cash (invoiced − costs)</dt><dd class="num@(job.CashPosition < 0 ? " neg" : "")">@Format.Money(job.CashPosition)</dd></div>
                         </dl>

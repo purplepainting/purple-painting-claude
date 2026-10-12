@@ -27,8 +27,6 @@ public sealed record ProjectSummary
 
     public bool ContractIncludesPending => Stage is not null && PendingOrders > 0;
 
-    /// <summary>Approved contract − costs: profit if none of the pending change orders go through.</summary>
-    public decimal? ProfitOnApproved => ApprovedContract is { } a ? a - ActualCost : null;
     public decimal PendingOrders { get; init; }    // customer orders sent, awaiting approval (pending change orders; for a bid, the proposal)
     public decimal UnsentChangeOrders { get; init; } // draft change orders not sent to the customer yet
     public int UnsentChangeOrderCount { get; init; }
@@ -78,17 +76,26 @@ public sealed record ProjectSummary
         };
     }
 
+    /// <summary>Some of billed is retention held back (earned, not collected yet). Shown in orange.</summary>
+    public bool BilledIncludesRetention => RetentionHeld >= 1;
+
     /// <summary>Billed to date (including retention) ÷ contract (the ring). Null when there's no contract.</summary>
     public decimal? BilledPercent => Contract > 0 ? Billed / Contract * 100 : null;
 
     /// <summary>Contract not yet billed. Retention already billed is not counted here.</summary>
     public decimal? LeftToBill => Contract is { } c ? c - Billed : null;
 
-    /// <summary>Contract − costs to date: the job's profit if no more costs come in. Null without a contract.</summary>
-    public decimal? Profit => Contract is { } c ? c - ActualCost : null;
+    /// <summary>
+    /// Profit = billed − costs to date. Billed includes retention held (earned, collected at the end),
+    /// so the PM sees money earned even when it isn't invoiced yet.
+    /// </summary>
+    public decimal Profit => Billed - ActualCost;
 
-    /// <summary>(Contract − costs) ÷ contract. Null without a contract.</summary>
-    public decimal? ProfitPercent => Contract > 0 ? Profit / Contract * 100 : null;
+    /// <summary>(Billed − costs) ÷ billed. Null until something is billed.</summary>
+    public decimal? ProfitPercent => Billed > 0 ? Profit / Billed * 100 : null;
+
+    /// <summary>Contract − costs to date: where the job lands if no more costs come in. Reference only.</summary>
+    public decimal? ProfitAtContract => Contract is { } c ? c - ActualCost : null;
 
     /// <summary>Invoiced (after retention) − costs: cash position on the job so far.</summary>
     public decimal CashPosition => InvoicedNet - ActualCost;
