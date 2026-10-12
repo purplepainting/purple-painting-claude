@@ -47,7 +47,7 @@ public sealed record PushResult(string? Label, string Kind, PushStatus Status, s
 /// changed there since the editor loaded it, the change is skipped (not overwritten).
 /// JobTread moves dependent tasks and notifies assigned crew (its defaults).
 /// </summary>
-public sealed class SchedulePushService(IJobTreadClient jobTread, ILogger<SchedulePushService> logger)
+public sealed class SchedulePushService(IJobTreadClient jobTread, PurpleDashboard.Data.ChangeLogWriter changeLog, ILogger<SchedulePushService> logger)
 {
     public async Task<IReadOnlyList<PushResult>> PushAsync(IReadOnlyList<ScheduleChange> changes, string user, CancellationToken ct)
     {
@@ -63,6 +63,8 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, ILogger<Schedu
         }
 
         ScheduleService.ClearCache();
+        await changeLog.WriteAsync(changes.Zip(results, (c, r) => PurpleDashboard.Data.ChangeLogWriter.Entry(
+            user, "schedule", c.Kind, c.Label, new { c.TaskId, c.JobId, c.Original, c.Updated, r.Message }, r.Status.ToString())).ToList(), CancellationToken.None);
         return results;
     }
 

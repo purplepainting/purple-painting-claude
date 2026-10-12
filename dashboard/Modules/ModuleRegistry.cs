@@ -33,7 +33,7 @@ public static class ModuleRegistry
         new("customers",  "Customers",               "Contacts, jobs, balances and reviews.",                 "JobTread + QuickBooks", "users",     "Customers owing"),
         new("sales",      "Sales & Marketing",       "Ad spend to revenue, door-to-door and reps.",           "Dashboard",             "megaphone", "Leads this month"),
         new("vendors",    "Vendors & Payables",      "Bills, due dates and vendor balances.",                 "QuickBooks",            "receipt",   "Due in 14 days"),
-        new("employees",  "Employees",               "One profile per person across payroll and jobs.",       "QuickBooks + JobTread", "id",        "Team members"),
+        new("employees",  "Employees",               "Crew levels, PM colors and who worked where.",          "JobTread + Dashboard",  "id",        "Team members", ModuleStatus.Live),
         new("equipment",  "Equipment & Sundries",    "Sprayers, ladders, vehicles and supplies.",             "Dashboard",             "tools",     "Low or out of stock"),
     ];
 

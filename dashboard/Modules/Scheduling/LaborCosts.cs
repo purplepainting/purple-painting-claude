@@ -84,6 +84,31 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
 
     private sealed record Rates(Dictionary<(string UserId, string JobId), decimal> ByUserJob, Dictionary<string, decimal> ByUser);
 
+    /// <summary>A job someone worked recently: hours and the last day they clocked in there.</summary>
+    public sealed record RecentJob(string JobId, string JobName, decimal Hours, DateOnly LastDay);
+
+    /// <summary>Jobs each person (user id) worked in the last 30 days, most recent first.</summary>
+    public async Task<Dictionary<string, List<RecentJob>>> GetRecentJobsByPersonAsync(CancellationToken ct) =>
+        (await GetRecentEntriesAsync(ct))
+            .Where(e => e.UserId is not null && e.JobId is not null)
+            .GroupBy(e => e.UserId!)
+            .ToDictionary(g => g.Key, g => g
+                .GroupBy(e => e.JobId!)
+                .Select(j => new RecentJob(j.Key, j.Select(e => e.JobName).FirstOrDefault(n => n is not null) ?? "Unknown job",
+                    Math.Round(j.Sum(e => e.Minutes) / 60m, 1), j.Max(e => LocalClock.ToLocalDate(e.StartedAt))))
+                .OrderByDescending(j => j.LastDay).ThenByDescending(j => j.Hours)
+                .ToList());
+
+    /// <summary>All time entries from the last 30 days, cached 30 minutes (rates and employee history).</summary>
+    private async Task<IReadOnlyList<Entry>> GetRecentEntriesAsync(CancellationToken ct) =>
+        (await cache.GetOrCreateAsync("labor:recent", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30);
+            var list = new List<Entry>();
+            await foreach (var e in TimeEntriesAsync(DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow.AddDays(1), ct)) list.Add(e);
+            return (IReadOnlyList<Entry>)list;
+        }))!;
+
     /// <summary>Latest burdened rate per person (and per person on each job) from the last 30 days.</summary>
     private async Task<Rates> GetRatesAsync(CancellationToken ct) =>
         (await cache.GetOrCreateAsync("labor:rates", async entry =>
@@ -91,8 +116,7 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30);
             var byUserJob = new Dictionary<(string, string), (DateTimeOffset At, decimal Rate)>();
             var byUser = new Dictionary<string, (DateTimeOffset At, decimal Rate)>();
-            var since = DateTimeOffset.UtcNow.AddDays(-30);
-            await foreach (var e in TimeEntriesAsync(since, DateTimeOffset.UtcNow.AddDays(1), ct))
+            foreach (var e in await GetRecentEntriesAsync(ct))
             {
                 if (e.UserId is null || e.Rate <= 0) continue;
                 if (!byUser.TryGetValue(e.UserId, out var u) || e.StartedAt > u.At) byUser[e.UserId] = (e.StartedAt, e.Rate);
@@ -101,7 +125,7 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
             return new Rates(byUserJob.ToDictionary(x => x.Key, x => x.Value.Rate), byUser.ToDictionary(x => x.Key, x => x.Value.Rate));
         }))!;
 
-    private sealed record Entry(string? JobId, string? UserId, DateTimeOffset StartedAt, decimal Cost, decimal Rate, decimal Minutes);
+    private sealed record Entry(string? JobId, string? UserId, DateTimeOffset StartedAt, decimal Cost, decimal Rate, decimal Minutes, string? JobName = null);
 
     /// <summary>Time entries started in [fromUtc, toUtc), 100 per page (no nested lists, so no size limit issue).</summary>
     private async IAsyncEnumerable<Entry> TimeEntriesAsync(DateTimeOffset fromUtc, DateTimeOffset toUtc, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
@@ -126,14 +150,14 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
                     {
                         ["$"] = args,
                         ["nextPage"] = new JsonObject(),
-                        ["nodes"] = JsonNode.Parse("""{ "startedAt": {}, "cost": {}, "hourlyRate": {}, "minutes": {}, "job": { "id": {} }, "user": { "id": {} } }"""),
+                        ["nodes"] = JsonNode.Parse("""{ "startedAt": {}, "cost": {}, "hourlyRate": {}, "minutes": {}, "job": { "id": {}, "name": {} }, "user": { "id": {} } }"""),
                     },
                 },
             };
             var connection = (await jobTread.QueryAsync(page is null ? "labor-entries" : "labor-entries-more", query, ct))["organization"]?["timeEntries"];
             foreach (var n in connection.Nodes())
                 if (DateTimeOffset.TryParse(n.Str("startedAt"), out var at))
-                    yield return new Entry(n["job"].Str("id"), n["user"].Str("id"), at, n.Dec("cost") ?? 0, n.Dec("hourlyRate") ?? 0, n.Dec("minutes") ?? 0);
+                    yield return new Entry(n["job"].Str("id"), n["user"].Str("id"), at, n.Dec("cost") ?? 0, n.Dec("hourlyRate") ?? 0, n.Dec("minutes") ?? 0, n["job"].Str("name"));
             page = connection.Str("nextPage");
         } while (page is not null);
     }

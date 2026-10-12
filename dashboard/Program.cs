@@ -1,4 +1,5 @@
 using PurpleDashboard.Auth;
+using PurpleDashboard.Data;
 using PurpleDashboard.Integrations.JobTread;
 using PurpleDashboard.Modules;
 using PurpleDashboard.Modules.Projects;
@@ -17,6 +18,7 @@ builder.Services.AddRazorPages(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<CurrentUser>();
+builder.AddDashboardDatabase();
 
 // JobTread. The grant key comes from the JOBTREAD_API_KEY setting in Azure (same name as the function app).
 builder.Services.Configure<JobTreadOptions>(o =>
@@ -38,7 +40,10 @@ else
 }
 
 // Modules
+builder.Services.AddScoped<ChangeLogWriter>();
 builder.Services.AddScoped<PurpleDashboard.Modules.People.PeopleService>();
+builder.Services.AddScoped<PurpleDashboard.Modules.People.TeamDirectory>();
+builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.People.TeamMembersMetric>();
 builder.Services.AddScoped<ProjectsService>();
 builder.Services.AddScoped<ITileMetric, ActiveProjectsMetric>();
 builder.Services.AddScoped<ScheduleService>();
@@ -49,6 +54,7 @@ builder.Services.Configure<PurpleDashboard.Modules.People.PmColorOptions>(builde
 builder.Services.AddScoped<ITileMetric, JobsThisWeekMetric>();
 
 var app = builder.Build();
+await app.PrepareDashboardDatabaseAsync();
 
 // Sign-in is handled by Azure App Service Authentication (Entra ID) in front of
 // this app, so every request that reaches here is already a signed-in team member.
@@ -64,7 +70,7 @@ app.UseStatusCodePagesWithReExecute("/error/{0}");
 app.MapStaticAssets();
 
 // Simple health check for deploy verification.
-app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/health", (DatabaseStatus db) => Results.Ok(new { status = "ok", database = db.Available ? "ok" : db.Configured ? "error" : "not set up" }));
 
 app.MapRazorPages().WithStaticAssets();
 

@@ -6,7 +6,7 @@ using PurpleDashboard.Integrations.JobTread;
 namespace PurpleDashboard.Modules.People;
 
 /// <summary>A staff member in JobTread. MembershipId is what tasks are assigned by.</summary>
-public sealed record StaffMember(string MembershipId, string UserId, string Name, string Role)
+public sealed record StaffMember(string MembershipId, string UserId, string Name, string Role, string? QboEmployeeId = null)
 {
     /// <summary>Painters are "Field Employee"; everyone else (admin, PM, office, sales) is a supervisor.</summary>
     public bool IsField => Role == "Field Employee";
@@ -26,14 +26,14 @@ public sealed class PeopleService(IJobTreadClient jobTread, IMemoryCache cache, 
                 ["organization"] = new JsonObject
                 {
                     ["$"] = new JsonObject { ["id"] = options.Value.OrganizationId },
-                    ["memberships"] = JsonNode.Parse("""{ "$": { "size": 100, "where": ["isInternal", true] }, "nodes": { "id": {}, "user": { "id": {}, "name": {} }, "role": { "name": {} } } }"""),
+                    ["memberships"] = JsonNode.Parse("""{ "$": { "size": 100, "where": ["isInternal", true] }, "nodes": { "id": {}, "qboEmployeeId": {}, "user": { "id": {}, "name": {} }, "role": { "name": {} } } }"""),
                 },
             };
             var nodes = (await jobTread.QueryAsync("people-staff", query, ct))["organization"]?["memberships"].Nodes() ?? [];
             return (IReadOnlyList<StaffMember>)nodes
-                .Select(m => (Id: m.Str("id"), UserId: m["user"].Str("id"), Name: m["user"].Str("name"), Role: m["role"].Str("name")))
+                .Select(m => (Id: m.Str("id"), UserId: m["user"].Str("id"), Name: m["user"].Str("name"), Role: m["role"].Str("name"), Qbo: m.Str("qboEmployeeId")))
                 .Where(m => m.Id is not null && m.UserId is not null && m.Name is not null)
-                .Select(m => new StaffMember(m.Id!, m.UserId!, m.Name!, m.Role ?? ""))
+                .Select(m => new StaffMember(m.Id!, m.UserId!, m.Name!, m.Role ?? "", m.Qbo))
                 .OrderBy(m => m.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }))!;

@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using Microsoft.Extensions.Options;
 using PurpleDashboard.Auth;
 using PurpleDashboard.Infrastructure;
 using PurpleDashboard.Integrations.JobTread;
@@ -16,10 +15,8 @@ public partial class IndexModel(
     ScheduleService schedule,
     LaborCostService laborCosts,
     SchedulePushService pushService,
-    PeopleService people,
+    TeamDirectory directory,
     ProjectsService projects,
-    IOptions<CrewLevelOptions> crewLevels,
-    IOptions<PmColorOptions> pmColors,
     CurrentUser me,
     ILogger<IndexModel> logger) : PageModel
 {
@@ -68,10 +65,12 @@ public partial class IndexModel(
     private Dictionary<string, StaffMember> staffByName = [];
     private Dictionary<string, StaffMember> staffByUserId = [];
 
-    public PmColorOptions PmColors => pmColors.Value;
+    /// <summary>Levels and PM colors (Employees page, then settings).</summary>
+    public Team Team { get; private set; } = null!;
 
     public async Task OnGetAsync(bool refresh, CancellationToken ct)
     {
+        Team = directory.Fallback();
         ViewData["Title"] = "Scheduling";
         ViewData["ModuleName"] = "Scheduling";
 
@@ -83,7 +82,8 @@ public partial class IndexModel(
         try
         {
             Tasks = await schedule.GetTasksAsync(From, To, refresh, ct);
-            staff = await people.GetStaffAsync(ct);
+            Team = await directory.GetAsync(ct);
+            staff = Team.Staff;
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
         {
@@ -202,7 +202,7 @@ public partial class IndexModel(
             addable = (await projects.GetOpenJobsAsync(ct: ct))
                 .Where(j => !j.IsInternal && ProjectViews.Default.Matches(j) && !onSchedule.Contains(j.Id))
                 .OrderBy(j => j.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(j => (object)new { id = j.Id, name = j.Name, type = j.JobTypeShort, pm = j.ProjectManager, pmColor = PmColors.For(j.ProjectManager), hue = JobColors.HueFor(j.Id) })
+                .Select(j => (object)new { id = j.Id, name = j.Name, type = j.JobTypeShort, pm = j.ProjectManager, pmColor = Team.PmColor(j.ProjectManager), hue = JobColors.HueFor(j.Id) })
                 .ToList();
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
@@ -218,7 +218,7 @@ public partial class IndexModel(
             days = Enumerable.Range(0, 7).Select(i => From.AddDays(i).ToString("yyyy-MM-dd")),
             jobs = jobsOnSchedule.OrderBy(j => j.JobName, StringComparer.OrdinalIgnoreCase).Select(j => new
             {
-                id = j.JobId, name = j.JobName, type = ShortType(j.JobType), pm = j.ProjectManager, pmColor = PmColors.For(j.ProjectManager), hue = JobColors.HueFor(j.JobId),
+                id = j.JobId, name = j.JobName, type = ShortType(j.JobType), pm = j.ProjectManager, pmColor = Team.PmColor(j.ProjectManager), hue = JobColors.HueFor(j.JobId),
                 costs = Days.Where(d => Costs.ContainsKey((j.JobId, d))).ToDictionary(d => d.ToString("yyyy-MM-dd"), d => new { amount = Math.Round(Costs[(j.JobId, d)].Amount), estimate = Costs[(j.JobId, d)].IsEstimate }),
             }),
             addableJobs = addable,
@@ -236,11 +236,11 @@ public partial class IndexModel(
     }
 
     /// <summary>"foreman", "painter", "helper", or "supervisor" for non-field staff.</summary>
-    public string LevelOf(StaffMember s) => !s.IsField ? "supervisor" : crewLevels.Value.For(s.Name).ToString().ToLowerInvariant();
+    public string LevelOf(StaffMember s) => Team.ByMembership.TryGetValue(s.MembershipId, out var m) ? m.Level : directory.DefaultLevel(s);
 
-    public string LevelOf(string name) => staffByName.TryGetValue(name, out var s) ? LevelOf(s) : "painter";
+    public string LevelOf(string name) => Team.LevelOf(name);
 
-    private static int Rank(string level) => level switch { "foreman" => 0, "painter" => 1, "helper" => 2, _ => 3 };
+    private static int Rank(string level) => Levels.Rank(level);
 
     /// <summary>Crew in display order: foremen first, then painters, helpers, supervisors.</summary>
     public IEnumerable<CrewAssignment> Ordered(IEnumerable<CrewAssignment> crew) =>

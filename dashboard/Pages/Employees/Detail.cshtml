@@ -1,0 +1,78 @@
+@page "/employees/{id}/detail"
+@model PurpleDashboard.Pages.Employees.DetailModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Integrations.JobTread
+@using PurpleDashboard.Modules.People
+@{
+    Layout = null;
+}
+@if (Model.Error is not null)
+{
+    <p class="notice-inline warn">@Model.Error</p>
+}
+else if (Model.Member is { } m)
+{
+    var p = m.Profile;
+    <div class="emp-detail">
+        <form class="emp-form" method="post" asp-page="/Employees/Index" asp-page-handler="Save">
+            <input type="hidden" name="membershipId" value="@m.Staff.MembershipId">
+            <fieldset disabled="@(!Model.CanEdit)">
+                <label class="field">
+                    <span>Level</span>
+                    <select name="level">
+                        <option value="">Default (@Levels.Label(Model.DefaultLevel))</option>
+                        @foreach (var l in Levels.All)
+                        {
+                            <option value="@l" selected="@(p?.Level == l)">@Levels.Label(l)</option>
+                        }
+                    </select>
+                    <small class="muted">Foreman $29+, Painter $23–28, Helper $16–22 base pay. Supervisors go on the Supervisors schedule.</small>
+                </label>
+                @if (m.IsSupervisor || !string.IsNullOrEmpty(p?.Color))
+                {
+                <div class="field">
+                    <span>PM tag color</span>
+                    <span class="color-row">
+                        <input type="color" name="color" value="@m.Color">
+                        <label class="check"><input type="checkbox" name="defaultColor" value="true" checked="@string.IsNullOrEmpty(p?.Color)"> Default</label>
+                    </span>
+                    <small class="muted">Used on the project and schedule PM tags. Uncheck Default to use the color picked.</small>
+                </div>
+                }
+                <label class="field wide">
+                    <span>Notes</span>
+                    <textarea name="notes" rows="2" maxlength="2000" placeholder="e.g. Drives the spray rig, Spanish only, prevailing wage certified">@p?.Notes</textarea>
+                </label>
+                <div class="form-actions wide">
+                    <button class="button" type="submit">Save</button>
+                    @if (p is not null) { <span class="muted small">Last changed @Format.Date(DateOnly.FromDateTime(p.UpdatedAt.ToLocalTime())) by @p.UpdatedBy</span> }
+                </div>
+            </fieldset>
+        </form>
+
+        <div class="emp-jobs">
+            <h3 class="detail-title">Jobs in the last 30 days</h3>
+            @if (Model.RecentJobs.Count == 0)
+            {
+                <p class="muted">No time clocked in the last 30 days.</p>
+            }
+            else
+            {
+                <ul class="crew-list">
+                    @foreach (var j in Model.RecentJobs)
+                    {
+                        <li>
+                            <a class="crew-name" href="@JobTreadIds.JobUrl(j.JobId)" target="_blank" rel="noopener">@j.JobName</a>
+                            <span class="crew-meta num">@Format.Number(j.Hours) hrs · last @Format.Date(j.LastDay)</span>
+                        </li>
+                    }
+                </ul>
+                <p class="muted small num">@Format.Number(Model.RecentJobs.Sum(j => j.Hours)) hrs total on @Model.RecentJobs.Count @(Model.RecentJobs.Count == 1 ? "job" : "jobs")</p>
+            }
+            <p class="muted small">
+                JobTread role: @m.Staff.Role ·
+                @(m.Staff.QboEmployeeId is null ? "no QuickBooks employee linked" : "linked to QuickBooks")
+            </p>
+        </div>
+    </div>
+}

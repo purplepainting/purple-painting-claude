@@ -7,7 +7,10 @@ document.querySelectorAll('form[data-autosubmit] select').forEach(function (sele
 
 // Expandable rows (<details data-detail-url>) load their detail the first time they open.
 document.querySelectorAll('details[data-detail-url]').forEach(function (details) {
-  details.addEventListener('toggle', function () {
+  details.addEventListener('toggle', load);
+  if (details.open) { load(); details.scrollIntoView({ block: 'start' }); }
+
+  function load() {
     if (!details.open || details.dataset.loaded) return;
     var body = details.querySelector('.job-detail-body');
     details.dataset.loaded = 'loading';
@@ -19,10 +22,11 @@ document.querySelectorAll('details[data-detail-url]').forEach(function (details)
         showTab(details, details.dataset.tab || 'costs');
       })
       .catch(function () {
-        body.innerHTML = '<p class="notice-inline warn">Couldn’t load cost codes. Close and reopen to try again.</p>';
+        body.innerHTML = '<p class="notice-inline warn"></p>';
+        body.firstChild.textContent = details.dataset.error || 'Couldn’t load cost codes. Close and reopen to try again.';
         delete details.dataset.loaded;
       });
-  });
+  }
 });
 
 // Tabs inside an expanded job (Costs / Crew / Job details). Panels are marked data-panel.
