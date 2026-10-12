@@ -458,3 +458,6 @@ table.data tr.burden-row td:first-child { padding-left: 24px; }
 .emp-row.with-chip { grid-template-columns: auto minmax(0, 1fr) auto auto auto; }
 @media (max-width: 760px) { .emp-row.with-chip { grid-template-columns: auto minmax(0, 1fr) auto; } .emp-row.with-chip .emp-rates { display: none; } }
 .chip.bad { background: #FEE2E2; color: #991B1B; }
+.cust-job { border-top: 1px solid var(--border); padding-top: 10px; display: grid; gap: 4px; }
+.cust-job-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.cust-links { margin-left: auto; display: flex; gap: 4px; }

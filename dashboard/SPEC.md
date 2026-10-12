@@ -142,6 +142,7 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 - List on the left (search; filters: All / Owes money / Review to request), detail on the right (stacks on mobile).
 - Detail: contact info, lifetime revenue, outstanding balance (QuickBooks), the customer's jobs (JobTread), links to JobTread and SharePoint.
 - **Reviews:** dashboard-owned review status per job (requested / received + platform + rating / ask later), with a "Request review" button. The button only records the request in Phase 1.
+- **Built (first pass):** `/customers`: JobTread jobs (open + closed in the last 12 months) grouped by customer, QuickBooks balance and contact info matched by name (QuickBooks customers who owe but have no recent job also show). Filters All / Owes money / Review to request (completed jobs with no review status). Each job: stage, contract, billed, unpaid, JobTread and SharePoint links, and review status (requested / received with platform and stars / ask later / not asking; JobReviews table). Tile: customers owing. The review button only records status (no messages sent).
 
 ### 5. Sales and marketing
 **Built (first pass):** `/sales` with three tabs.

@@ -24,6 +24,7 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<EquipmentItem> Equipment => Set<EquipmentItem>();
     public DbSet<EquipmentEvent> EquipmentEvents => Set<EquipmentEvent>();
+    public DbSet<JobReview> JobReviews => Set<JobReview>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -130,6 +131,14 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
         {
             e.HasIndex(x => x.EquipmentId);
             e.Property(x => x.Kind).HasMaxLength(20);
+        });
+        b.Entity<JobReview>(e =>
+        {
+            e.HasIndex(x => x.JobId).IsUnique();
+            e.Property(x => x.JobId).HasMaxLength(32);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.Platform).HasMaxLength(40);
+            e.Property(x => x.UpdatedBy).HasMaxLength(200);
         });
         b.Entity<ChangeLogEntry>(e =>
         {
@@ -364,6 +373,24 @@ public sealed class EquipmentEvent
     public required string Kind { get; set; }
     public string? Detail { get; set; }
     public string? By { get; set; }
+}
+
+/// <summary>Review status for a finished job (dashboard-owned).</summary>
+public sealed class JobReview
+{
+    public int Id { get; set; }
+    public required string JobId { get; set; }
+    public string? JobName { get; set; }
+    /// <summary>"requested", "received", "later", "skip".</summary>
+    public required string Status { get; set; }
+    /// <summary>Google, Yelp, Facebook, Houzz, Nextdoor, Other.</summary>
+    public string? Platform { get; set; }
+    public int? Rating { get; set; }
+    public DateOnly? RequestedOn { get; set; }
+    public DateOnly? ReceivedOn { get; set; }
+    public string? Notes { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public string? UpdatedBy { get; set; }
 }
 
 /// <summary>Audit log: who changed what, and the result (schedule pushes, employee edits).</summary>

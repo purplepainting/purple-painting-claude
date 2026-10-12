@@ -1,0 +1,99 @@
+@page "/customers"
+@model PurpleDashboard.Pages.Customers.IndexModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Integrations.JobTread
+@using PurpleDashboard.Modules.Customers
+
+<div class="module-head">
+    <div class="pills" role="tablist" aria-label="Filters">
+        @foreach (var (key, label) in new[] { ((string?)null, "All"), ("owes", "Owes money"), ("review", "Review to request") })
+        {
+            <a class="pill@(Model.Show == key ? " active" : "")" asp-page="/Customers/Index" asp-route-show="@key" asp-route-q="@Model.Q">@label</a>
+        }
+    </div>
+    <form class="filters" method="get">
+        @if (Model.Show is not null) { <input type="hidden" name="show" value="@Model.Show"> }
+        <input type="search" name="q" value="@Model.Q" placeholder="Search customer, job or address" aria-label="Search">
+        <button class="button secondary" type="submit">Search</button>
+    </form>
+</div>
+
+@if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
+@if (Model.Error is not null)
+{
+    <div class="card notice warn"><strong>Couldn't load customers.</strong><p>@Model.Error</p></div>
+}
+else
+{
+    <div class="kpis">
+        <div class="card kpi"><span class="kpi-label">Customers</span><span class="kpi-value num">@Model.All.Count</span><span class="kpi-sub">open jobs + last 12 months</span></div>
+        <div class="card kpi"><span class="kpi-label">Owed to us</span><span class="kpi-value num">@Format.Money(Model.All.Sum(c => c.Owes))</span><span class="kpi-sub">@Model.All.Count(c => c.Owes >= 1) customers</span></div>
+        <div class="card kpi"><span class="kpi-label">Reviews to request</span><span class="kpi-value num">@Model.All.Sum(c => c.Jobs.Count(j => CustomersService.NeedsReview(j, Model.Reviews)))</span><span class="kpi-sub">completed jobs</span></div>
+    </div>
+    <p class="list-meta muted">Jobs from JobTread; balances and contact info from QuickBooks (matched by name) · <a asp-page="/Customers/Index" asp-route-show="@Model.Show" asp-route-q="@Model.Q" asp-route-refresh="true">Refresh</a></p>
+
+    <div class="job-list">
+        @if (!Model.Shown.Any()) { <div class="card empty-state"><p class="muted">No customers here.</p></div> }
+        @foreach (var c in Model.Shown)
+        {
+            <details class="job card emp">
+                <summary class="emp-row">
+                    <span class="avatar" aria-hidden="true">@string.Concat(c.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0])))</span>
+                    <div class="job-main">
+                        <div class="job-title">@c.Name</div>
+                        <div class="job-sub muted">@c.Jobs.Count @(c.Jobs.Count == 1 ? "job" : "jobs") · billed @Format.Money(c.Billed)@(c.Qb is null ? " · not in QuickBooks" : "")</div>
+                    </div>
+                    <span class="emp-rates num"><span class="@(c.Owes >= 1 ? "neg" : "muted")">@(c.Owes >= 1 ? "Owes " + Format.Money(c.Owes) : "Paid up")</span><span class="muted">@(c.LastActivity is { } d ? "Last " + Format.Date(d) : "")</span></span>
+                    <span class="chevron" aria-hidden="true"></span>
+                </summary>
+                <div class="job-detail bonus-detail">
+                    @if (c.Qb is { } q)
+                    {
+                        <dl class="detail-grid">
+                            <div><dt>Email</dt><dd>@(q.Email is { } e ? Html.Raw($"<a href=\"mailto:{System.Net.WebUtility.HtmlEncode(e)}\">{System.Net.WebUtility.HtmlEncode(e)}</a>") : "—")</dd></div>
+                            <div><dt>Phone</dt><dd>@(q.Phone is { } ph ? Html.Raw($"<a href=\"tel:{System.Net.WebUtility.HtmlEncode(ph)}\">{System.Net.WebUtility.HtmlEncode(ph)}</a>") : "—")</dd></div>
+                            <div><dt>Billing address</dt><dd>@(q.Address ?? "—")</dd></div>
+                            <div><dt>QuickBooks balance</dt><dd class="num">@Format.Money(q.Balance)</dd></div>
+                        </dl>
+                    }
+                    @foreach (var j in c.Jobs)
+                    {
+                        Model.Reviews.TryGetValue(j.Id, out var r);
+                        <div class="cust-job">
+                            <div class="cust-job-head">
+                                <b>#@j.Number @j.Name</b>
+                                <span class="muted small">@(j.Stage ?? j.BidStage ?? "Bid") · contract @Format.Money(j.Contract) · billed @Format.Money(j.Billed)@(j.Unpaid >= 1 ? " · unpaid " + Format.Money(j.Unpaid) : "")</span>
+                                <span class="cust-links">
+                                    <a class="link-button" href="@JobTreadIds.JobUrl(j.Id)" target="_blank" rel="noopener">JobTread ↗</a>
+                                    @if (j.FolderUrl is not null) { <a class="link-button" href="@j.FolderUrl" target="_blank" rel="noopener">SharePoint ↗</a> }
+                                </span>
+                            </div>
+                            @if (j.IsCompleted || r is not null)
+                            {
+                                <form method="post" asp-page-handler="Review" asp-route-show="@Model.Show" asp-route-q="@Model.Q" class="inline-form">
+                                    <input type="hidden" name="jobId" value="@j.Id"><input type="hidden" name="jobName" value="@j.Name">
+                                    <span class="chip @(r?.Status == "received" ? "good" : r is null ? "warn" : "")">@IndexModel.ReviewLabel(r)</span>
+                                    <select name="status" aria-label="Review status">
+                                        <option value="requested" selected="@(r?.Status is null or "requested")">Requested</option>
+                                        <option value="received" selected="@(r?.Status == "received")">Received</option>
+                                        <option value="later" selected="@(r?.Status == "later")">Ask later</option>
+                                        <option value="skip" selected="@(r?.Status == "skip")">Not asking</option>
+                                    </select>
+                                    <select name="platform" aria-label="Platform"><option value="">Platform</option>@foreach (var p in CustomersService.Platforms) { <option selected="@(r?.Platform == p)">@p</option> }</select>
+                                    <select name="rating" aria-label="Rating"><option value="">Stars</option>@for (var s = 5; s >= 1; s--) { <option value="@s" selected="@(r?.Rating == s)">@s ★</option> }</select>
+                                    <input name="notes" value="@r?.Notes" placeholder="Notes" aria-label="Notes">
+                                    <button class="button secondary" type="submit" disabled="@(!Model.CanEdit)">Save</button>
+                                </form>
+                            }
+                        </div>
+                    }
+                    @if (c.Jobs.Count == 0) { <p class="muted small">No JobTread jobs in the last 12 months; owes money in QuickBooks.</p> }
+                </div>
+            </details>
+        }
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/site.js" asp-append-version="true"></script>
+}
