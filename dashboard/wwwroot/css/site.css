@@ -224,6 +224,10 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
 .pchip.lvl-painter { background: #22A35A; color: #fff; }
 .pchip.lvl-helper { background: #BBF7D0; color: #14532D; border-color: #86EFAC; }
 .pchip.lvl-supervisor { background: #E7E5EB; color: #3F3A47; }
+/* Management: purple by role (PMs use their own PM color inline). */
+.pchip.lvl-admin { background: #3B0764; color: #fff; }
+.pchip.lvl-office { background: #8B5CF6; color: #fff; }
+.pchip.lvl-sales { background: #EDE4FF; color: #4C1D95; border-color: #D3BFFF; }
 .pchips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
 .block-time { font-size: 11.5px; opacity: .8; }
 .pm-tag { display: inline-flex; font-size: 11px; font-weight: 700; padding: 0 7px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
@@ -375,6 +379,9 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
 .avatar.lvl-foreman { background: #14532D; color: #fff; }
 .avatar.lvl-painter { background: #22A35A; color: #fff; }
 .avatar.lvl-helper { background: #BBF7D0; color: #14532D; }
+.avatar.lvl-admin { background: #3B0764; color: #fff; }
+.avatar.lvl-office { background: #8B5CF6; color: #fff; }
+.avatar.lvl-sales { background: #EDE4FF; color: #4C1D95; }
 .emp-figs { display: flex; align-items: center; gap: 8px; }
 .emp-hours { min-width: 56px; text-align: right; font-size: 13px; }
 .emp-note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

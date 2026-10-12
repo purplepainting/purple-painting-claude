@@ -76,6 +76,11 @@
     return DOW[dt.getDay()] + ', ' + String(dt.getMonth() + 1).padStart(2, '0') + '.' + String(dt.getDate()).padStart(2, '0') + ' — ' + shortName(name);
   }
   function level(id) { return (people[id] || {}).level || 'painter'; }
+  // Chip color: green by level for crew, purple by role for management (from the server).
+  function chipAttrs(id) {
+    var p = people[id] || {};
+    return { cls: p.chip || ('lvl-' + level(id)), style: p.chipStyle ? ' style="' + esc(p.chipStyle) + '"' : '' };
+  }
   var RANK = { foreman: 0, painter: 1, helper: 2, supervisor: 3 };
   // Foremen first, then painters, helpers, supervisors.
   function ordered(ids) { return ids.slice().sort(function (a, b) { return (RANK[level(a)] - RANK[level(b)]) || first(a).localeCompare(first(b)); }); }
@@ -152,7 +157,8 @@
             + '<span class="block-title">' + esc(shortName(t.name)) + '</span>'
             + '<span class="block-time">' + esc(times(t)) + (t.start !== t.end ? ' · ' + esc(dayLabel(t.start)) + '–' + esc(dayLabel(t.end)) : '') + '</span>'
             + '<span class="pchips">' + (t.crew.length ? ordered(t.crew).map(function (id) {
-              return '<span class="pchip lvl-' + level(id) + (selected && selected.id === id && selected.fromKey === t.key ? ' selected' : '') + '" draggable="true" data-person="' + esc(id) + '" data-from="' + t.key + '" data-day="' + d + '">' + esc(first(id)) + '</span>';
+              var ca = chipAttrs(id);
+              return '<span' + ca.style + ' class="pchip ' + ca.cls + (selected && selected.id === id && selected.fromKey === t.key ? ' selected' : '') + '" draggable="true" data-person="' + esc(id) + '" data-from="' + t.key + '" data-day="' + d + '">' + esc(first(id)) + '</span>';
             }).join('') : '<em class="block-sub">Unassigned</em>') + '</span>'
             + (t.dependents && !t.isNew ? '<span class="block-sub">⛓ ' + t.dependents + ' linked task' + (t.dependents > 1 ? 's' : '') + ' move with it</span>' : '')
             + '</div>';
@@ -173,7 +179,7 @@
       var free = data.people.filter(function (p) { return (p.level === 'supervisor') === wantSupervisors && !busy[p.id]; })
         .sort(function (a, b) { return (RANK[a.level] - RANK[b.level]) || a.first.localeCompare(b.first); });
       html += '<td class="drop free' + (selected && selected.day === d ? ' targetable' : '') + '" data-free="1" data-day="' + d + '"><span class="pchips">'
-        + free.map(function (p) { return '<span class="pchip lvl-' + p.level + (selected && selected.id === p.id && selected.fromKey === null && selected.day === d ? ' selected' : '') + '" draggable="true" data-person="' + esc(p.id) + '" data-from="" data-day="' + d + '">' + esc(p.first) + '</span>'; }).join('')
+        + free.map(function (p) { var ca = chipAttrs(p.id); return '<span' + ca.style + ' class="pchip ' + ca.cls + (selected && selected.id === p.id && selected.fromKey === null && selected.day === d ? ' selected' : '') + '" draggable="true" data-person="' + esc(p.id) + '" data-from="" data-day="' + d + '">' + esc(p.first) + '</span>'; }).join('')
         + '</span></td>';
     });
     html += '</tr></tbody></table></div></div>';

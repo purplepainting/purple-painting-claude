@@ -283,7 +283,7 @@ public partial class IndexModel(
                 crew = t.Crew.Select(c => c.MembershipId),
                 parentTaskId = t.ParentTaskId, taskTypeId = t.TaskTypeId, dependents = t.Dependents,
             }),
-            people = staff.Select(s => new { id = s.MembershipId, name = s.Name, first = s.FirstName, level = LevelOf(s) }),
+            people = staff.Select(s => new { id = s.MembershipId, name = s.Name, first = s.FirstName, level = LevelOf(s), chip = Team.ByMembership.TryGetValue(s.MembershipId, out var m) ? m.ChipClass : "lvl-" + LevelOf(s), chipStyle = Team.ByMembership.TryGetValue(s.MembershipId, out var m2) ? m2.ChipStyle : null }),
         };
         return JsonSerializer.Serialize(data);
     }

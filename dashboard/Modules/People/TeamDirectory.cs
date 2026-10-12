@@ -20,6 +20,22 @@ public static class Levels
 public sealed record TeamMember(StaffMember Staff, EmployeeProfile? Profile, string Level, bool LevelIsSet, string Color)
 {
     public bool IsSupervisor => Level == Levels.Supervisor;
+
+    /// <summary>
+    /// Chip color class. Crew: green by level. Management: purple by JobTread role (Admin dark,
+    /// Office medium, Sales light); PMs use their own PM color (see ChipStyle). Anyone else gray.
+    /// </summary>
+    public string ChipClass => !IsSupervisor ? "lvl-" + Level : Staff.Role switch
+    {
+        "Admin" => "lvl-supervisor lvl-admin",
+        "Office Administrator" => "lvl-supervisor lvl-office",
+        "Salesperson" => "lvl-supervisor lvl-sales",
+        "Project Manager" => "lvl-supervisor lvl-pm",
+        _ => "lvl-supervisor",
+    };
+
+    /// <summary>Inline style for a PM's chip (their PM color); empty for everyone else.</summary>
+    public string? ChipStyle => IsSupervisor && Staff.Role == "Project Manager" ? $"background:{Color};color:#fff" : null;
 }
 
 /// <summary>
@@ -47,6 +63,9 @@ public sealed class Team
     public IReadOnlyList<StaffMember> Staff => Members.Select(m => m.Staff).ToList();
 
     public TeamMember? Find(string name) => byName.GetValueOrDefault(name);
+
+    public string ChipClass(string name) => Find(name)?.ChipClass ?? "lvl-" + Levels.Painter;
+    public string? ChipStyle(string name) => Find(name)?.ChipStyle;
 
     /// <summary>"foreman", "painter", "helper" or "supervisor". Unknown names count as painters.</summary>
     public string LevelOf(string name) => Find(name)?.Level ?? Levels.Painter;
