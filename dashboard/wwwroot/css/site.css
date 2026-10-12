@@ -24,6 +24,9 @@
   --touch:      44px;      /* minimum touch target */
   --page-width: 1200px;
   --gutter:     16px;
+  /* Keep content clear of the iPhone notch / home bar and Android cutouts. */
+  --safe-left:  max(var(--gutter), env(safe-area-inset-left));
+  --safe-right: max(var(--gutter), env(safe-area-inset-right));
 
   --font-ui:    "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-num:   "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -32,7 +35,11 @@
 /* ---------- Base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; font-family: var(--font-ui); font-size: 15px; line-height: 1.5; background: var(--bg); color: var(--text); }
+body { margin: 0; font-family: var(--font-ui); font-size: 15px; line-height: 1.5; background: var(--bg); color: var(--text); -webkit-tap-highlight-color: transparent; }
+a, button, input, select, textarea, label { touch-action: manipulation; }
+/* 16px minimum stops iPhone Safari from zooming in when a field is tapped. */
+input, select, textarea { font-size: max(16px, 1em); }
+:focus-visible { outline: 2px solid var(--purple-600); outline-offset: 2px; }
 a { color: var(--purple-700); }
 h1, h2, h3 { line-height: 1.2; margin: 0; }
 h1 { font-size: 28px; font-weight: 800; }
@@ -41,17 +48,17 @@ h2 { font-size: 17px; font-weight: 700; }
 .num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
 
 /* ---------- Top bar ---------- */
-.topbar { position: sticky; top: 0; z-index: 10; background: var(--purple-900); color: #fff; }
-.topbar-inner { max-width: var(--page-width); margin: 0 auto; padding: 0 var(--gutter); min-height: 60px; display: flex; align-items: center; gap: 12px; }
+.topbar { position: sticky; top: 0; z-index: 10; background: var(--purple-900); color: #fff; padding-top: env(safe-area-inset-top); }
+.topbar-inner { max-width: var(--page-width); margin: 0 auto; padding: 0 var(--safe-right) 0 var(--safe-left); min-height: 60px; display: flex; align-items: center; gap: 12px; }
 .brand, .topbar-back { display: inline-flex; align-items: center; gap: 10px; min-height: var(--touch); color: #fff; text-decoration: none; font-weight: 700; }
 .topbar-back { color: var(--purple-100); font-weight: 600; }
-.topbar-back:hover { color: #fff; }
+@media (hover: hover) { .topbar-back:hover { color: #fff; } }
 .topbar-title { font-weight: 700; }
 .topbar-user { margin-left: auto; color: var(--purple-100); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 .logo { width: 34px; height: 34px; border-radius: var(--radius-sm); background: var(--purple-600); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; }
 
 /* ---------- Page ---------- */
-.page { max-width: var(--page-width); margin: 0 auto; padding: 28px var(--gutter) 48px; }
+.page { max-width: var(--page-width); margin: 0 auto; padding: 28px var(--safe-right) calc(48px + env(safe-area-inset-bottom)) var(--safe-left); }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); }
 
 /* ---------- Common components ---------- */
@@ -61,7 +68,8 @@ h2 { font-size: 17px; font-weight: 700; }
 .chip.active { background: var(--purple-600); color: #fff; }
 
 .button { display: inline-flex; align-items: center; justify-content: center; min-height: var(--touch); padding: 0 18px; border-radius: 999px; border: 0; background: var(--purple-600); color: #fff; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; }
-.button:hover { background: var(--purple-700); }
+@media (hover: hover) { .button:hover { background: var(--purple-700); } }
+.button:active { background: var(--purple-700); }
 .button.secondary { background: var(--card); color: var(--purple-700); border: 1px solid var(--border); }
 
 /* Tables live inside a card and scroll sideways on small screens. */
@@ -83,7 +91,9 @@ table.data td.num, table.data th.num { text-align: right; }
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
 .tile { display: flex; flex-direction: column; gap: 8px; padding: 18px; color: inherit; text-decoration: none; min-height: 190px; transition: border-color .15s, box-shadow .15s; }
-.tile:hover, .tile:focus-visible { border-color: var(--purple-600); box-shadow: 0 2px 12px rgba(46, 18, 72, .08); outline: none; }
+@media (hover: hover) { .tile:hover { border-color: var(--purple-600); box-shadow: 0 2px 12px rgba(46, 18, 72, .08); } }
+.tile:focus-visible { border-color: var(--purple-600); outline: none; }
+.tile:active { border-color: var(--purple-600); }
 .tile p { margin: 0; font-size: 14px; }
 .tile-head { display: flex; align-items: center; justify-content: space-between; }
 .tile-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--purple-50); color: var(--purple-600); display: inline-flex; align-items: center; justify-content: center; }
@@ -98,4 +108,5 @@ table.data td.num, table.data th.num { text-align: right; }
   .page { padding-top: 20px; }
   .tiles { grid-template-columns: 1fr; }
   .tile { min-height: 0; }
+  .topbar-user { max-width: 40%; font-size: 13px; }
 }

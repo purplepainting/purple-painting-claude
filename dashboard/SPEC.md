@@ -80,6 +80,14 @@ These tokens live as CSS variables at the top of `dashboard/wwwroot/css/site.css
 
 Patterns: a sticky top bar with a "← Dashboard" back link and the module name; pill-shaped saved-view buttons; tables inside white cards that scroll horizontally on small screens; status chips; minimum touch target of 44px. Must work on a phone (crews and salespeople will use it in the field).
 
+Phone checklist (iPhone Safari and Android Chrome), already handled in the shell; keep it true for every new screen:
+- Layout fits at 360px wide with no sideways page scroll. Wide tables scroll inside their card (`.table-wrap`).
+- Touch targets at least 44px. Hover effects only on devices that have hover.
+- Form fields at least 16px text so iPhone doesn't zoom on tap.
+- Content stays clear of the notch and home bar (safe-area insets).
+- Installable to the home screen (manifest + icons); opens full-screen with the purple status bar.
+- Test new screens at phone width before opening a PR.
+
 ## 6. Modules, in build order
 
 ### Launchpad (home)

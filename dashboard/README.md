@@ -42,6 +42,8 @@ straight away with a "Coming soon" page.
 
 **Change colors or fonts:** edit the variables in `:root` at the top of `wwwroot/css/site.css`.
 
+**Phones:** every screen must work on iPhone and Android. Follow the phone checklist in SPEC.md section 5; the shared styles already handle most of it.
+
 **Shared UI pieces** already styled in `site.css`: `.card`, `.chip` (`.warn`, `.good`, `.active`),
 `.button` (`.secondary`), and `.table-wrap` + `table.data` for tables that scroll on phones.
 
