@@ -290,6 +290,9 @@ public partial class IndexModel(
     /// <summary>Task names repeat the date ("Mon, 10.12 — Paint", "Day 6 (Mon 10/12) – Prep"); the grid already shows it.</summary>
     public static string ShortName(string name) => DatePrefix().Replace(name, "").Trim() is { Length: > 0 } s ? s : name;
 
+    /// <summary>Tasks renamed "DELETE …" (marked in the editor) are waiting for someone to delete them in JobTread.</summary>
+    public static bool IsMarkedForDeletion(ScheduleTask t) => t.Name.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase);
+
     public static string Time(ScheduleTask t) => t.StartTime is { } s
         ? Clock(s) + (t.EndTime is { } e ? " – " + Clock(e) : "")
         : "";

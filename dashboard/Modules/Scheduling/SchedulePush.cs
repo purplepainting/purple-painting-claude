@@ -24,14 +24,14 @@ public sealed record TaskFields
 
 public sealed record ScheduleChange
 {
-    /// <summary>"update", "create" or "delete".</summary>
+    /// <summary>"update", "create" or "delete" (falls back to renaming it DELETE and moving it to Sunday if JobTread refuses).</summary>
     public required string Kind { get; init; }
     public string? TaskId { get; init; }          // update, delete
     public string? JobId { get; init; }           // create
     public string? ParentTaskId { get; init; }    // create: put the new day under the same phase
     public string? TaskTypeId { get; init; }      // create
     public TaskFields? Original { get; init; }    // update, delete: what the editor loaded, to catch conflicts
-    public TaskFields? Updated { get; init; }     // update, create
+    public TaskFields? Updated { get; init; }     // update, create; delete: the DELETE/Sunday fallback
     public string? Label { get; init; }           // for results and the log, e.g. "SBCC Cosmetology · Painting"
 }
 
@@ -114,8 +114,22 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, ILogger<Schedu
                 {
                     if (!current.TryGetValue(c.TaskId, out var now)) return new(c.Label, c.Kind, PushStatus.Done, "Already gone from JobTread.");
                     if (!now.SameAs(c.Original)) return new(c.Label, c.Kind, PushStatus.Conflict, "Someone changed this task in JobTread after you loaded the schedule, so it wasn't deleted.");
-                    await jobTread.QueryAsync("schedule-delete", new JsonObject { ["r"] = new JsonObject { ["_"] = "deleteTask", ["$"] = new JsonObject { ["id"] = c.TaskId } } }, ct);
-                    return new(c.Label, c.Kind, PushStatus.Done, "Deleted.");
+                    try
+                    {
+                        await jobTread.QueryAsync("schedule-delete", new JsonObject { ["r"] = new JsonObject { ["_"] = "deleteTask", ["$"] = new JsonObject { ["id"] = c.TaskId } } }, ct);
+                        return new(c.Label, c.Kind, PushStatus.Done, "Deleted.");
+                    }
+                    catch (JobTreadException e) when (IsNotAllowed(e) && c.Updated is { } f)
+                    {
+                        // JobTread's key isn't allowed to delete: mark it instead so someone can delete it in JobTread.
+                        var args = new JsonObject
+                        {
+                            ["id"] = c.TaskId, ["name"] = f.Name, ["startDate"] = f.StartDate, ["endDate"] = f.EndDate,
+                            ["assignedMembershipIds"] = Ids(f.Crew), ["notify"] = false,
+                        };
+                        await jobTread.QueryAsync("schedule-mark-delete", new JsonObject { ["r"] = new JsonObject { ["_"] = "updateTask", ["$"] = args } }, ct);
+                        return new(c.Label, c.Kind, PushStatus.Done, "JobTread didn't allow deleting, so it was renamed DELETE and moved to Sunday for someone to delete in JobTread.");
+                    }
                 }
                 default:
                     return new(c.Label, c.Kind, PushStatus.Failed, "This change was incomplete and wasn't sent.");
@@ -123,7 +137,7 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, ILogger<Schedu
         }
         catch (JobTreadException e)
         {
-            var message = e.Message.Contains("does not allow", StringComparison.OrdinalIgnoreCase)
+            var message = IsNotAllowed(e)
                 ? $"JobTread's key for the dashboard isn't allowed to {c.Kind} tasks. Allow it in JobTread (grant settings) and try again."
                 : e.Message;
             return new(c.Label, c.Kind, PushStatus.Failed, message);
@@ -166,6 +180,9 @@ public sealed class SchedulePushService(IJobTreadClient jobTread, ILogger<Schedu
         }
         return result;
     }
+
+    private static bool IsNotAllowed(JobTreadException e) =>
+        e.Message.Contains("does not allow", StringComparison.OrdinalIgnoreCase) || e.Message.Contains("requires the", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>"07:00:00.000" → "07:00".</summary>
     public static string? Hm(string? t) => string.IsNullOrEmpty(t) ? null : t.Length >= 5 ? t[..5] : t;

@@ -359,3 +359,7 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
 .agenda-task-row.done { opacity: .55; }
 @media (max-width: 520px) { .agenda-task-row { grid-template-columns: minmax(0, 1fr); } .agenda-task-row .pchips { grid-column: 1; } }
 .row-head .pchip { text-transform: capitalize; margin-left: 4px; }
+
+/* Tasks marked for deletion (renamed DELETE, moved to Sunday): delete them in JobTread. */
+.block.marked-delete { background: #FDF1F1; color: #7F1D1D; border-left-color: #B91C1C; }
+.block.marked-delete .block-title { text-decoration: line-through; }

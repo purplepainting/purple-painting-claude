@@ -106,7 +106,7 @@ else
                                             <td class="@(day == Model.Today ? "today" : "")">
                                                 @foreach (var t in row.Cells[day])
                                                 {
-                                                    <div class="block@(t.Completed ? " done" : "")" style="@JobColors.Style(t.JobId)" title="@t.Name">
+                                                    <div class="block@(t.Completed ? " done" : "")@(IndexModel.IsMarkedForDeletion(t) ? " marked-delete" : "")" style="@JobColors.Style(t.JobId)" title="@t.Name">
                                                         @if (Model.ByPerson)
                                                         {
                                                             <span class="block-title">@t.JobName</span>

@@ -100,7 +100,12 @@
     return tasks.filter(isChanged).map(function (t) {
       var upd = fieldsOf(t);
       if (t.isNew) return { kind: 'create', jobId: t.jobId, parentTaskId: t.parentTaskId, taskTypeId: t.taskTypeId, updated: upd, label: label(t), _t: t };
-      if (t.deleted) return { kind: 'delete', taskId: t.id, original: original[t.id], label: label(t), _t: t };
+      if (t.deleted) {
+        // If JobTread won't allow the delete, the server falls back to these values (DELETE, Sunday, no crew).
+        var o = original[t.id], sunday = data.days[6];
+        var fallback = { name: /^DELETE\b/i.test(o.name) ? o.name : DELETE_PREFIX + o.name, startDate: sunday, endDate: sunday, startTime: o.startTime, endTime: o.endTime, crew: [] };
+        return { kind: 'delete', taskId: t.id, original: o, updated: fallback, label: label(t), _t: t };
+      }
       return { kind: 'update', taskId: t.id, original: original[t.id], updated: upd, label: label(t), _t: t };
     });
   }
@@ -139,7 +144,7 @@
         html += '<td class="drop" data-job="' + esc(j.id) + '" data-day="' + d + '">';
         live().filter(function (t) { return t.jobId === j.id && covers(t, d); }).forEach(function (t) {
           var ch = isChanged(t);
-          html += '<div class="block editable' + (t.isNew ? ' is-new' : ch ? ' is-changed' : '') + (selected && selected.day === d ? ' targetable' : '') + '" draggable="true" data-key="' + t.key + '" data-day="' + d + '" style="--h:' + j.hue + '">'
+          html += '<div class="block editable' + (isMarked(t) ? ' marked-delete' : '') + (t.isNew ? ' is-new' : ch ? ' is-changed' : '') + (selected && selected.day === d ? ' targetable' : '') + '" draggable="true" data-key="' + t.key + '" data-day="' + d + '" style="--h:' + j.hue + '">'
             + (t.isNew ? '<span class="edit-tag new">New</span>' : ch ? '<span class="edit-tag">Changed</span>' : '')
             + '<span class="block-title">' + esc(shortName(t.name)) + '</span>'
             + '<span class="block-time">' + esc(times(t)) + (t.start !== t.end ? ' · ' + esc(dayLabel(t.start)) + '–' + esc(dayLabel(t.end)) : '') + '</span>'
@@ -205,7 +210,8 @@
       + '<p class="muted small">The crew gets a JobTread notification when you push.</p>'
       + '<div class="drawer-actions"><button type="submit" class="button">Save to draft</button>'
       + '<button type="button" class="button secondary" data-act="close-panel">Cancel</button>'
-      + (!isCreate ? '<button type="button" class="button danger" data-act="delete-task" data-key="' + t.key + '">Delete</button>' : '')
+      + (!isCreate && t.isNew ? '<button type="button" class="button danger" data-act="delete-task" data-key="' + t.key + '">Remove this new day</button>' : '')
+      + (!isCreate && !t.isNew ? '<button type="button" class="button danger" data-act="mark-delete" data-key="' + t.key + '" title="Deletes it in JobTread when you push. If JobTread doesn\u2019t allow deleting, it\u2019s renamed DELETE, moved to Sunday and its crew cleared instead.">Delete</button>' : '')
       + '</div></form></aside>';
     render();
     var nameInput = document.getElementById('f-name');
@@ -235,8 +241,8 @@
       + '<h2>Review ' + list.length + ' ' + (list.length === 1 ? 'change' : 'changes') + '</h2>'
       + '<ul class="review-list">' + list.map(function (c) {
         var t = c._t, o = c.original, lines = [];
-        if (c.kind === 'create') lines.push('New: ' + dayLabel(t.start) + (t.end !== t.start ? '–' + dayLabel(t.end) : '') + ' · ' + times(t) + ' · ' + (t.crew.map(first).join(', ') || 'no crew'));
-        else if (c.kind === 'delete') lines.push('Delete from JobTread (' + dayLabel(o.startDate) + ')');
+        if (c.kind === 'delete') lines.push('Delete from JobTread (' + dayLabel(o.startDate) + '). If JobTread doesn\u2019t allow it, it\u2019s renamed DELETE and moved to Sunday instead.');
+        else if (c.kind === 'create') lines.push('New: ' + dayLabel(t.start) + (t.end !== t.start ? '–' + dayLabel(t.end) : '') + ' · ' + times(t) + ' · ' + (t.crew.map(first).join(', ') || 'no crew'));
         else {
           if (o.startDate !== t.start || o.endDate !== t.end) lines.push('Date ' + dayLabel(o.startDate) + ' → ' + dayLabel(t.start) + (t.dependents ? ' · ⛓ ' + t.dependents + ' linked task' + (t.dependents > 1 ? 's' : '') + ' move too' : ''));
           if ((o.startTime || null) !== (t.startTime || null) || (o.endTime || null) !== (t.endTime || null)) lines.push('Time ' + (times({ startTime: o.startTime, endTime: o.endTime }) || 'none') + ' → ' + (times(t) || 'none'));
@@ -245,7 +251,7 @@
             var removed = o.crew.filter(function (id) { return t.crew.indexOf(id) < 0; }).map(first);
             lines.push('Crew' + (added.length ? ' +' + added.join(', +') : '') + (removed.length ? ' −' + removed.join(', −') : ''));
           }
-          if (o.name !== t.name) lines.push('Name → ' + t.name);
+          if (o.name !== t.name) lines.push(isMarked(t) && !/^DELETE\b/i.test(o.name) ? 'Marked for deletion (renamed DELETE, moved to Sunday, crew cleared)' : 'Name → ' + t.name);
         }
         return '<li class="review-item ' + c.kind + '"><b>' + esc(c.label) + '</b><span>' + lines.map(esc).join('<br>') + '</span></li>';
       }).join('') + '</ul>'
@@ -305,6 +311,18 @@
     t.name = renameForDate(t.name, t.start);
   }
 
+  // Delete tries a real delete in JobTread. If JobTread refuses, the server instead renames the task
+  // DELETE, moves it to this week's Sunday and clears the crew, so someone can delete it in JobTread.
+  var DELETE_PREFIX = 'DELETE – ';
+  function isMarked(t) { return /^DELETE\b/i.test(t.name); }
+  function markForDeletion(t) {
+    if (!t || isMarked(t)) return;
+    var sunday = data.days[6];
+    t.name = DELETE_PREFIX + t.name;
+    t.start = sunday; t.end = sunday;
+    t.crew = [];
+  }
+
   function addDay(jobId, day) {
     var jobTasks = live().filter(function (t) { return t.jobId === jobId; });
     var model = jobTasks.filter(function (t) { return t.start <= day; }).sort(function (a, b) { return a.start < b.start ? 1 : -1; })[0] || jobTasks[0];
@@ -353,10 +371,12 @@
     if (a === 'cancel-select') { selected = null; render(); return; }
     if (a === 'close-panel') { closePanel(); return; }
     if (a === 'delete-task') {
+      // Only days added in this draft can be removed; the dashboard never deletes JobTread tasks.
       var t = byKey(act.dataset.key);
-      if (t.isNew) tasks.splice(tasks.indexOf(t), 1); else t.deleted = true;
+      if (t && t.isNew) tasks.splice(tasks.indexOf(t), 1);
       panelHtml = ''; render(); return;
     }
+    if (a === 'mark-delete') { var dt = byKey(act.dataset.key); if (dt) dt.deleted = true; panelHtml = ''; render(); return; }
     if (a === 'undo-all') { load(); clearDraft(); selected = null; render(); return; }
     if (a === 'review') { openReview(); return; }
     if (a === 'close-review') { reviewHtml = ''; render(); return; }

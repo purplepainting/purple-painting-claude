@@ -122,7 +122,7 @@ Mutations (validated on the "ZZ TEST - Schedule Format" job):
 
 - `updateTask { id, startDate, endDate, startTime, endTime, assignedMembershipIds, name }`. Dates `yyyy-MM-dd`, times `HH:mm` (stored as `HH:mm:ss.000`). `assignedMembershipIds` replaces the crew. Defaults: `notify: true` (assignees notified), `updateDependentTasks: true` (dependent tasks shift with it).
 - `createTask { targetType: "job", targetId: <jobId>, name, startDate, endDate, startTime, endTime, assignedMembershipIds, parentTaskId?, taskTypeId? }` → `createdTask { id }`.
-- `deleteTask { id }`. **Needs the "deleteTask" action allowed on the grant.** The Claude connector's grant doesn't allow it; the dashboard's key may not either, in which case the push reports it.
+- `deleteTask { id }`: needs the "deleteTask" action on the grant. The Claude connector's grant isn't allowed; the dashboard tries it and, if refused ("requires the \"deleteTask\" action"), renames the task "DELETE – …", moves it to Sunday and clears the crew instead.
 - A task's dependents: `dependentTasks { count }` (alias it, e.g. `"dependents": { "_": "dependentTasks", "count": {} }`).
 - In one request, root fields run in order, but a read placed after a mutation in the same request may still see old values; read in a separate request.
 
