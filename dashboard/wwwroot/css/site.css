@@ -215,7 +215,7 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
 
 /* ---------- Scheduling ---------- */
 /* Each job has its own hue (--h, set inline per job). Light tint fill, strong edge, dark text. */
-.block, .agenda-item { --jc-bg: hsl(var(--h, 270) 70% 93%); --jc-fg: hsl(var(--h, 270) 60% 18%); --jc-edge: hsl(var(--h, 270) 62% 42%); }
+.block, .agenda-item { --jc-bg: hsl(var(--h, 270) 75% var(--l, 92%)); --jc-fg: hsl(var(--h, 270) 60% 18%); --jc-edge: hsl(var(--h, 270) 62% 42%); }
 .swatch { background: hsl(var(--h, 270) 62% 42%); }
 
 /* Crew levels, so balanced crews are easy to see. */

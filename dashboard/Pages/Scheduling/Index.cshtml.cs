@@ -78,6 +78,9 @@ public partial class IndexModel(
     private Dictionary<string, StaffMember> staffByName = [];
     private Dictionary<string, StaffMember> staffByUserId = [];
 
+    /// <summary>Job colors for this week (each job a different pastel). Day view uses the whole week's jobs so colors match.</summary>
+    public JobColors Colors { get; private set; } = new([]);
+
     /// <summary>Levels and PM colors (Employees page, then settings).</summary>
     public Team Team { get; private set; } = null!;
 
@@ -92,11 +95,14 @@ public partial class IndexModel(
         To = IsDay ? date : From.AddDays(6);
 
         IReadOnlyList<StaffMember> staff;
+        IReadOnlyList<ScheduleTask> weekTasks;
         try
         {
             Tasks = await schedule.GetTasksAsync(From, To, refresh, ct);
             Team = await directory.GetAsync(ct);
             staff = Team.Staff;
+            var weekStart = LocalClock.WeekStart(From);
+            weekTasks = IsDay ? await schedule.GetTasksAsync(weekStart, weekStart.AddDays(6), refresh, ct) : Tasks;
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
         {
@@ -110,6 +116,7 @@ public partial class IndexModel(
 
         // Painter and supervisor schedules are separate: a task belongs to Supervisors when everyone on it is a supervisor.
         Tasks = Tasks.Where(t => IsSupervisorTask(t) == Supervisors).ToList();
+        Colors = new JobColors(weekTasks.Where(t => IsSupervisorTask(t) == Supervisors).Select(t => t.JobId));
 
         // Weekends only appear when something is scheduled on them.
         Days = Enumerable.Range(0, To.DayNumber - From.DayNumber + 1)
@@ -261,7 +268,7 @@ public partial class IndexModel(
             addable = (await projects.GetOpenJobsAsync(ct: ct))
                 .Where(j => !j.IsInternal && ProjectViews.Default.Matches(j) && !onSchedule.Contains(j.Id))
                 .OrderBy(j => j.Name, StringComparer.OrdinalIgnoreCase)
-                .Select(j => (object)new { id = j.Id, name = j.Name, type = j.JobTypeShort, pm = j.ProjectManager, pmColor = Team.PmColor(j.ProjectManager), hue = JobColors.HueFor(j.Id) })
+                .Select(j => (object)new { id = j.Id, name = j.Name, type = j.JobTypeShort, pm = j.ProjectManager, pmColor = Team.PmColor(j.ProjectManager), hue = Colors.HueFor(j.Id), deep = Colors.IsDeep(j.Id) })
                 .ToList();
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
@@ -278,7 +285,7 @@ public partial class IndexModel(
             days = Enumerable.Range(0, 7).Select(i => From.AddDays(i).ToString("yyyy-MM-dd")),
             jobs = jobsOnSchedule.OrderBy(j => j.JobName, StringComparer.OrdinalIgnoreCase).Select(j => new
             {
-                id = j.JobId, name = j.JobName, type = ShortType(j.JobType), pm = j.ProjectManager, pmColor = Team.PmColor(j.ProjectManager), hue = JobColors.HueFor(j.JobId),
+                id = j.JobId, name = j.JobName, type = ShortType(j.JobType), pm = j.ProjectManager, pmColor = Team.PmColor(j.ProjectManager), hue = Colors.HueFor(j.JobId), deep = Colors.IsDeep(j.JobId),
                 costs = Days.Where(d => Costs.ContainsKey((j.JobId, d))).ToDictionary(d => d.ToString("yyyy-MM-dd"), d => new { amount = Math.Round(Costs[(j.JobId, d)].Amount), estimate = Costs[(j.JobId, d)].IsEstimate, hours = Math.Round(Costs[(j.JobId, d)].Hours, 1) }),
             }),
             addableJobs = addable,
@@ -319,7 +326,7 @@ public partial class IndexModel(
         .Select(g =>
         {
             var first = g.First();
-            return new ScheduleRow(first.JobName, ShortType(first.JobType), JobColors.Style(first.JobId), first.ProjectManager, first.JobId,
+            return new ScheduleRow(first.JobName, ShortType(first.JobType), Colors.Style(first.JobId), first.ProjectManager, first.JobId,
                 Days.ToDictionary(d => d, d => (IReadOnlyList<ScheduleTask>)g.Where(t => t.Covers(d)).ToList()));
         })
         .OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase)

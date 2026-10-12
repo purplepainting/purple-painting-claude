@@ -30,22 +30,44 @@ public sealed record ScheduleTask
 }
 
 /// <summary>
-/// Each job gets its own color (a hue), picked from a set of well-separated hues by the job id,
-/// so a job is always the same color everywhere.
+/// Job colors for one screen: every job shown gets a different pastel. Hues are spaced evenly
+/// around the color wheel (greens left out) for the number of jobs; with more than 4 jobs, every other job gets a
+/// mid tone instead of a pastel so neighbors still stand apart. Jobs are ordered by id, so the same set of jobs
+/// gets the same colors. Jobs added later ("+ Add job" in the editor) fill in between.
 /// </summary>
-public static class JobColors
+public sealed class JobColors
 {
-    private static readonly int[] Hues = [268, 200, 28, 145, 340, 48, 175, 300, 12, 225, 95, 320];
+    private const double Start = 268;   // first job is purple
+    // No greens (hues 70-170): crew chips are green, so green jobs would hide them.
+    // Jobs use the arc from 170 (teal-blue) round through purple, red and orange to 70 (yellow).
+    private const double ArcStart = 170, Arc = 260;
+    private readonly Dictionary<string, (int Hue, bool Deep)> colors = [];
+    private readonly int count;
 
-    public static int HueFor(string jobId)
+    public JobColors(IEnumerable<string> jobIds)
     {
-        var hash = 0;
-        foreach (var c in jobId) hash = unchecked(hash * 31 + c);
-        return Hues[(int)((uint)hash % (uint)Hues.Length)];
+        var ids = jobIds.Distinct().Order(StringComparer.Ordinal).ToList();
+        count = Math.Max(ids.Count, 1);
+        foreach (var id in ids) Add(id);
     }
 
-    /// <summary>Inline style that sets the job's hue for .block, .swatch etc.</summary>
-    public static string Style(string jobId) => $"--h:{HueFor(jobId)}";
+    public int HueFor(string jobId) => Get(jobId).Hue;
+    public bool IsDeep(string jobId) => Get(jobId).Deep;
+
+    /// <summary>Inline style for .block, .swatch etc.: the hue, plus a mid tone for every other job.</summary>
+    public string Style(string jobId) => Get(jobId) is var c && c.Deep ? $"--h:{c.Hue};--l:80%" : $"--h:{c.Hue}";
+
+    private (int Hue, bool Deep) Get(string jobId) => colors.TryGetValue(jobId, out var c) ? c : Add(jobId);
+
+    private (int Hue, bool Deep) Add(string jobId)
+    {
+        var i = colors.Count;
+        // Within the first `count` jobs: even spacing. Extra jobs land halfway between existing hues.
+        var step = Arc / count;
+        var along = i < count ? i * step : ((i - count) * 2 + 1) * step / 2;
+        var hue = ArcStart + (Start - ArcStart + along) % Arc;
+        return colors[jobId] = ((int)Math.Round(hue % 360), count > 4 && i % 2 == 1);
+    }
 }
 
 /// <summary>Crew level, for balanced-crew colors. From the Crew:Foremen / Crew:Helpers settings; everyone else is a painter.</summary>
