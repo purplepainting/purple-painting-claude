@@ -15,6 +15,10 @@
         <h1 class="schedule-title">@Model.Heading</h1>
     </div>
     <div class="schedule-toggles" data-view-only>
+        <div class="segmented" role="group" aria-label="Whose schedule">
+            <a class="@(Model.Supervisors ? "" : "active")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(who: "crew")'>Crew</a>
+            <a class="@(Model.Supervisors ? "active" : "")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(who: "supervisors")'>Supervisors</a>
+        </div>
         <div class="segmented" role="group" aria-label="Range">
             <a class="@(Model.IsDay ? "active" : "")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(Model.IsDay ? Model.From : (Model.Today >= Model.From && Model.Today <= Model.To ? Model.Today : Model.From), "day")'>Day</a>
             <a class="@(Model.IsDay ? "" : "active")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(LocalClock.WeekStart(Model.From), "week")'>Week</a>
@@ -54,7 +58,7 @@ else
 
         @if (Model.Tasks.Count == 0)
         {
-            <div class="card empty-state"><p class="muted">Nothing scheduled in JobTread for this @(Model.IsDay ? "day" : "week").</p></div>
+            <div class="card empty-state"><p class="muted">No @(Model.Supervisors ? "supervisor" : "crew") tasks in JobTread for this @(Model.IsDay ? "day" : "week").</p></div>
         }
         else
         {

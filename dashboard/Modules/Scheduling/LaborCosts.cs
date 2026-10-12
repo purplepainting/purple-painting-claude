@@ -18,7 +18,7 @@ public sealed record DayCost(decimal Amount, bool IsEstimate);
 public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cache, IOptions<JobTreadOptions> options, PeopleService people)
 {
     /// <summary>What actually happened on a job on a day: cost and who clocked in (user id → minutes).</summary>
-    public sealed record ActualDay(decimal Cost, Dictionary<string, decimal> MinutesByUser);
+    public sealed record ActualDay(decimal Cost, Dictionary<string, decimal> MinutesByUser, Dictionary<string, decimal> CostByUser);
 
     /// <summary>Actual labor per (job id, local date) for the range, from time entries.</summary>
     public async Task<Dictionary<(string JobId, DateOnly Day), ActualDay>> GetActualAsync(DateOnly from, DateOnly to, CancellationToken ct)
@@ -32,8 +32,12 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
             {
                 if (e.JobId is null) continue;
                 var k = (e.JobId, LocalClock.ToLocalDate(e.StartedAt));
-                if (!result.TryGetValue(k, out var day)) result[k] = day = new ActualDay(0, []);
-                if (e.UserId is not null) day.MinutesByUser[e.UserId] = day.MinutesByUser.GetValueOrDefault(e.UserId) + e.Minutes;
+                if (!result.TryGetValue(k, out var day)) result[k] = day = new ActualDay(0, [], []);
+                if (e.UserId is not null)
+                {
+                    day.MinutesByUser[e.UserId] = day.MinutesByUser.GetValueOrDefault(e.UserId) + e.Minutes;
+                    day.CostByUser[e.UserId] = day.CostByUser.GetValueOrDefault(e.UserId) + e.Cost;
+                }
                 result[k] = day with { Cost = day.Cost + e.Cost };
             }
             return result;

@@ -27,11 +27,15 @@ public partial class IndexModel(
     [BindProperty(SupportsGet = true)] public string? Mode { get; set; }
     /// <summary>"job" (default) or "person".</summary>
     [BindProperty(SupportsGet = true)] public string? By { get; set; }
+    /// <summary>"crew" (default: tasks with painters, or unassigned) or "supervisors" (tasks only supervisors are on).</summary>
+    [BindProperty(SupportsGet = true)] public string? Who { get; set; }
+
     /// <summary>Any date in the period to show (yyyy-MM-dd). Defaults to today.</summary>
     [BindProperty(SupportsGet = true)] public DateOnly? Date { get; set; }
 
     public bool IsDay => Mode == "day";
     public bool ByPerson => By == "person";
+    public bool Supervisors => Who == "supervisors";
     public DateOnly Today { get; } = LocalClock.Today;
     public DateOnly From { get; private set; }
     public DateOnly To { get; private set; }
@@ -90,6 +94,9 @@ public partial class IndexModel(
         LoadedAt = LocalClock.Now;
         staffByName = staff.GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.First());
         staffByUserId = staff.GroupBy(s => s.UserId).ToDictionary(g => g.Key, g => g.First());
+
+        // Painter and supervisor schedules are separate: a task belongs to Supervisors when everyone on it is a supervisor.
+        Tasks = Tasks.Where(t => IsSupervisorTask(t) == Supervisors).ToList();
 
         // Weekends only appear when something is scheduled on them.
         Days = Enumerable.Range(0, To.DayNumber - From.DayNumber + 1)
@@ -157,9 +164,12 @@ public partial class IndexModel(
                     {
                         if (actual.TryGetValue((jobId, day), out var a))
                         {
-                            if (a.Cost > 0) Costs[(jobId, day)] = new DayCost(a.Cost, false);
-                            Actual[(jobId, day)] = a.MinutesByUser
-                                .Select(m => (Name: staffByUserId.TryGetValue(m.Key, out var st) ? st.Name : "Unknown", Hours: Math.Round(m.Value / 60m, 1)))
+                            // Only this schedule's people: painters on Crew, supervisors on Supervisors.
+                            var users = a.MinutesByUser.Keys.Where(InView).ToList();
+                            var cost = users.Sum(u => a.CostByUser.GetValueOrDefault(u));
+                            if (cost > 0) Costs[(jobId, day)] = new DayCost(cost, false);
+                            Actual[(jobId, day)] = users
+                                .Select(u => (Name: staffByUserId.TryGetValue(u, out var st) ? st.Name : "Unknown", Hours: Math.Round(a.MinutesByUser[u] / 60m, 1)))
                                 .OrderByDescending(x => x.Hours)
                                 .ToList();
                         }
@@ -203,6 +213,7 @@ public partial class IndexModel(
         var data = new
         {
             weekStart = From.ToString("yyyy-MM-dd"),
+            who = Supervisors ? "supervisors" : "crew",
             today = Today.ToString("yyyy-MM-dd"),
             days = Enumerable.Range(0, 7).Select(i => From.AddDays(i).ToString("yyyy-MM-dd")),
             jobs = jobsOnSchedule.OrderBy(j => j.JobName, StringComparer.OrdinalIgnoreCase).Select(j => new
@@ -237,6 +248,11 @@ public partial class IndexModel(
 
     public IEnumerable<(string Name, decimal Hours)> Ordered(IEnumerable<(string Name, decimal Hours)> crew) =>
         crew.OrderBy(c => Rank(LevelOf(c.Name))).ThenByDescending(c => c.Hours);
+
+    /// <summary>Does this person's time belong on the schedule being shown (supervisors vs everyone else)?</summary>
+    private bool InView(string userId) => (staffByUserId.TryGetValue(userId, out var st) && !st.IsField) == Supervisors;
+
+    public bool IsSupervisorTask(ScheduleTask t) => t.Crew.Count > 0 && t.Crew.All(c => LevelOf(c.Name) == "supervisor");
 
     /// <summary>"1F · 2P · 1H": the crew balance on a task.</summary>
     public string Balance(ScheduleTask t)
@@ -282,8 +298,9 @@ public partial class IndexModel(
         var t => t,
     };
 
-    public Dictionary<string, string?> Route(DateOnly? date = null, string? mode = null, string? by = null) => new()
+    public Dictionary<string, string?> Route(DateOnly? date = null, string? mode = null, string? by = null, string? who = null) => new()
     {
+        ["who"] = (who ?? Who) == "supervisors" ? "supervisors" : null,
         ["date"] = (date ?? From) == LocalClock.WeekStart(Today) && (mode ?? Mode) != "day" ? null : (date ?? From).ToString("yyyy-MM-dd"),
         ["mode"] = (mode ?? Mode) == "day" ? "day" : null,
         ["by"] = (by ?? By) == "person" ? "person" : null,

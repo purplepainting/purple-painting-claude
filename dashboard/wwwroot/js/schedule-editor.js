@@ -11,7 +11,7 @@
 
   var data = JSON.parse(dataEl.textContent);
   var token = (document.querySelector('input[name="__RequestVerificationToken"]') || {}).value;
-  var draftKey = 'schedule-draft:' + data.weekStart;
+  var draftKey = 'schedule-draft:' + data.weekStart + ':' + (data.who || 'crew');
   var DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   var people = {};
@@ -166,11 +166,12 @@
     });
 
     // Not scheduled: field staff not on any task that day.
-    html += '<tr class="free-row"><th class="row-head" scope="row">Not scheduled<span class="row-sub muted">Drag or tap a painter onto a job</span></th>';
+    html += '<tr class="free-row"><th class="row-head" scope="row">Not scheduled<span class="row-sub muted">Drag or tap ' + (data.who === 'supervisors' ? 'a supervisor' : 'a painter') + ' onto a job</span></th>';
     days.forEach(function (d) {
       var busy = {};
       live().filter(function (t) { return covers(t, d); }).forEach(function (t) { t.crew.forEach(function (id) { busy[id] = true; }); });
-      var free = data.people.filter(function (p) { return p.level !== 'supervisor' && !busy[p.id]; })
+      var wantSupervisors = data.who === 'supervisors';
+      var free = data.people.filter(function (p) { return (p.level === 'supervisor') === wantSupervisors && !busy[p.id]; })
         .sort(function (a, b) { return (RANK[a.level] - RANK[b.level]) || a.first.localeCompare(b.first); });
       html += '<td class="drop free' + (selected && selected.day === d ? ' targetable' : '') + '" data-free="1" data-day="' + d + '"><span class="pchips">'
         + free.map(function (p) { return '<span class="pchip lvl-' + p.level + (selected && selected.id === p.id && selected.fromKey === null && selected.day === d ? ' selected' : '') + '" draggable="true" data-person="' + esc(p.id) + '" data-from="" data-day="' + d + '">' + esc(p.first) + '</span>'; }).join('')
