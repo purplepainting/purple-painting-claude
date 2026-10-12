@@ -3,6 +3,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using PurpleDashboard.Infrastructure;
 using PurpleDashboard.Integrations.JobTread;
+using PurpleDashboard.Modules.People;
 using static PurpleDashboard.Integrations.JobTread.JobTreadIds;
 
 namespace PurpleDashboard.Modules.Projects;
@@ -11,7 +12,7 @@ namespace PurpleDashboard.Modules.Projects;
 /// Reads projects from JobTread. Results are cached for a couple of minutes so pages stay fast
 /// and JobTread isn't called on every click. Field meanings: docs/JOBTREAD.md.
 /// </summary>
-public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache, IOptions<JobTreadOptions> options)
+public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache, IOptions<JobTreadOptions> options, PeopleService people)
 {
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(2);
     private const int ListPageSize = 50;
@@ -261,7 +262,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             .OrderBy(l => l.Number is null)
             .ThenBy(l => l.Number, StringComparer.Ordinal)
             .ToList();
-        var supervisors = await GetSupervisorIdsAsync(ct);
+        var supervisors = await people.GetSupervisorUserIdsAsync(ct);
         var crew = job["crew"].GroupRows()
             .Select(row =>
             {
@@ -278,32 +279,6 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
 
         return new ProjectDetail(jobId, costCodes, crew);
     }
-
-    /// <summary>
-    /// User ids of supervisors: internal JobTread members whose role isn't "Field Employee"
-    /// (admins, project managers, office, sales). Cached for 30 minutes.
-    /// </summary>
-    private async Task<HashSet<string>> GetSupervisorIdsAsync(CancellationToken ct) =>
-        (await cache.GetOrCreateAsync("projects:supervisors", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30);
-            var query = new JsonObject
-            {
-                ["organization"] = new JsonObject
-                {
-                    ["$"] = new JsonObject { ["id"] = options.Value.OrganizationId },
-                    ["memberships"] = Json("""{ "$": { "size": 100, "where": ["isInternal", true] }, "nodes": { "user": { "id": {} }, "role": { "name": {} } } }"""),
-                },
-            };
-            var members = (await jobTread.QueryAsync("projects-roles", query, ct))["organization"]?["memberships"].Nodes() ?? [];
-            return members
-                .Where(m => m["role"].Str("name") != FieldRole)
-                .Select(m => m["user"].Str("id"))
-                .OfType<string>()
-                .ToHashSet();
-        }))!;
-
-    private const string FieldRole = "Field Employee";
 
     private static JsonNode Json(string json) => JsonNode.Parse(json)!;
 

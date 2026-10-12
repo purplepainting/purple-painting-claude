@@ -112,5 +112,20 @@ Where-clause note: a single condition is passed bare (`"where": [["job","id"], "
 ## People and roles
 
 - `organization.memberships` where `isInternal = true`: staff. `role.name` is one of Admin, Project Manager, Salesperson, Office Administrator, Field Employee. There is **no foreman role**; every painter is "Field Employee".
+- **Link to QuickBooks:** each membership has `qboEmployeeId`, the QuickBooks employee id. Every internal member has one, so JobTread ↔ QuickBooks people match by id, not by name (names differ: e.g. "Alejandra Guzman" in JobTread is "Alejandra De Jesus" in QuickBooks, "Moises Gonzalez" is "Gonzales"). A user's display name belongs to their own JobTread login and can't be changed through the API (`updateMembership` has no name field).
 - Crew on a job: `job.timeEntries` grouped by `user.id`, `user.name` → sum `minutes`, max `hourlyRate`, max `startedAt`. `hourlyRate` is the cost rate on each entry.
 - Foreman (dashboard rule): highest `hourlyRate` among Field Employees on the job, ties by hours.
+
+## Writing the schedule
+
+Mutations (validated on the "ZZ TEST - Schedule Format" job):
+
+- `updateTask { id, startDate, endDate, startTime, endTime, assignedMembershipIds, name }`. Dates `yyyy-MM-dd`, times `HH:mm` (stored as `HH:mm:ss.000`). `assignedMembershipIds` replaces the crew. Defaults: `notify: true` (assignees notified), `updateDependentTasks: true` (dependent tasks shift with it).
+- `createTask { targetType: "job", targetId: <jobId>, name, startDate, endDate, startTime, endTime, assignedMembershipIds, parentTaskId?, taskTypeId? }` → `createdTask { id }`.
+- `deleteTask { id }`: needs the "deleteTask" action on the grant. The Claude connector's grant isn't allowed; the dashboard tries it and, if refused ("requires the \"deleteTask\" action"), renames the task "DELETE – …", moves it to Sunday and clears the crew instead.
+- A task's dependents: `dependentTasks { count }` (alias it, e.g. `"dependents": { "_": "dependentTasks", "count": {} }`).
+- In one request, root fields run in order, but a read placed after a mutation in the same request may still see old values; read in a separate request.
+
+## Time entries for the schedule
+
+`organization.timeEntries` where `startedAt` is in the range (UTC; Pacific midnight boundaries), `size: 100`, no nested lists: `startedAt, cost, hourlyRate, minutes, job { id }, user { id }`. Grouped in the dashboard by job and local date for actual cost and who clocked in. `hourlyRate` is the burdened cost rate; the latest per person (and per person per job) over 30 days is used for estimates and never shown.

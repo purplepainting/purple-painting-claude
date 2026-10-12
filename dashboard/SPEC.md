@@ -92,7 +92,7 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 
 ### Left menu and home page
 - 8 module tiles in this order, each with its name, a short line (key-number label, or "Coming soon") and its key number:
-  1. Projects · 2. Scheduling · 3. Financials · 4. Customers · 5. Sales & Marketing · 6. Vendors and payables · 7. Employees · 8. Equipment & Sundries
+  1. Projects · 2. Scheduling · 3. Financials · 4. Customers · 5. Sales & Marketing · 6. Vendors & Payables · 7. Employees · 8. Equipment & Sundries
 - The signed-in user's name at the bottom of the menu.
 - "/" opens the Projects list. Global search comes later.
 
@@ -114,6 +114,9 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 - JobTread has no crew object (see docs/JOBTREAD.md): each job day is a task with painters assigned. So the week grid has two row modes: **by job** (default; each cell shows the day's task and who's on it) and **by person** (each cell shows the job they're on), plus an "Unassigned" row. On phones the week shows as a day-by-day list with times, people and a map link.
 - Color-coded by job type (interior / exterior / commercial-public works) using colors that differ in lightness, not hue alone.
 - Built from JobTread job dates and crew assignments.
+- **Built (week view):** each job has its own color; crew chips are colored by level (Foreman purple, Painter green, Helper amber, Supervisor gray) with a "1F · 2P · 1H" balance on each box; PM tags are colored per PM; job numbers are not shown. Each job/day shows labor cost (actual from time entries up to today, "est." after: crew × scheduled hours × burdened rate) and each job shows a week total. By person shows the same per painter per day, with a week total per person (visible to everyone with dashboard access for now; can be limited by role once Employees exists). Past days show **what actually happened**: who clocked in with hours, scheduled people who didn't clock in crossed out, unscheduled people dashed. Day view groups tasks into one card per job, most people first.
+- **Schedule editor (built):** "Edit schedule" turns the week into a draft: drag a box to another day (dates shift, the date in the task name updates), drag or tap a painter to move just them (or to "Not scheduled" to take them off), "+ Add day" copies the job's nearest day, "+ New task", "+ Add job" (active jobs not on the schedule), tap a box to edit name/dates/times/crew. A day added in the draft can be removed before pushing. **Delete** tries a real delete in JobTread; if JobTread's key isn't allowed to delete, it falls back to renaming the task "DELETE – …", moving it to that week's Sunday and clearing its crew (no notification), for someone to delete in JobTread. Marked tasks show crossed out in red. The push result says which happened. A bar counts pending changes; "Review & push" lists every change (before → after, linked tasks noted) and sends them to JobTread. Each change is checked against JobTread first and skipped if someone changed it there since loading. JobTread moves dependent tasks and notifies the crew (its defaults). Every push is logged with who and what. The draft survives a reload (this browser only). Everyone with dashboard access can push.
+- **Next:** job timeline (Gantt) when tapping a job: phases and tasks with dependency arrows, drag to move/stretch, same draft-then-push.
 - **First write-back feature (Kareem's top priority for editing):** build and change the schedule here (drag a job to another crew or day, set start/end, assign crews), then push it to JobTread. JobTread stays the system of record; the dashboard is the editing surface. Plan it as:
   1. Read-only schedule view from JobTread data.
   2. Draft edits in the dashboard (stored in the dashboard DB as a pending schedule), so a week can be built before anything changes in JobTread.
@@ -143,7 +146,8 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 
 ### 7. Employees (QuickBooks payroll + JobTread assignments)
 - One profile per person.
-- **Open issue:** identity matching ("Jose in QuickBooks" = "Jose in JobTread"). Propose a mapping table in the dashboard DB with a simple admin screen to link records manually. Don't attempt fuzzy auto-matching without approval.
+- **Identity matching (solved):** every JobTread membership carries `qboEmployeeId`, so JobTread and QuickBooks people match by id. A manual override in the dashboard DB covers any missing link.
+- **Per-employee settings live here** (dashboard DB): crew level (Foreman / Painter / Helper / Supervisor; suggested from QuickBooks base rate: Helper $16–22, Painter $23–28, Foreman $29+, confirmable/overridable) and a color for each PM. The schedule, Projects crew list and foreman pick read from these profiles. Until this module exists they come from the `Crew` and `ProjectManagers` settings in appsettings.json.
 
 ### 8. Equipment and sundries (dashboard-owned)
 - Fully custom: items (sprayers, ladders, vehicles, supplies), status, location or assigned crew, low/out-of-stock flags.
@@ -164,7 +168,6 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 
 ## 8. Open questions to raise with Kareem (don't guess)
 - Marketing attribution method.
-- Employee identity matching approach.
 - Commission and bonus rules (amounts, triggers, who is eligible).
 - Which job types and crews exist in JobTread, and how crews are represented there.
 - QuickBooks API access: Intuit developer app setup and where OAuth tokens are stored.

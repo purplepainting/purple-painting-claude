@@ -6,6 +6,9 @@ using PurpleDashboard.Modules.Scheduling;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Fetch/JSON posts send the antiforgery token in this header.
+builder.Services.AddAntiforgery(o => o.HeaderName = "RequestVerificationToken");
+
 builder.Services.AddRazorPages(options =>
 {
     // Home page = the Projects list (also at /projects).
@@ -35,9 +38,14 @@ else
 }
 
 // Modules
+builder.Services.AddScoped<PurpleDashboard.Modules.People.PeopleService>();
 builder.Services.AddScoped<ProjectsService>();
 builder.Services.AddScoped<ITileMetric, ActiveProjectsMetric>();
 builder.Services.AddScoped<ScheduleService>();
+builder.Services.AddScoped<SchedulePushService>();
+builder.Services.AddScoped<LaborCostService>();
+builder.Services.Configure<CrewLevelOptions>(builder.Configuration.GetSection("Crew"));
+builder.Services.Configure<PurpleDashboard.Modules.People.PmColorOptions>(builder.Configuration.GetSection("ProjectManagers"));
 builder.Services.AddScoped<ITileMetric, JobsThisWeekMetric>();
 
 var app = builder.Build();

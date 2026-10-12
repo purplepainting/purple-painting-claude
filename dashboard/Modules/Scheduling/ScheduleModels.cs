@@ -1,5 +1,7 @@
 namespace PurpleDashboard.Modules.Scheduling;
 
+public sealed record CrewAssignment(string MembershipId, string Name);
+
 /// <summary>One scheduled JobTread task on a job (usually one day of work with the painters assigned).</summary>
 public sealed record ScheduleTask
 {
@@ -15,32 +17,47 @@ public sealed record ScheduleTask
     public required string JobName { get; init; }
     public string? JobNumber { get; init; }
     public string? JobType { get; init; }
+    public string? ProjectManager { get; init; }
     public string? Address { get; init; }
     public bool IsInternal { get; init; }
-    public IReadOnlyList<string> People { get; init; } = [];
+    public IReadOnlyList<CrewAssignment> Crew { get; init; } = [];
+    public IReadOnlyList<string> People => Crew.Select(c => c.Name).ToList();
+    public string? ParentTaskId { get; init; }
+    public string? TaskTypeId { get; init; }
+    public int Dependents { get; init; }
 
     public bool Covers(DateOnly day) => Start <= day && day <= End;
 }
 
-/// <summary>The color group a job type is drawn in. Groups differ in lightness, not just hue.</summary>
-public enum JobColor { Residential, Commercial, PublicWorks, Other }
-
+/// <summary>
+/// Each job gets its own color (a hue), picked from a set of well-separated hues by the job id,
+/// so a job is always the same color everywhere.
+/// </summary>
 public static class JobColors
 {
-    public static JobColor For(string? jobType) => jobType switch
+    private static readonly int[] Hues = [268, 200, 28, 145, 340, 48, 175, 300, 12, 225, 95, 320];
+
+    public static int HueFor(string jobId)
     {
-        "Residential - Standard Home" or "Residential - Custom House" => JobColor.Residential,
-        "Commercial" or "Property Management / Production" => JobColor.Commercial,
-        "Prevailing Wage" => JobColor.PublicWorks,
-        _ => JobColor.Other,
-    };
+        var hash = 0;
+        foreach (var c in jobId) hash = unchecked(hash * 31 + c);
+        return Hues[(int)((uint)hash % (uint)Hues.Length)];
+    }
 
-    public static string Css(string? jobType) => "jc-" + For(jobType).ToString().ToLowerInvariant();
+    /// <summary>Inline style that sets the job's hue for .block, .swatch etc.</summary>
+    public static string Style(string jobId) => $"--h:{HueFor(jobId)}";
+}
 
-    public static readonly (JobColor Color, string Label)[] Legend =
-    [
-        (JobColor.Residential, "Residential"),
-        (JobColor.Commercial, "Commercial / property mgmt"),
-        (JobColor.PublicWorks, "Public works"),
-    ];
+/// <summary>Crew level, for balanced-crew colors. From the Crew:Foremen / Crew:Helpers settings; everyone else is a painter.</summary>
+public enum CrewLevel { Foreman, Painter, Helper }
+
+public sealed class CrewLevelOptions
+{
+    public List<string> Foremen { get; set; } = [];
+    public List<string> Helpers { get; set; } = [];
+
+    public CrewLevel For(string name) =>
+        Foremen.Contains(name, StringComparer.OrdinalIgnoreCase) ? CrewLevel.Foreman
+        : Helpers.Contains(name, StringComparer.OrdinalIgnoreCase) ? CrewLevel.Helper
+        : CrewLevel.Painter;
 }

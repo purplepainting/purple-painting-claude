@@ -16,8 +16,19 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(2);
 
     // JobTread rejects a query (413) when its largest possible result is too big: page size times
-    // every nested list's size. Keep pages and nested sizes small (crews are 1-4 people).
+    // every nested list's size. Keep pages and nested sizes small (crews are 1-4 people; 3 job fields).
     private const int PageSize = 25;
+
+    // Cancelled after a push so every cached schedule week is dropped at once.
+    private static CancellationTokenSource resetSignal = new();
+
+    /// <summary>Drop all cached schedule weeks (after changes are pushed to JobTread).</summary>
+    public static void ClearCache()
+    {
+        var old = Interlocked.Exchange(ref resetSignal, new CancellationTokenSource());
+        old.Cancel();
+        old.Dispose();
+    }
 
     /// <summary>Job tasks that overlap the date range (inclusive), internal jobs excluded.</summary>
     public async Task<IReadOnlyList<ScheduleTask>> GetTasksAsync(DateOnly from, DateOnly to, bool refresh = false, CancellationToken ct = default)
@@ -27,6 +38,7 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
         return (await cache.GetOrCreateAsync(key, async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = CacheFor;
+            entry.AddExpirationToken(new Microsoft.Extensions.Primitives.CancellationChangeToken(resetSignal.Token));
             return (IReadOnlyList<ScheduleTask>)(await LoadAsync(from, to, ct)).Where(t => !t.IsInternal).ToList();
         }))!;
     }
@@ -48,17 +60,19 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
             var nodes = JsonNode.Parse("""
             {
               "id": {}, "name": {}, "startDate": {}, "endDate": {}, "startTime": {}, "endTime": {}, "completed": {},
-              "taskType": { "name": {} },
+              "taskType": { "id": {}, "name": {} },
+              "parentTask": { "id": {} },
+              "dependents": { "_": "dependentTasks", "count": {} },
               "job": { "id": {}, "name": {}, "number": {}, "location": { "address": {} } },
-              "assignedMemberships": { "$": { "size": 10 }, "nodes": { "user": { "name": {} } } }
+              "assignedMemberships": { "$": { "size": 10 }, "nodes": { "id": {}, "user": { "name": {} } } }
             }
             """)!;
             nodes["job"]!["customFieldValues"] = new JsonObject
             {
                 ["$"] = new JsonObject
                 {
-                    ["size"] = 2,
-                    ["where"] = new JsonArray(new JsonArray("customField", "id"), "in", new JsonArray(JobFields.JobType, JobFields.HowBidCameIn)),
+                    ["size"] = 3,
+                    ["where"] = new JsonArray(new JsonArray("customField", "id"), "in", new JsonArray(JobFields.JobType, JobFields.HowBidCameIn, JobFields.ProjectManager)),
                 },
                 ["nodes"] = JsonNode.Parse("""{ "value": {}, "customField": { "id": {} } }"""),
             };
@@ -100,9 +114,17 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
             JobName = job.Str("name") ?? "(no name)",
             JobNumber = job.Str("number"),
             JobType = fields.GetValueOrDefault(JobFields.JobType),
+            ProjectManager = fields.GetValueOrDefault(JobFields.ProjectManager),
             Address = job?["location"].Str("address"),
             IsInternal = fields.GetValueOrDefault(JobFields.HowBidCameIn) == "Internal Job",
-            People = task["assignedMemberships"].Nodes().Select(m => m["user"].Str("name")).OfType<string>().ToList(),
+            Crew = task["assignedMemberships"].Nodes()
+                .Select(m => (Id: m.Str("id"), Name: m["user"].Str("name")))
+                .Where(m => m.Id is not null && m.Name is not null)
+                .Select(m => new CrewAssignment(m.Id!, m.Name!))
+                .ToList(),
+            ParentTaskId = task["parentTask"].Str("id"),
+            TaskTypeId = task["taskType"].Str("id"),
+            Dependents = (int)(task["dependents"].Dec("count") ?? 0),
         };
     }
 }
