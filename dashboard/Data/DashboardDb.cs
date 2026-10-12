@@ -77,6 +77,6 @@ public sealed class DesignTimeFactory : IDesignTimeDbContextFactory<DashboardDb>
 public sealed class DatabaseStatus
 {
     public bool Configured { get; set; }
-    public bool Available { get; set; }
-    public string? Problem { get; set; }
+    public volatile bool Available;
+    public volatile string? Problem;
 }
