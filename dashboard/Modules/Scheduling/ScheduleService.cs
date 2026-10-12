@@ -15,6 +15,10 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
 {
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(2);
 
+    // JobTread rejects a query (413) when its largest possible result is too big: page size times
+    // every nested list's size. Keep pages and nested sizes small (crews are 1-4 people).
+    private const int PageSize = 25;
+
     /// <summary>Job tasks that overlap the date range (inclusive), internal jobs excluded.</summary>
     public async Task<IReadOnlyList<ScheduleTask>> GetTasksAsync(DateOnly from, DateOnly to, bool refresh = false, CancellationToken ct = default)
     {
@@ -38,7 +42,7 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
             and.Add(new JsonArray("startDate", "<=", to.ToString("yyyy-MM-dd")));
             and.Add(new JsonArray("endDate", ">=", from.ToString("yyyy-MM-dd")));
 
-            var args = new JsonObject { ["where"] = where, ["size"] = 100, ["sortBy"] = JsonNode.Parse("""[{ "field": "startDate" }]""") };
+            var args = new JsonObject { ["where"] = where, ["size"] = PageSize, ["sortBy"] = JsonNode.Parse("""[{ "field": "startDate" }]""") };
             if (page is not null) args["page"] = page;
 
             var nodes = JsonNode.Parse("""
@@ -46,14 +50,14 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
               "id": {}, "name": {}, "startDate": {}, "endDate": {}, "startTime": {}, "endTime": {}, "completed": {},
               "taskType": { "name": {} },
               "job": { "id": {}, "name": {}, "number": {}, "location": { "address": {} } },
-              "assignedMemberships": { "$": { "size": 25 }, "nodes": { "user": { "name": {} } } }
+              "assignedMemberships": { "$": { "size": 10 }, "nodes": { "user": { "name": {} } } }
             }
             """)!;
             nodes["job"]!["customFieldValues"] = new JsonObject
             {
                 ["$"] = new JsonObject
                 {
-                    ["size"] = 5,
+                    ["size"] = 2,
                     ["where"] = new JsonArray(new JsonArray("customField", "id"), "in", new JsonArray(JobFields.JobType, JobFields.HowBidCameIn)),
                 },
                 ["nodes"] = JsonNode.Parse("""{ "value": {}, "customField": { "id": {} } }"""),
