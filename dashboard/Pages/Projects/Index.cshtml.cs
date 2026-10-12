@@ -6,7 +6,7 @@ using PurpleDashboard.Modules.Projects;
 
 namespace PurpleDashboard.Pages.Projects;
 
-public class IndexModel(ProjectsService projects, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(ProjectsService projects, Microsoft.Extensions.Options.IOptions<PurpleDashboard.Modules.People.PmColorOptions> pmColors, ILogger<IndexModel> logger) : PageModel
 {
     [BindProperty(SupportsGet = true)] public string? View { get; set; }
     [BindProperty(SupportsGet = true)] public string? Pm { get; set; }
@@ -20,6 +20,7 @@ public class IndexModel(ProjectsService projects, ILogger<IndexModel> logger) : 
     public IReadOnlyList<string> JobTypes { get; private set; } = [];
     public string? Error { get; private set; }
     public DateTime LoadedAt { get; private set; }
+    public PurpleDashboard.Modules.People.PmColorOptions PmColors => pmColors.Value;
     public DateOnly Today { get; private set; }
 
     public async Task OnGetAsync(bool refresh, CancellationToken ct)

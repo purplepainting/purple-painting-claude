@@ -43,6 +43,7 @@ builder.Services.AddScoped<ProjectsService>();
 builder.Services.AddScoped<ITileMetric, ActiveProjectsMetric>();
 builder.Services.AddScoped<ScheduleService>();
 builder.Services.AddScoped<SchedulePushService>();
+builder.Services.AddScoped<LaborCostService>();
 builder.Services.Configure<CrewLevelOptions>(builder.Configuration.GetSection("Crew"));
 builder.Services.Configure<PurpleDashboard.Modules.People.PmColorOptions>(builder.Configuration.GetSection("ProjectManagers"));
 builder.Services.AddScoped<ITileMetric, JobsThisWeekMetric>();

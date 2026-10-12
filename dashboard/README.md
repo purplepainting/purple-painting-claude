@@ -17,7 +17,7 @@ Locally there's no Entra sign-in in front of the app, so you're shown as "Local 
 To see real JobTread data locally, set the grant key first: `dotnet user-secrets set JOBTREAD_API_KEY <key>`
 (never put it in a file in the repo). Or point at saved sample responses with
 `JobTread__FixtureDirectory=/path/to/folder dotnet run`, where the folder has one `{query name}.json`
-per query (`projects-list`, `projects-activity`, `projects-detail`, `schedule-week`).
+per query (`projects-list`, `projects-activity`, `projects-detail`, `schedule-week`, `people-staff`, `labor-entries`, and for pushes `schedule-current`, `schedule-update`, `schedule-create`, `schedule-delete`).
 
 ## Layout
 
@@ -34,7 +34,9 @@ per query (`projects-list`, `projects-activity`, `projects-detail`, `schedule-we
 | `wwwroot/js/site.js` | Small optional scripts (auto-submit filters, load expanded rows) |
 | `Integrations/JobTread/` | The JobTread client. Every JobTread call goes through `IJobTreadClient` |
 | `Modules/Projects/` | Projects data: models, preset views, `ProjectsService` (JobTread queries) |
-| `Modules/Scheduling/` | Schedule data: `ScheduleService` (JobTread tasks), job type colors |
+| `Modules/Scheduling/` | Schedule: `ScheduleService` (read tasks), `SchedulePushService` (write changes to JobTread), `LaborCostService` (actual and estimated labor), job colors and crew levels |
+| `Modules/People/` | `PeopleService` (staff and roles from JobTread), PM colors |
+| `wwwroot/js/schedule-editor.js` | The schedule editor (draft, drag/tap, review & push) |
 | `Infrastructure/` | Shared helpers: `LocalClock` (Pacific time), `Format` (money, %, dates) |
 | `docs/JOBTREAD.md` | How our JobTread data is structured and how to query it |
 
@@ -57,6 +59,8 @@ straight away with a "Coming soon" page.
 **Add or change a Projects view pill:** edit `Modules/Projects/ProjectViews.cs`.
 
 **Change the profit % colors:** edit the stops in `Modules/Projects/ProfitScale.cs`.
+
+**Crew levels and PM colors (temporary):** `Crew:Foremen` / `Crew:Helpers` and `ProjectManagers:Colors` in `appsettings.json`. These move to the Employees module once the database exists.
 
 **Change colors or fonts:** edit the variables in `:root` at the top of `wwwroot/css/site.css`.
 

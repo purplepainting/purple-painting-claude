@@ -73,7 +73,7 @@ else
                             <span class="job-num num">#@job.Number</span> @job.Name
                             @if (job.NeedsAttention) { <span class="attention-dot" title="Money waiting on us: open to see why"></span> }
                         </div>
-                        <div class="job-sub muted">@(job.Customer ?? "No client")<span class="job-pm"> · PM @(job.ProjectManager ?? "not set")</span></div>
+                        <div class="job-sub muted">@(job.Customer ?? "No client")@if (job.ProjectManager is not null) { <span class="pm-tag" style="@Model.PmColors.Style(job.ProjectManager)">PM @job.ProjectManager.Split(' ')[0]</span> } else { <span class="job-pm"> · no PM</span> }</div>
                         <div class="job-contract num">@(job.Contract is null ? "No contract yet" : Format.Money(job.Contract) + " contract")</div>
                     </div>
                     <dl class="job-line-figs">

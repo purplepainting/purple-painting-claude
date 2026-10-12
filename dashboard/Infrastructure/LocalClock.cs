@@ -10,6 +10,13 @@ public static class LocalClock
     public static DateTime Now => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Zone);
     public static DateOnly Today => DateOnly.FromDateTime(Now);
 
+    /// <summary>Midnight Pacific at the start of the date, as a UTC instant.</summary>
+    public static DateTimeOffset StartOfDayUtc(DateOnly date)
+    {
+        var local = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        return new DateTimeOffset(local, Zone.GetUtcOffset(local)).ToUniversalTime();
+    }
+
     public static DateOnly ToLocalDate(DateTimeOffset at) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(at, Zone).DateTime);
 
     /// <summary>Monday of the week containing the date.</summary>

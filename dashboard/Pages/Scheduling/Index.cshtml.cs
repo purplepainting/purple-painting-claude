@@ -14,6 +14,7 @@ namespace PurpleDashboard.Pages.Scheduling;
 
 public partial class IndexModel(
     ScheduleService schedule,
+    LaborCostService laborCosts,
     SchedulePushService pushService,
     PeopleService people,
     ProjectsService projects,
@@ -40,10 +41,28 @@ public partial class IndexModel(
     public string? Error { get; private set; }
     public DateTime LoadedAt { get; private set; }
 
+    /// <summary>Labor cost per job per day (actual up to today, estimated after). Empty if costs couldn't load.</summary>
+    public Dictionary<(string JobId, DateOnly Day), DayCost> Costs { get; } = [];
+
+    /// <summary>Who actually clocked in per job per day (past days and today), with hours.</summary>
+    public Dictionary<(string JobId, DateOnly Day), List<(string Name, decimal Hours)>> Actual { get; } = [];
+
+    /// <summary>Past day (or today) with no time entries for a job that was scheduled: nobody clocked in.</summary>
+    public bool IsPastOrToday(DateOnly day) => day <= Today;
+
+    /// <summary>Did this scheduled person clock in on this job that day?</summary>
+    public bool ClockedIn(string jobId, DateOnly day, string name) =>
+        Actual.TryGetValue((jobId, day), out var list) && list.Any(x => x.Name == name);
+
+    public (decimal Actual, decimal Estimate) WeekCost(string jobId) =>
+        (Costs.Where(c => c.Key.JobId == jobId && !c.Value.IsEstimate).Sum(c => c.Value.Amount),
+         Costs.Where(c => c.Key.JobId == jobId && c.Value.IsEstimate).Sum(c => c.Value.Amount));
+
     /// <summary>JSON for the schedule editor (week view only).</summary>
     public string? EditorJson { get; private set; }
 
     private Dictionary<string, StaffMember> staffByName = [];
+    private Dictionary<string, StaffMember> staffByUserId = [];
 
     public PmColorOptions PmColors => pmColors.Value;
 
@@ -70,6 +89,7 @@ public partial class IndexModel(
         }
         LoadedAt = LocalClock.Now;
         staffByName = staff.GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.First());
+        staffByUserId = staff.GroupBy(s => s.UserId).ToDictionary(g => g.Key, g => g.First());
 
         // Weekends only appear when something is scheduled on them.
         Days = Enumerable.Range(0, To.DayNumber - From.DayNumber + 1)
@@ -78,6 +98,7 @@ public partial class IndexModel(
             .ToList();
 
         Rows = ByPerson ? RowsByPerson() : RowsByJob();
+        await LoadCostsAsync(ct);
 
         if (!IsDay) EditorJson = await BuildEditorJsonAsync(staff, ct);
     }
@@ -90,6 +111,42 @@ public partial class IndexModel(
 
         var results = await pushService.PushAsync(request.Changes, me.Email ?? me.DisplayName ?? "unknown", ct);
         return new JsonResult(new { results });
+    }
+
+    private async Task LoadCostsAsync(CancellationToken ct)
+    {
+        try
+        {
+            var actual = await laborCosts.GetActualAsync(From, To, ct);
+            foreach (var jobId in Tasks.Select(t => t.JobId).Distinct())
+            {
+                foreach (var day in Days)
+                {
+                    if (day <= Today)
+                    {
+                        if (actual.TryGetValue((jobId, day), out var a))
+                        {
+                            if (a.Cost > 0) Costs[(jobId, day)] = new DayCost(a.Cost, false);
+                            Actual[(jobId, day)] = a.MinutesByUser
+                                .Select(m => (Name: staffByUserId.TryGetValue(m.Key, out var st) ? st.Name : "Unknown", Hours: Math.Round(m.Value / 60m, 1)))
+                                .OrderByDescending(x => x.Hours)
+                                .ToList();
+                        }
+                    }
+                    else
+                    {
+                        decimal est = 0;
+                        foreach (var t in Tasks.Where(t => t.JobId == jobId && t.Covers(day)))
+                            est += await laborCosts.EstimateAsync(t, ct) ?? 0;
+                        if (est > 0) Costs[(jobId, day)] = new DayCost(est, true);
+                    }
+                }
+            }
+        }
+        catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
+        {
+            logger.LogWarning(e, "Loading labor costs failed; schedule shows without costs");
+        }
     }
 
     private async Task<string> BuildEditorJsonAsync(IReadOnlyList<StaffMember> staff, CancellationToken ct)
@@ -120,6 +177,7 @@ public partial class IndexModel(
             jobs = jobsOnSchedule.OrderBy(j => j.JobName, StringComparer.OrdinalIgnoreCase).Select(j => new
             {
                 id = j.JobId, name = j.JobName, type = ShortType(j.JobType), pm = j.ProjectManager, pmColor = PmColors.For(j.ProjectManager), hue = JobColors.HueFor(j.JobId),
+                costs = Days.Where(d => Costs.ContainsKey((j.JobId, d))).ToDictionary(d => d.ToString("yyyy-MM-dd"), d => new { amount = Math.Round(Costs[(j.JobId, d)].Amount), estimate = Costs[(j.JobId, d)].IsEstimate }),
             }),
             addableJobs = addable,
             tasks = Tasks.Select(t => new
@@ -156,7 +214,7 @@ public partial class IndexModel(
         .Select(g =>
         {
             var first = g.First();
-            return new ScheduleRow(first.JobName, ShortType(first.JobType), JobColors.Style(first.JobId), first.ProjectManager,
+            return new ScheduleRow(first.JobName, ShortType(first.JobType), JobColors.Style(first.JobId), first.ProjectManager, first.JobId,
                 Days.ToDictionary(d => d, d => (IReadOnlyList<ScheduleTask>)g.Where(t => t.Covers(d)).ToList()));
         })
         .OrderBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
@@ -165,12 +223,12 @@ public partial class IndexModel(
     private List<ScheduleRow> RowsByPerson()
     {
         var names = Tasks.SelectMany(t => t.People).Distinct().Order(StringComparer.OrdinalIgnoreCase).ToList();
-        var rows = names.Select(p => new ScheduleRow(p, null, null, null,
+        var rows = names.Select(p => new ScheduleRow(p, null, null, null, null,
             Days.ToDictionary(d => d, d => (IReadOnlyList<ScheduleTask>)Tasks.Where(t => t.Covers(d) && t.People.Contains(p)).ToList())))
             .ToList();
         var unassigned = Tasks.Where(t => t.Crew.Count == 0).ToList();
         if (unassigned.Count > 0)
-            rows.Add(new ScheduleRow("Unassigned", null, null, null,
+            rows.Add(new ScheduleRow("Unassigned", null, null, null, null,
                 Days.ToDictionary(d => d, d => (IReadOnlyList<ScheduleTask>)unassigned.Where(t => t.Covers(d)).ToList())));
         return rows;
     }
@@ -211,4 +269,4 @@ public partial class IndexModel(
     private static partial Regex DatePrefix();
 }
 
-public sealed record ScheduleRow(string Title, string? Subtitle, string? ColorStyle, string? ProjectManager, IReadOnlyDictionary<DateOnly, IReadOnlyList<ScheduleTask>> Cells);
+public sealed record ScheduleRow(string Title, string? Subtitle, string? ColorStyle, string? ProjectManager, string? JobId, IReadOnlyDictionary<DateOnly, IReadOnlyList<ScheduleTask>> Cells);
