@@ -1,0 +1,8 @@
+@page "/error/{code:int?}"
+@model ErrorModel
+
+<section class="card empty-state">
+    <h1>@Model.Heading</h1>
+    <p class="muted">@Model.Message</p>
+    <a class="button" href="/">Back to dashboard</a>
+</section>

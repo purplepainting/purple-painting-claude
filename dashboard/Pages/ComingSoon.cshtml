@@ -1,0 +1,10 @@
+@page "/{module:alpha}"
+@model ComingSoonModel
+
+<section class="card empty-state">
+    <span class="tile-icon"><partial name="_Icon" model="Model.Module.Icon" /></span>
+    <h1>@Model.Module.Name</h1>
+    <p class="muted">@Model.Module.Description</p>
+    <p class="muted">Data from @Model.Module.Source. This module hasn't been built yet.</p>
+    <a class="button" href="/">Back to dashboard</a>
+</section>
