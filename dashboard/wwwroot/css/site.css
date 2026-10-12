@@ -447,3 +447,13 @@ table.data tr.burden-row td:first-child { padding-left: 24px; }
 .acct-list li { display: flex; justify-content: space-between; gap: 12px; }
 .fin-section .bar { display: inline-block; height: 6px; width: calc(var(--w) * 0.6); max-width: 60px; background: var(--purple-600); border-radius: 3px; margin-right: 6px; vertical-align: middle; }
 .bonus-detail { padding: 12px 14px; display: grid; gap: 10px; } .bonus-detail .form-actions form { display: inline; }
+.inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 8px; }
+.inline-form input, .inline-form select { font: inherit; }
+.inline-form .field { display: grid; gap: 4px; }
+.inline-form .field > span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.inline-form .field.grow { flex: 1 1 200px; }
+.inline-form .field.grow input { width: 100%; }
+.fin-section form { display: inline; }
+.fin-section .inline-form { display: flex; }
+.emp-row.with-chip { grid-template-columns: auto minmax(0, 1fr) auto auto auto; }
+@media (max-width: 760px) { .emp-row.with-chip { grid-template-columns: auto minmax(0, 1fr) auto; } .emp-row.with-chip .emp-rates { display: none; } }

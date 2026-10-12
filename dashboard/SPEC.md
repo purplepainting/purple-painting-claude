@@ -144,6 +144,10 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 - **Reviews:** dashboard-owned review status per job (requested / received + platform + rating / ask later), with a "Request review" button. The button only records the request in Phase 1.
 
 ### 5. Sales and marketing
+**Built (first pass):** `/sales` with three tabs.
+- **Commissions:** salesperson from each JobTread job; a rule per person (percent of money collected, contract, or job profit; CommissionRules table); earned per job, payments recorded (CommissionPayments), owed. Collected = invoices minus unpaid (before retention). Rates aren't known yet: everyone shows "No rate set" until entered. Tile: commissions owed.
+- **Door-to-door:** log form (date, rep, doors, leads, sold, sold $, notes; SalesActivities), totals and by-rep table for 30/90 days or YTD.
+- **Ads & lead sources:** monthly spend per channel entered by hand (AdSpends) next to jobs and contract value by JobTread "How bid came in" (same names line up). Not attribution (still undecided).
 - **Ads → revenue:** spend per channel (Google Ads, Facebook/Instagram, referrals/signs), leads, jobs won and revenue, with return on spend. Ad platform integration comes later; Phase 1 can use manually entered monthly spend.
 - **Door-to-door and reps:** dashboard-owned. A "Log activity" form (rep, date, doors knocked, leads, notes), totals for doors, leads and sold, and a rep table (doors, leads, sold, sold $).
 - **Open issue:** the attribution method (which ad produced which lead/job) is undecided. Don't invent one. Leave a clear placeholder.

@@ -72,6 +72,8 @@ builder.Services.AddScoped<PurpleDashboard.Modules.Financials.FinancialsService>
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Financials.NetProfitMetric>();
 builder.Services.Configure<PurpleDashboard.Modules.Financials.BonusOptions>(builder.Configuration.GetSection("Bonuses"));
 builder.Services.AddScoped<PurpleDashboard.Modules.Financials.BonusService>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Sales.SalesService>();
+builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Sales.CommissionsOwedMetric>();
 
 var app = builder.Build();
 

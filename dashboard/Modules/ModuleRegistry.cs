@@ -31,7 +31,7 @@ public static class ModuleRegistry
         new("scheduling", "Scheduling",              "Who is on which job, by crew and week.",                "JobTread",              "calendar",  "Jobs this week", ModuleStatus.Live),
         new("financials", "Financials",              "JobTread vs QuickBooks, labor burden, overhead and bonuses.", "QuickBooks + JobTread", "chart",     "Net profit YTD", ModuleStatus.Live),
         new("customers",  "Customers",               "Contacts, jobs, balances and reviews.",                 "JobTread + QuickBooks", "users",     "Customers owing"),
-        new("sales",      "Sales & Marketing",       "Ad spend to revenue, door-to-door and reps.",           "Dashboard",             "megaphone", "Leads this month"),
+        new("sales",      "Sales & Marketing",       "Commissions, door-to-door and ad spend vs lead sources.", "JobTread + Dashboard",  "megaphone", "Commissions owed", ModuleStatus.Live),
         new("vendors",    "Vendors & Payables",      "Bills, due dates and vendor balances.",                 "QuickBooks",            "receipt",   "Due in 14 days"),
         new("employees",  "Employees",               "Crew levels, PM colors and who worked where.",          "JobTread + Dashboard",  "id",        "Team members", ModuleStatus.Live),
         new("equipment",  "Equipment & Sundries",    "Sprayers, ladders, vehicles and supplies.",             "Dashboard",             "tools",     "Low or out of stock"),

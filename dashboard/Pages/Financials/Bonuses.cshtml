@@ -54,7 +54,7 @@ else
         @foreach (var b in Model.Shown)
         {
             <details class="job card emp">
-                <summary class="emp-row">
+                <summary class="emp-row with-chip">
                     <span class="chip @(b.Status switch { BonusStatus.Ready => "warn", BonusStatus.Paid => "good", BonusStatus.Approved => "active", _ => "" })">@(b.Status == BonusStatus.Projected ? "Coming" : b.Status.ToString())</span>
                     <div class="job-main">
                         <div class="job-title">@(b.Number is null ? "" : "#" + b.Number + " ")@b.JobName</div>
