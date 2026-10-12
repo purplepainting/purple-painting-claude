@@ -124,6 +124,11 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
   - How crews and schedule items are represented in JobTread (job dates, tasks, assignees) must be confirmed with Kareem before step 2.
 
 ### 3. Financials (hybrid; large module with tabs)
+**Built (first pass, Oct 2026):** `/financials` with three tabs, for any period (this month, last month, last 3 months, since JobTread (May 2026), YTD, last year; accrual or cash):
+- **JobTread vs QuickBooks:** revenue (JT invoices, net of retention, vs QB income), field labor (JT time entries at burdened rates vs QB field wages + burden), job costs (JT vendor bills vs QB materials/jobsite; job bills are entered in JobTread and pushed to QuickBooks, so these should match), gross profit, cost per hour; by month; and **"Where things are off"**: month gaps in job costs or revenue, field payroll booked under Expenses, labor burden under Expenses, no employer payroll tax account, uncategorized, deleted accounts with activity, unnumbered accounts.
+- **Labor burden:** QB field wages by account + burden items (workers' comp 5510, sick & holiday 5180) = real field labor cost; per JobTread clocked hour and % of wages; vs JobTread's average burdened rate; gap per hour by month. QuickBooks has no employer payroll tax or benefits accounts (likely inside wages); noted on the page.
+- **Overhead:** everything outside job costs by category (office & management payroll, rent, vehicles & fuel, insurance, marketing, commissions, bonuses, software, professional, bank, interest, ...), % of revenue, per field hour, per month; each category opens to its accounts.
+- Accounts are sorted by QuickBooks account number (`Modules/Financials/AccountRules.cs`; override any prefix with settings `Financials:Accounts:{prefix}` = `Kind|Category`).
 Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commissions**
 - **Company:** P&L, balance sheet and cash position from QuickBooks. KPI cards for revenue YTD, net profit YTD, cash on hand and open A/R.
 - **Job P&L:** per-job profit from JobTread, with burden rates applied.

@@ -1,0 +1,222 @@
+@page "/financials"
+@model PurpleDashboard.Pages.Financials.IndexModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Modules.Financials
+
+<div class="module-head">
+    <div class="pills" role="tablist" aria-label="Financials sections">
+        @foreach (var (key, label) in new[] { ("overview", "JobTread vs QuickBooks"), ("burden", "Labor burden"), ("overhead", "Overhead") })
+        {
+            <a class="pill@(Model.CurrentTab == key ? " active" : "")" asp-page="/Financials/Index" asp-all-route-data="Model.RouteFor(tab: key)">@label</a>
+        }
+    </div>
+    <form class="filters" method="get" data-autosubmit>
+        @if (Model.CurrentTab != "overview") { <input type="hidden" name="tab" value="@Model.CurrentTab"> }
+        <select name="period" aria-label="Period">
+            @foreach (var (key, label) in IndexModel.Periods)
+            {
+                <option value="@key" selected="@((Model.Period ?? "3m") == key)">@label</option>
+            }
+        </select>
+        <select name="basis" aria-label="Accounting basis">
+            <option value="" selected="@(Model.CurrentBasis == "Accrual")">Accrual</option>
+            <option value="Cash" selected="@(Model.CurrentBasis == "Cash")">Cash</option>
+        </select>
+        <button class="button secondary" type="submit">Apply</button>
+    </form>
+</div>
+
+@if (!Model.Connected)
+{
+    <div class="card notice warn">
+        <strong>QuickBooks isn't connected.</strong>
+        <p>Connect it once on <a href="/connections">Connections</a> and this page fills in.</p>
+    </div>
+}
+else if (Model.Error is not null)
+{
+    <div class="card notice warn"><strong>Couldn't load financials.</strong><p>@Model.Error</p></div>
+}
+else if (Model.Report is { } r)
+{
+    var t = r.Total;
+    <p class="list-meta muted">
+        @Model.RangeFrom.ToString("MMM d, yyyy") – @Model.RangeTo.ToString("MMM d, yyyy") · @Model.CurrentBasis basis · QuickBooks is the source of truth ·
+        loaded @r.LoadedAt.ToString("h:mm tt") · <a asp-page="/Financials/Index" asp-all-route-data="Model.RouteFor()" asp-route-refresh="true">Refresh</a>
+        @if (Model.RangeFrom < IndexModel.JobTreadStart) { <br><span class="notice-inline warn">JobTread data starts around May 2026, so earlier months only have QuickBooks numbers.</span> }
+    </p>
+
+    @if (Model.CurrentTab == "overview")
+    {
+        <div class="kpis">
+            <div class="card kpi"><span class="kpi-label">Revenue (QB)</span><span class="kpi-value num">@Format.Money(t.QbIncome)</span></div>
+            <div class="card kpi"><span class="kpi-label">Gross profit (QB)</span><span class="kpi-value num">@Format.Money(t.QbGrossProfit)</span><span class="kpi-sub num">@IndexModel.Pct(t.QbGrossProfit, t.QbIncome) of revenue</span></div>
+            <div class="card kpi"><span class="kpi-label">Overhead (QB)</span><span class="kpi-value num">@Format.Money(t.QbOverhead)</span><span class="kpi-sub num">@IndexModel.Pct(t.QbOverhead, t.QbIncome) of revenue</span></div>
+            <div class="card kpi"><span class="kpi-label">Net profit (QB)</span><span class="kpi-value num@(t.QbNet < 0 ? " neg" : "")">@Format.Money(t.QbNet)</span><span class="kpi-sub num">@IndexModel.Pct(t.QbNet, t.QbIncome) of revenue</span></div>
+        </div>
+
+        <section class="card fin-section">
+            <h2 class="section-title">JobTread vs QuickBooks</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th></th><th class="num">JobTread</th><th class="num">QuickBooks</th><th class="num">Difference (QB − JT)</th></tr></thead>
+                    <tbody>
+                        <tr><td>Revenue <span class="muted small">(JT invoices, net of retention)</span></td><td class="num">@Format.Money(t.JtInvoiced)</td><td class="num">@Format.Money(t.QbIncome)</td><td class="num">@IndexModel.Gap(t.QbIncome, t.JtInvoiced)</td></tr>
+                        <tr><td>Field labor <span class="muted small">(JT burdened time vs QB wages + burden)</span></td><td class="num">@Format.Money(t.JtLaborCost)</td><td class="num">@Format.Money(t.QbLabor)</td><td class="num">@IndexModel.Gap(t.QbLabor, t.JtLaborCost)</td></tr>
+                        <tr><td>Job costs <span class="muted small">(JT bills vs QB materials, jobsite)</span></td><td class="num">@Format.Money(t.JtBills)</td><td class="num">@Format.Money(t.QbJobCosts)</td><td class="num">@IndexModel.Gap(t.QbJobCosts, t.JtBills)</td></tr>
+                        <tr class="total"><td>Gross profit</td><td class="num">@Format.Money(t.JtGrossProfit) <span class="muted">(@IndexModel.Pct(t.JtGrossProfit, t.JtInvoiced))</span></td><td class="num">@Format.Money(t.QbGrossProfit) <span class="muted">(@IndexModel.Pct(t.QbGrossProfit, t.QbIncome))</span></td><td class="num">@IndexModel.Gap(t.QbGrossProfit, t.JtGrossProfit)</td></tr>
+                        <tr><td>Field hours / cost per hour</td><td class="num">@Format.Number(t.JtHours) hrs · @IndexModel.PerHour(t.JtCostPerHour)</td><td class="num">@IndexModel.PerHour(t.QbCostPerHour)</td><td class="num">@(t.QbCostPerHour is { } q && t.JtCostPerHour is { } j ? IndexModel.PerHour(q - j) : "—")</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card fin-section">
+            <h2 class="section-title">Where things are off <span class="muted">@r.Flags.Count</span></h2>
+            @if (r.Flags.Count == 0) { <p class="muted">Nothing stands out for this period.</p> }
+            <ul class="flags">
+                @foreach (var f in r.Flags)
+                {
+                    <li class="flag @f.Severity"><b>@f.Title</b><span>@f.Detail</span></li>
+                }
+            </ul>
+        </section>
+
+        <section class="card fin-section">
+            <h2 class="section-title">By month</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Month</th><th class="num">QB revenue</th><th class="num">JT invoiced</th><th class="num">QB labor</th><th class="num">JT labor</th><th class="num">QB job costs</th><th class="num">JT bills</th><th class="num">QB overhead</th><th class="num">QB net</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in r.Months)
+                        {
+                            <tr>
+                                <td>@m.Label</td>
+                                <td class="num">@Format.Money(m.QbIncome)</td><td class="num muted">@Format.Money(m.JtInvoiced)</td>
+                                <td class="num">@Format.Money(m.QbLabor)</td><td class="num muted">@Format.Money(m.JtLaborCost)</td>
+                                <td class="num">@Format.Money(m.QbJobCosts)</td><td class="num muted">@Format.Money(m.JtBills)</td>
+                                <td class="num">@Format.Money(m.QbOverhead)</td>
+                                <td class="num@(m.QbNet < 0 ? " neg" : "")">@Format.Money(m.QbNet)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+    else if (Model.CurrentTab == "burden")
+    {
+        var wages = t.QbFieldWages;
+        var hours = t.JtHours;
+        <div class="kpis">
+            <div class="card kpi"><span class="kpi-label">Real labor cost per hour (QB)</span><span class="kpi-value num">@IndexModel.PerHour(t.QbCostPerHour)</span><span class="kpi-sub">wages + burden ÷ JobTread hours</span></div>
+            <div class="card kpi"><span class="kpi-label">JobTread average rate</span><span class="kpi-value num">@IndexModel.PerHour(t.JtCostPerHour)</span><span class="kpi-sub">burdened cost on time entries</span></div>
+            <div class="card kpi"><span class="kpi-label">Gap per hour</span><span class="kpi-value num@(t.QbCostPerHour > t.JtCostPerHour ? " neg" : "")">@(t.QbCostPerHour is { } q && t.JtCostPerHour is { } j ? IndexModel.PerHour(q - j) : "—")</span><span class="kpi-sub">positive = JobTread rates too low</span></div>
+            <div class="card kpi"><span class="kpi-label">Burden on top of wages</span><span class="kpi-value num">@IndexModel.Pct(t.QbBurden, wages)</span><span class="kpi-sub num">@Format.Money(t.QbBurden) on @Format.Money(wages) wages</span></div>
+        </div>
+
+        <section class="card fin-section">
+            <h2 class="section-title">What makes up field labor cost</h2>
+            <p class="muted small">Per hour uses @Format.Number(hours) JobTread clocked hours in this period.</p>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th></th><th class="num">Amount</th><th class="num">Per hour</th><th class="num">% of wages</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in r.FieldWages)
+                        {
+                            <tr><td>@c.Category</td><td class="num">@Format.Money(c.Total)</td><td class="num">@IndexModel.PerHour(hours > 0 ? c.Total / hours : null)</td><td class="num">@IndexModel.Pct(c.Total, wages)</td></tr>
+                        }
+                        <tr class="total"><td>Field wages</td><td class="num">@Format.Money(wages)</td><td class="num">@IndexModel.PerHour(hours > 0 ? wages / hours : null)</td><td class="num">100%</td></tr>
+                        @foreach (var c in r.Burden)
+                        {
+                            <tr class="burden-row"><td>+ @c.Category</td><td class="num">@Format.Money(c.Total)</td><td class="num">@IndexModel.PerHour(hours > 0 ? c.Total / hours : null)</td><td class="num">@IndexModel.Pct(c.Total, wages)</td></tr>
+                        }
+                        <tr class="total"><td>Real field labor cost</td><td class="num">@Format.Money(t.QbLabor)</td><td class="num">@IndexModel.PerHour(t.QbCostPerHour)</td><td class="num">@IndexModel.Pct(t.QbLabor, wages)</td></tr>
+                        <tr><td>JobTread labor cost (burdened rates)</td><td class="num">@Format.Money(t.JtLaborCost)</td><td class="num">@IndexModel.PerHour(t.JtCostPerHour)</td><td class="num">@IndexModel.Pct(t.JtLaborCost, wages)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="muted small">QuickBooks has no separate employer payroll tax or benefits accounts, so those costs are most likely inside the wage lines. Overtime is shown as its own wage line. Sick &amp; holiday pay and workers' comp count as burden. Change which accounts count where in settings (Financials:Accounts).</p>
+        </section>
+
+        <section class="card fin-section">
+            <h2 class="section-title">Per hour by month</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Month</th><th class="num">JT hours</th><th class="num">QB wages</th><th class="num">QB burden</th><th class="num">QB per hour</th><th class="num">JT per hour</th><th class="num">Gap</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in r.Months)
+                        {
+                            <tr>
+                                <td>@m.Label</td><td class="num">@Format.Number(m.JtHours)</td>
+                                <td class="num">@Format.Money(m.QbFieldWages)</td><td class="num">@Format.Money(m.QbBurden)</td>
+                                <td class="num">@IndexModel.PerHour(m.QbCostPerHour)</td><td class="num">@IndexModel.PerHour(m.JtCostPerHour)</td>
+                                <td class="num">@(m.QbCostPerHour is { } q2 && m.JtCostPerHour is { } j2 ? IndexModel.PerHour(q2 - j2) : "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+    else
+    {
+        var oh = t.QbOverhead;
+        <div class="kpis">
+            <div class="card kpi"><span class="kpi-label">Overhead</span><span class="kpi-value num">@Format.Money(oh)</span><span class="kpi-sub">everything outside job costs</span></div>
+            <div class="card kpi"><span class="kpi-label">% of revenue</span><span class="kpi-value num">@IndexModel.Pct(oh, t.QbIncome)</span></div>
+            <div class="card kpi"><span class="kpi-label">Per field hour</span><span class="kpi-value num">@IndexModel.PerHour(t.JtHours > 0 ? oh / t.JtHours : null)</span><span class="kpi-sub">what each hour has to cover</span></div>
+            <div class="card kpi"><span class="kpi-label">Per month</span><span class="kpi-value num">@Format.Money(r.Months.Count > 0 ? oh / r.Months.Count : 0)</span><span class="kpi-sub">average</span></div>
+        </div>
+
+        <section class="card fin-section">
+            <h2 class="section-title">Where overhead goes</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr><th>Category</th><th class="num">Total</th><th class="num">% of overhead</th>
+                            @foreach (var m in r.Months) { <th class="num">@m.Label[..3]</th> }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var c in r.Overhead)
+                        {
+                            <tr>
+                                <td>
+                                    <details class="acct-list">
+                                        <summary>@c.Category</summary>
+                                        <ul>@foreach (var (name, amount) in c.Accounts) { <li><span>@name</span><span class="num">@Format.Money(amount)</span></li> }</ul>
+                                    </details>
+                                </td>
+                                <td class="num">@Format.Money(c.Total)</td>
+                                <td class="num"><span class="bar" style="--w:@(oh == 0 ? 0 : Math.Round(100 * c.Total / oh))%"></span>@IndexModel.Pct(c.Total, oh)</td>
+                                @foreach (var v in c.ByMonth) { <td class="num muted">@Format.Money(v)</td> }
+                            </tr>
+                        }
+                        <tr class="total"><td>Total overhead</td><td class="num">@Format.Money(oh)</td><td class="num">100%</td>
+                            @foreach (var m in r.Months) { <td class="num">@Format.Money(m.QbOverhead)</td> }
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card fin-section">
+            <h2 class="section-title">Job costs (not overhead)</h2>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Category</th><th class="num">QuickBooks</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in r.JobCosts) { <tr><td>@c.Category</td><td class="num">@Format.Money(c.Total)</td></tr> }
+                        <tr><td>Field labor (wages + burden)</td><td class="num">@Format.Money(t.QbLabor)</td></tr>
+                        <tr class="total"><td>Total job costs</td><td class="num">@Format.Money(t.QbLabor + t.QbJobCosts)</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+}
+
+@section Scripts {
+    <script src="~/js/site.js" asp-append-version="true"></script>
+}

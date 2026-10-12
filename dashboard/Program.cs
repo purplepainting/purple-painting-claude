@@ -47,6 +47,7 @@ builder.Services.Configure<PurpleDashboard.Integrations.QuickBooks.QuickBooksOpt
     o.RedirectUri = builder.Configuration["QBO_REDIRECT_URI"];
     o.ExtraScopes = builder.Configuration["QBO_EXTRA_SCOPES"];
     o.Environment = builder.Configuration["QBO_ENVIRONMENT"] ?? "production";
+    if (builder.Environment.IsDevelopment()) o.FixtureDirectory = builder.Configuration["QuickBooks:FixtureDirectory"];
 });
 builder.Services.AddHttpClient<PurpleDashboard.Integrations.QuickBooks.QuickBooksClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
@@ -65,6 +66,10 @@ builder.Services.AddScoped<LaborCostService>();
 builder.Services.Configure<CrewLevelOptions>(builder.Configuration.GetSection("Crew"));
 builder.Services.Configure<PurpleDashboard.Modules.People.PmColorOptions>(builder.Configuration.GetSection("ProjectManagers"));
 builder.Services.AddScoped<ITileMetric, JobsThisWeekMetric>();
+builder.Services.Configure<PurpleDashboard.Modules.Financials.AccountRulesOptions>(builder.Configuration.GetSection("Financials"));
+builder.Services.AddScoped<PurpleDashboard.Modules.Financials.AccountRules>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Financials.FinancialsService>();
+builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Financials.NetProfitMetric>();
 
 var app = builder.Build();
 

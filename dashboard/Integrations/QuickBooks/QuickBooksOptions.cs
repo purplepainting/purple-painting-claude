@@ -18,7 +18,10 @@ public sealed class QuickBooksOptions
     /// <summary>"production" (default) or "sandbox" for an Intuit test company.</summary>
     public string Environment { get; set; } = "production";
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret);
+    /// <summary>Local development only: a folder of saved QuickBooks responses ({report}.json, query-{Entity}.json).</summary>
+    public string? FixtureDirectory { get; set; }
+
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(FixtureDirectory) || !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret);
 
     public string ApiBase => Environment == "sandbox"
         ? "https://sandbox-quickbooks.api.intuit.com/"

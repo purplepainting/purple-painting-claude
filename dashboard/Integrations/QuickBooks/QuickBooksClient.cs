@@ -43,6 +43,8 @@ public sealed class QuickBooksClient(
     /// <summary>The saved connection, or null if QuickBooks isn't connected (or the database isn't available).</summary>
     public async Task<QuickBooksConnection?> GetConnectionAsync(CancellationToken ct)
     {
+        if (Options.FixtureDirectory is not null)
+            return new QuickBooksConnection { RealmId = "fixture", CompanyName = "Purple Painting (sample data)", RefreshTokenProtected = "", ConnectedAt = DateTime.UtcNow, RefreshTokenExpiresAt = DateTime.UtcNow.AddDays(100) };
         if (!database.Available) return null;
         var db = services.GetRequiredService<DashboardDb>();
         return await db.QuickBooksConnections.AsNoTracking().OrderByDescending(c => c.ConnectedAt).FirstOrDefaultAsync(ct);
@@ -123,6 +125,8 @@ public sealed class QuickBooksClient(
     /// </summary>
     public async Task<List<JsonNode>> QueryAsync(string entity, string query, CancellationToken ct)
     {
+        if (Options.FixtureDirectory is not null)
+            return ((await FixtureAsync($"query-{entity}", ct))["QueryResponse"]?[entity] as JsonArray ?? []).OfType<JsonNode>().Select(n => n.DeepClone()).ToList();
         var rows = new List<JsonNode>();
         for (var start = 1; ; start += 1000)
         {
@@ -137,7 +141,14 @@ public sealed class QuickBooksClient(
 
     /// <summary>A report, e.g. ReportAsync("ProfitAndLoss", new() { ["start_date"] = "2026-01-01", ["end_date"] = "2026-10-12" }).</summary>
     public Task<JsonNode> ReportAsync(string report, Dictionary<string, string> parameters, CancellationToken ct) =>
-        GetAsync($"reports/{report}?" + string.Join("&", parameters.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}")), ct);
+        Options.FixtureDirectory is not null ? FixtureAsync(report, ct) : GetAsync($"reports/{report}?" + string.Join("&", parameters.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}")), ct);
+
+    private async Task<JsonNode> FixtureAsync(string name, CancellationToken ct)
+    {
+        var path = Path.Combine(Options.FixtureDirectory!, name + ".json");
+        if (!File.Exists(path)) throw new QuickBooksException($"No QuickBooks fixture for '{name}' at {path}.");
+        return JsonNode.Parse(await File.ReadAllTextAsync(path, ct))!;
+    }
 
     private async Task<JsonNode> GetAsync(string path, CancellationToken ct)
     {
