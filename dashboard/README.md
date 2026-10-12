@@ -1,2 +1,2 @@
-PurpleDashboard (Linux B1, West US 3) code goes here, with its own workflow in
-.github/workflows/dashboard-deploy.yml.
+PurpleDashboard (Linux B1, West US 3) at dashboard.purplepainting.net.
+Deploys via .github/workflows/dashboard-deploy.yml on push to main.
