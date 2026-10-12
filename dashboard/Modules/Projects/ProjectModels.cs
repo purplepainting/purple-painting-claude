@@ -34,6 +34,7 @@ public sealed record ProjectSummary
     public int UnsentChangeOrderCount { get; init; }
     public decimal ActualCost { get; init; }       // time entries + approved/pending vendor bills
     public decimal InvoicedNet { get; init; }      // approved/pending customer invoices, after retention held back
+    public decimal Unpaid { get; init; }           // balance still owed on approved/pending invoices
     public decimal RetentionHeld { get; init; }    // retention withheld on those invoices (earned, collected at the end)
 
     /// <summary>Earned and billed: invoices plus the retention held back on them.</summary>
@@ -44,6 +45,19 @@ public sealed record ProjectSummary
     public DateOnly? NextScheduled { get; init; }  // first scheduled task today or later
 
     public bool IsInternal => HowBidCameIn == "Internal Job";
+
+    /// <summary>Job type in one or two words for the main line.</summary>
+    public string? JobTypeShort => JobType switch
+    {
+        "Residential - Standard Home" => "Residential",
+        "Residential - Custom House" => "Custom Home",
+        "Prevailing Wage" => "Public Works",
+        "Property Management / Production" => "Property Mgmt",
+        var t => t,
+    };
+
+    /// <summary>Money waiting on us (unsent change orders, finished job not fully billed or paid): a dot on the main line.</summary>
+    public bool NeedsAttention => (IsCompleted && HasMoneyOutstanding) || UnsentChangeOrderCount > 0;
 
     public bool IsPreConstruction => Stage == "Pre-Construction / Color Submittals";
 
@@ -79,6 +93,14 @@ public sealed record ProjectSummary
     /// <summary>Invoiced (after retention) − costs: cash position on the job so far.</summary>
     public decimal CashPosition => InvoicedNet - ActualCost;
 
+    /// <summary>Contract left to bill, unpaid invoices, or retention not collected yet.</summary>
+    public bool HasMoneyOutstanding => LeftToBill >= 1 || Unpaid >= 1 || RetentionHeld >= 1;
+
+    /// <summary>Total still to come in: left to bill + unpaid invoices + retention held.</summary>
+    public decimal Outstanding => Math.Max(LeftToBill ?? 0, 0) + Unpaid + RetentionHeld;
+
+    public bool IsCompleted => Stage == "Completed";
+
     /// <summary>Costs so far are more than what's been invoiced.</summary>
     public bool CostsOverBilled => ActualCost > Billed && ActualCost > 0;
 }
@@ -90,27 +112,24 @@ public sealed record CostCodeLine(string? Number, string Name, decimal Labor, de
     public bool HasCosts => Actual != 0;
 }
 
-public sealed record ProjectDetail(string JobId, IReadOnlyList<CostCodeLine> CostCodes)
+/// <summary>Someone who has clocked time on the job. Pay rate is used only to pick the foreman; it's never shown.</summary>
+public sealed record CrewMember(string Name, decimal Hours, DateOnly? LastWorked, bool IsSupervisor, decimal Rate);
+
+public sealed record ProjectDetail(string JobId, IReadOnlyList<CostCodeLine> CostCodes, IReadOnlyList<CrewMember> Crew)
 {
+    /// <summary>
+    /// Foreman = the highest-paid field person on the job (supervisors left out); ties go to
+    /// whoever has the most hours. JobTread has no foreman field, so this is inferred.
+    /// </summary>
+    public CrewMember? Foreman => Crew.Where(c => !c.IsSupervisor && c.Rate > 0)
+        .OrderByDescending(c => c.Rate).ThenByDescending(c => c.Hours).FirstOrDefault();
+
+    /// <summary>Field crew, most hours first. Supervisors are listed separately.</summary>
+    public IEnumerable<CrewMember> FieldCrew => Crew.Where(c => !c.IsSupervisor).OrderByDescending(c => c.Hours);
+    public IEnumerable<CrewMember> Supervisors => Crew.Where(c => c.IsSupervisor).OrderByDescending(c => c.Hours);
+
     public decimal TotalActual => CostCodes.Sum(c => c.Actual);
     public decimal TotalHours => CostCodes.Sum(c => c.Hours);
 
     public decimal? ShareOfCost(CostCodeLine line) => TotalActual > 0 ? line.Actual / TotalActual * 100 : null;
-}
-
-/// <summary>Profit % color bands. Values come from the "Projects:Margin" settings.</summary>
-public sealed class MarginBands
-{
-    public decimal Strong { get; set; } = 30;
-    public decimal Okay { get; set; } = 25;
-    public decimal Baseline { get; set; } = 20;
-
-    public (string Label, string Css) For(decimal? profitPercent) => profitPercent switch
-    {
-        null => ("No contract", "none"),
-        var p when p >= Strong => ("Strong", "strong"),
-        var p when p >= Okay => ("Okay", "okay"),
-        var p when p >= Baseline => ("Baseline", "baseline"),
-        _ => ("Below baseline", "below"),
-    };
 }

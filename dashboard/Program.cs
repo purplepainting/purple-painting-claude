@@ -35,7 +35,6 @@ else
 }
 
 // Modules
-builder.Services.Configure<MarginBands>(builder.Configuration.GetSection("Projects:Margin"));
 builder.Services.AddScoped<ProjectsService>();
 builder.Services.AddScoped<ITileMetric, ActiveProjectsMetric>();
 builder.Services.AddScoped<ScheduleService>();

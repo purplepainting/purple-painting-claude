@@ -76,6 +76,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
                           "id": {}, "name": {}, "number": {}, "actualCost": {}, "projectedPrice": {},
                           "location": { "address": {}, "account": { "name": {} } },
                           "billed": { "_": "documents", "$": { "where": { "and": [["type", "customerInvoice"], ["status", "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } },
+                          "unpaid": { "_": "documents", "$": { "where": { "and": [["type", "customerInvoice"], ["status", "in", ["approved", "pending"]]] } }, "sum": { "$": ["balance"] } },
                           "pendingOrders": { "_": "documents", "$": { "where": { "and": [["type", "customerOrder"], ["status", "pending"]] } }, "sum": { "$": ["price"] }, "count": {} },
                           "unsentChangeOrders": { "_": "documents", "$": { "where": { "and": [["type", "customerOrder"], ["status", "draft"], ["name", "like", "%Change Order%"]] } }, "sum": { "$": ["price"] }, "count": {} },
                           "retainageCostItem": { "held": { "_": "documentCostItems", "$": { "where": { "and": [[["document", "type"], "customerInvoice"], [["document", "status"], "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } } }
@@ -124,6 +125,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             UnsentChangeOrders = job["unsentChangeOrders"].Dec("sum") ?? 0,
             UnsentChangeOrderCount = (int)(job["unsentChangeOrders"].Dec("count") ?? 0),
             InvoicedNet = job["billed"].Dec("sum") ?? 0,
+            Unpaid = job["unpaid"].Dec("sum") ?? 0,
             // Retention lines on invoices are negative; flip to the amount held back.
             RetentionHeld = -(job["retainageCostItem"]?["held"].Dec("sum") ?? 0),
         };
@@ -209,6 +211,12 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
                        "group": { "by": [["costItem", "costCode", "id"], ["costItem", "costCode", "name"], ["costItem", "costCode", "number"]], "aggs": { "cost": { "sum": "cost" }, "minutes": { "sum": "minutes" } } } },
                 "withValues": {}
               },
+              "crew": {
+                "_": "timeEntries",
+                "$": { "size": 100,
+                       "group": { "by": [["user", "id"], ["user", "name"]], "aggs": { "minutes": { "sum": "minutes" }, "rate": { "max": "hourlyRate" }, "last": { "max": "startedAt" } } } },
+                "withValues": {}
+              },
               "bills": {
                 "_": "documents",
                 "$": { "where": { "and": [["type", "vendorBill"], ["status", "in", ["approved", "pending"]]] }, "size": 100 },
@@ -253,8 +261,49 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             .OrderBy(l => l.Number is null)
             .ThenBy(l => l.Number, StringComparer.Ordinal)
             .ToList();
-        return new ProjectDetail(jobId, costCodes);
+        var supervisors = await GetSupervisorIdsAsync(ct);
+        var crew = job["crew"].GroupRows()
+            .Select(row =>
+            {
+                var id = row["user"].Str("id");
+                DateOnly? last = DateTimeOffset.TryParse(row.Str("last"), out var at) ? LocalClock.ToLocalDate(at) : null;
+                return new CrewMember(
+                    row["user"].Str("name") ?? "Unknown",
+                    Math.Round((row.Dec("minutes") ?? 0) / 60m, 1),
+                    last,
+                    id is not null && supervisors.Contains(id),
+                    row.Dec("rate") ?? 0);
+            })
+            .ToList();
+
+        return new ProjectDetail(jobId, costCodes, crew);
     }
+
+    /// <summary>
+    /// User ids of supervisors: internal JobTread members whose role isn't "Field Employee"
+    /// (admins, project managers, office, sales). Cached for 30 minutes.
+    /// </summary>
+    private async Task<HashSet<string>> GetSupervisorIdsAsync(CancellationToken ct) =>
+        (await cache.GetOrCreateAsync("projects:supervisors", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(30);
+            var query = new JsonObject
+            {
+                ["organization"] = new JsonObject
+                {
+                    ["$"] = new JsonObject { ["id"] = options.Value.OrganizationId },
+                    ["memberships"] = Json("""{ "$": { "size": 100, "where": ["isInternal", true] }, "nodes": { "user": { "id": {} }, "role": { "name": {} } } }"""),
+                },
+            };
+            var members = (await jobTread.QueryAsync("projects-roles", query, ct))["organization"]?["memberships"].Nodes() ?? [];
+            return members
+                .Where(m => m["role"].Str("name") != FieldRole)
+                .Select(m => m["user"].Str("id"))
+                .OfType<string>()
+                .ToHashSet();
+        }))!;
+
+    private const string FieldRole = "Field Employee";
 
     private static JsonNode Json(string json) => JsonNode.Parse(json)!;
 

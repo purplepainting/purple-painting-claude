@@ -149,64 +149,63 @@ table.data td.num, table.data th.num { text-align: right; }
 .bar.over > span { background: var(--warn-text); }
 
 /* ---------- Expandable job rows ---------- */
-.job-list { display: grid; gap: 10px; min-width: 0; }
+/* Main line: ring · name + type · billed · profit pill. Everything else is in the dropdown. */
+.job-list { display: grid; gap: 8px; min-width: 0; }
 .job { min-width: 0; }
-/* Grid children default to min-width:auto, which would let a wide table stretch the page on phones. */
-.job-detail > *, .job-row > * { min-width: 0; }
 .job > summary { list-style: none; cursor: pointer; }
 .job > summary::-webkit-details-marker { display: none; }
-.job-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 16px; align-items: center; padding: 14px 16px; min-height: 76px; }
+.job-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 14px; align-items: center; padding: 10px 14px; min-height: 68px; }
+.job-row > * { min-width: 0; }
 .job[open] > .job-row { border-bottom: 1px solid var(--border); }
 @media (hover: hover) { .job > summary:hover { background: #FBFAFD; border-radius: var(--radius); } }
-.job-progress { display: grid; justify-items: center; gap: 2px; min-width: 64px; }
-.job-billed { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.job-title { font-weight: 700; overflow-wrap: anywhere; }
+.job-title { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .job-num { color: var(--muted); font-weight: 500; font-size: 13px; }
-.job-sub { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.job-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-.job-figs { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; }
-.job-figs dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-.job-figs dd { margin: 2px 0 0; font-size: 14px; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
-.job-profit { display: grid; justify-items: end; min-width: 88px; }
-.profit { font-size: 20px; font-weight: 600; padding: 2px 10px; border-radius: 999px; }
-.profit-strong { background: var(--good-bg); color: var(--good-text); }
-.profit-okay { color: var(--good-text); }
-.profit-baseline { color: var(--text); }
-.profit-below { background: var(--warn-bg); color: var(--warn-text); }
-.profit-none { color: var(--muted); }
-.profit-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.profit-dollars { font-size: 13px; font-weight: 600; }
-.job-figs dd.fig-note { font-size: 11px; color: var(--muted); margin-top: 0; line-height: 1.4; }
-.cash { font-size: 11px; color: var(--muted); white-space: nowrap; }
-.cash.neg { color: var(--warn-text); }
+.job-sub { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-pm { color: var(--text); }
+.attention-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn-text); margin-left: 6px; vertical-align: 2px; }
+.job-contract { font-size: 13px; color: var(--text); margin-top: 1px; }
+.job-line-figs { display: grid; grid-template-columns: auto auto; gap: 2px 10px; margin: 0; align-items: baseline; }
+.job-line-figs > div { display: contents; }
+.job-line-figs dt { font-size: 12px; color: var(--muted); text-align: right; }
+.job-line-figs dd { margin: 0; font-size: 14px; text-align: right; white-space: nowrap; }
+.profit { justify-self: end; min-width: 64px; text-align: center; font-size: 18px; font-weight: 600; padding: 4px 12px; border-radius: 999px; }
 .chevron { width: 10px; height: 10px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: 0 4px 4px; transition: transform .15s; }
 .job[open] .chevron { transform: rotate(-135deg); margin-top: 6px; }
-.job-detail { padding: 14px 16px 16px; display: grid; gap: 12px; }
-.job-links { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.job-totals { font-size: 13px; margin-left: auto; }
+
+.job-detail { padding: 14px 16px 16px; display: grid; gap: 14px; }
+.job-detail > * { min-width: 0; }
+.job-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px 20px; margin: 0; }
+.detail-grid.money { padding-top: 12px; border-top: 1px solid var(--border); }
+.detail-grid dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.detail-grid dd { margin: 2px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+.detail-grid dd.num { font-size: 15px; }
+.detail-grid dd.fig-note { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.job-links { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.job-tabs-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.job-panel { display: grid; gap: 14px; }
+.job-panel[hidden] { display: none; }
 .detail-title { font-size: 15px; margin: 4px 0 8px; }
+.crew { margin-bottom: 8px; }
+.crew-list { list-style: none; margin: 0 0 6px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; }
+.crew-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.crew-name { font-weight: 600; }
+.crew-meta { font-size: 12px; color: var(--muted); width: 100%; }
 .job-detail .table-wrap { border: 1px solid var(--border); border-radius: var(--radius-sm); }
 table.data tfoot td { font-weight: 700; border-top: 1px solid var(--border); }
 table.data tr.no-costs td { color: var(--muted); }
 table.data td.used { white-space: nowrap; }
 table.data td.used .bar { width: 60px; margin-right: 6px; }
 
-@media (max-width: 1300px) {
-  /* Ring + name on top; the numbers and profit on the line below. */
-  .job-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "ring main main" "figs figs profit"; gap: 10px 12px; }
-  .job-progress { grid-area: ring; align-self: start; }
-  .job-main { grid-area: main; }
-  .job-figs { grid-area: figs; flex-wrap: wrap; gap: 8px 18px; }
-  .job-profit { grid-area: profit; align-self: end; min-width: 0; }
+@media (max-width: 640px) {
+  /* Phones: ring · name/type · profit. Billed moves under the name. */
+  .job-row { grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; padding: 10px 12px; }
+  .job-row > .ring { grid-row: 1 / span 2; align-self: start; }
+  .job-line-figs { grid-column: 2; grid-row: 2; display: flex; gap: 14px; }
+  .job-line-figs > div { display: flex; gap: 4px; align-items: baseline; }
   .job-row .chevron { display: none; }
-}
-@media (max-width: 520px) {
-  .job-row { padding: 12px; }
-  .job-progress { min-width: 52px; }
-  .profit { font-size: 17px; padding: 2px 8px; }
-  .job-totals { margin-left: 0; width: 100%; }
-  .filters select { flex: 1 1 45%; }
-  .profit-band { display: none; }
+  .profit { grid-column: 3; grid-row: 1 / span 2; font-size: 16px; min-width: 56px; padding: 4px 10px; }
+  .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---------- Scheduling ---------- */
@@ -222,8 +221,9 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
 .button.icon { width: var(--touch); padding: 0; font-size: 22px; line-height: 1; }
 .schedule-toggles { display: flex; gap: 8px; flex-wrap: wrap; }
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; background: var(--card); padding: 3px; }
-.segmented a, .segmented span { display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--text); text-decoration: none; }
-.segmented a.active { background: var(--purple-600); color: #fff; }
+.segmented a, .segmented span, .segmented button { display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--text); text-decoration: none; }
+.segmented a.active, .segmented button.active { background: var(--purple-600); color: #fff; }
+.segmented button { border: 0; background: none; font-family: inherit; cursor: pointer; }
 .segmented .disabled { color: var(--muted); opacity: .6; cursor: default; }
 
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 12px; font-size: 13px; color: var(--muted); }
