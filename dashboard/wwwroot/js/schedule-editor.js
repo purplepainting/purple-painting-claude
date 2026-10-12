@@ -91,12 +91,11 @@
   function label(t) { return ((allJobs[t.jobId] || {}).name || 'Job') + ' · ' + shortName(t.name); }
   function live() { return tasks.filter(function (t) { return !t.deleted; }); }
   function byKey(k) { return tasks.find(function (t) { return t.key === k; }); }
-  function balance(crew) {
-    var n = { foreman: 0, painter: 0, helper: 0 };
-    crew.forEach(function (id) { var l = level(id); if (n[l] !== undefined) n[l]++; });
-    return [n.foreman ? n.foreman + 'F' : '', n.painter ? n.painter + 'P' : '', n.helper ? n.helper + 'H' : ''].filter(Boolean).join(' · ');
-  }
   function money(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
+  // "$1,234 · 24h": either part left out when zero.
+  function costLabel(amount, hours) {
+    return [amount > 0 ? money(amount) : null, hours > 0 ? (Math.round(hours * 10) / 10) + 'h' : null].filter(Boolean).join(' · ');
+  }
 
   // ---- Changes for the review / push ----
   function changes() {
@@ -138,10 +137,11 @@
 
     shown.forEach(function (j) {
       html += '<tr style="--h:' + j.hue + '"><th class="row-head" scope="row"><span class="swatch"></span><span class="row-title">' + esc(j.name) + '</span>'
-        + '<span class="row-sub muted">' + esc(j.type || '') + (j.pm ? ' <span class="pm-tag" style="color:' + esc(j.pmColor) + ';background:color-mix(in srgb,' + esc(j.pmColor) + ' 12%,transparent);border-color:color-mix(in srgb,' + esc(j.pmColor) + ' 35%,transparent)">PM ' + esc(j.pm.split(' ')[0]) + '</span>' : '') + '</span>';
-      var week = 0, est = false;
-      Object.keys(j.costs || {}).forEach(function (d) { week += j.costs[d].amount; if (j.costs[d].estimate) est = true; });
-      if (week > 0) html += '<span class="row-cost num">Week ' + money(week) + (est ? '<span class="muted"> · incl. est.</span>' : '') + '</span>';
+        + (j.type ? '<span class="row-sub muted">' + esc(j.type) + '</span>' : '')
+        + (j.pm ? '<span class="row-pm"><span class="pm-tag" style="color:' + esc(j.pmColor) + ';background:color-mix(in srgb,' + esc(j.pmColor) + ' 12%,transparent);border-color:color-mix(in srgb,' + esc(j.pmColor) + ' 35%,transparent)">PM ' + esc(j.pm.split(' ')[0]) + '</span></span>' : '');
+      var week = 0, weekHours = 0, est = false;
+      Object.keys(j.costs || {}).forEach(function (d) { week += j.costs[d].amount; weekHours += j.costs[d].hours || 0; if (j.costs[d].estimate) est = true; });
+      if (week > 0 || weekHours > 0) html += '<span class="row-cost num">Week ' + costLabel(week, weekHours) + (est ? '<span class="muted"> · incl. est.</span>' : '') + '</span>';
       html += '</th>';
       days.forEach(function (d) {
         html += '<td class="drop" data-job="' + esc(j.id) + '" data-day="' + d + '">';
@@ -154,12 +154,11 @@
             + '<span class="pchips">' + (t.crew.length ? ordered(t.crew).map(function (id) {
               return '<span class="pchip lvl-' + level(id) + (selected && selected.id === id && selected.fromKey === t.key ? ' selected' : '') + '" draggable="true" data-person="' + esc(id) + '" data-from="' + t.key + '" data-day="' + d + '">' + esc(first(id)) + '</span>';
             }).join('') : '<em class="block-sub">Unassigned</em>') + '</span>'
-            + (balance(t.crew) ? '<span class="block-balance">' + balance(t.crew) + '</span>' : '')
             + (t.dependents && !t.isNew ? '<span class="block-sub">⛓ ' + t.dependents + ' linked task' + (t.dependents > 1 ? 's' : '') + ' move with it</span>' : '')
             + '</div>';
         });
         var dc = (j.costs || {})[d];
-        if (dc) html += '<div class="day-cost num' + (dc.estimate ? ' est' : '') + '">' + (dc.estimate ? 'est. ' : '') + money(dc.amount) + '</div>';
+        if (dc) html += '<div class="day-cost num' + (dc.estimate ? ' est' : '') + '">' + (dc.estimate ? 'est. ' : '') + costLabel(dc.amount, dc.hours) + '</div>';
         html += '<button type="button" class="add-day" data-act="add-day" data-job="' + esc(j.id) + '" data-day="' + d + '">+ Add day</button></td>';
       });
       html += '</tr>';
@@ -339,6 +338,61 @@
     });
   }
 
+  // "+ Add day": add a new day (copy of the nearest one), or move one of the job's tasks that's
+  // already in JobTread on another date (when the job's schedule was built out ahead of time).
+  var jobTasks = {};   // job id → tasks outside this week, or 'loading' / 'error'
+  function openAddDay(jobId, day) {
+    var job = allJobs[jobId] || {};
+    var list = jobTasks[jobId];
+    var inDraft = {}; tasks.forEach(function (t) { if (t.id) inDraft[t.id] = true; });
+    var body;
+    if (list === undefined || list === 'loading') body = '<p class="muted">Looking for this job\u2019s other tasks in JobTread\u2026</p>';
+    else if (list === 'error') body = '<p class="notice-inline warn">Couldn\u2019t load this job\u2019s tasks from JobTread. <button type="button" class="link-button" data-act="retry-tasks" data-job="' + esc(jobId) + '" data-day="' + day + '">Try again</button></p>';
+    else {
+      var options = list.filter(function (t) { return !inDraft[t.id]; });
+      body = options.length
+        ? '<ul class="review-list task-pick">' + options.map(function (t) {
+            return '<li><button type="button" class="task-option" data-act="use-task" data-job="' + esc(jobId) + '" data-id="' + esc(t.id) + '" data-day="' + day + '">'
+              + '<b>' + esc(shortName(t.name)) + '</b>'
+              + '<span class="muted small">Now ' + esc(dayLabel(t.start)) + (t.start !== t.end ? '–' + esc(dayLabel(t.end)) : '') + (times(t) ? ' · ' + esc(times(t)) : '')
+              + (t.crew.length ? ' · ' + esc(ordered(t.crew).map(first).join(', ')) : ' · no crew') + '</span>'
+              + (t.dependents ? '<span class="muted small">⛓ ' + t.dependents + ' linked task' + (t.dependents > 1 ? 's' : '') + ' move with it</span>' : '')
+              + '</button></li>';
+          }).join('') + '</ul>'
+        : '<p class="muted">No other upcoming tasks on this job in JobTread.</p>';
+    }
+    panelHtml = '<div class="drawer-scrim" data-act="close-panel"></div><aside class="drawer card" role="dialog" aria-label="Add a day">'
+      + '<h2>Add a day · ' + esc(dayLabel(day)) + '</h2><p class="muted">' + esc(job.name || '') + '</p>'
+      + '<button type="button" class="button" data-act="add-new-day" data-job="' + esc(jobId) + '" data-day="' + day + '">+ New day</button>'
+      + '<p class="muted small">Copies the times, crew and name of the nearest day on this job.</p>'
+      + '<h3 class="detail-title">Or move a task already in JobTread</h3>' + body
+      + '<div class="drawer-actions"><button type="button" class="button secondary" data-act="close-panel">Cancel</button></div></aside>';
+    render();
+    if (list === undefined) {
+      jobTasks[jobId] = 'loading';
+      fetch('?handler=JobTasks&jobId=' + encodeURIComponent(jobId) + '&date=' + data.weekStart, { credentials: 'same-origin' })
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (list) { jobTasks[jobId] = list; })
+        .catch(function () { jobTasks[jobId] = 'error'; })
+        .then(function () {
+          if (panelHtml.indexOf('aria-label="Add a day"') >= 0) openAddDay(jobId, day);
+        });
+    }
+  }
+
+  function useExisting(jobId, id, day) {
+    var src = (Array.isArray(jobTasks[jobId]) ? jobTasks[jobId] : []).find(function (t) { return t.id === id; });
+    if (!src || tasks.some(function (t) { return t.id === id; })) return;
+    var orig = fieldsOf(src);
+    original[id] = orig;
+    tasks.push({
+      key: 'k' + (nextKey++), id: id, jobId: jobId, isNew: false, deleted: false, orig: orig,
+      name: renameForDate(src.name, day), start: day, end: addDays(day, diffDays(src.start, src.end)),
+      startTime: src.startTime, endTime: src.endTime, crew: src.crew.slice(),
+      parentTaskId: src.parentTaskId, taskTypeId: src.taskTypeId, dependents: src.dependents
+    });
+  }
+
   // ---- Events ----
   var drag = null;
   root.addEventListener('dragstart', function (e) {
@@ -372,7 +426,10 @@
     var a = act && act.dataset.act;
     if (a === 'done') { stopEditing(); return; }
     if (a === 'new-task') { openPanel({ jobId: shownJobs[0], name: '', start: data.today >= data.days[0] && data.today <= data.days[6] ? data.today : data.days[0], end: '', startTime: '07:00', endTime: '15:30', crew: [] }, true); return; }
-    if (a === 'add-day') { addDay(act.dataset.job, act.dataset.day); render(); return; }
+    if (a === 'add-day') { openAddDay(act.dataset.job, act.dataset.day); return; }
+    if (a === 'retry-tasks') { delete jobTasks[act.dataset.job]; openAddDay(act.dataset.job, act.dataset.day); return; }
+    if (a === 'add-new-day') { addDay(act.dataset.job, act.dataset.day); panelHtml = ''; render(); return; }
+    if (a === 'use-task') { useExisting(act.dataset.job, act.dataset.id, act.dataset.day); panelHtml = ''; render(); return; }
     if (a === 'cancel-select') { selected = null; render(); return; }
     if (a === 'close-panel') { closePanel(); return; }
     if (a === 'delete-task') {
@@ -421,7 +478,12 @@
   function startEditing() {
     load();
     var draft = readDraft();
-    if (draft && confirmRestore()) { tasks = draft.tasks; shownJobs = draft.shownJobs || shownJobs; nextKey = tasks.length + 1000; }
+    if (draft && confirmRestore()) {
+      tasks = draft.tasks; shownJobs = draft.shownJobs || shownJobs; nextKey = tasks.length + 1000;
+      // Tasks moved in from another week carry what they were in JobTread (for the conflict check).
+      tasks.forEach(function (t) { if (t.id && !original[t.id] && t.orig) original[t.id] = t.orig; });
+      tasks = tasks.filter(function (t) { return !t.id || original[t.id]; });
+    }
     view.hidden = true; root.hidden = false; editBtn.hidden = true;
     document.querySelectorAll('[data-view-only] .segmented').forEach(function (s) { s.hidden = true; });
     render();

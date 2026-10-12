@@ -39,20 +39,36 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
         {
             entry.AbsoluteExpirationRelativeToNow = CacheFor;
             entry.AddExpirationToken(new Microsoft.Extensions.Primitives.CancellationChangeToken(resetSignal.Token));
-            return (IReadOnlyList<ScheduleTask>)(await LoadAsync(from, to, ct)).Where(t => !t.IsInternal).ToList();
+            var overlaps = new JsonArray(
+                new JsonArray("startDate", "<=", to.ToString("yyyy-MM-dd")),
+                new JsonArray("endDate", ">=", from.ToString("yyyy-MM-dd")));
+            return (IReadOnlyList<ScheduleTask>)(await LoadAsync(overlaps, "schedule-week", ct)).Where(t => !t.IsInternal).ToList();
         }))!;
     }
 
-    private async Task<List<ScheduleTask>> LoadAsync(DateOnly from, DateOnly to, CancellationToken ct)
+    /// <summary>
+    /// A job's tasks that start in [from, to], unfinished. For "+ Add day": a job whose schedule is
+    /// already built out in JobTread can move one of its existing tasks instead of adding a new one.
+    /// </summary>
+    public async Task<IReadOnlyList<ScheduleTask>> GetJobTasksAsync(string jobId, DateOnly from, DateOnly to, CancellationToken ct = default)
+    {
+        var conditions = new JsonArray(
+            new JsonArray(new JsonArray("job", "id"), "=", jobId),
+            new JsonArray("startDate", ">=", from.ToString("yyyy-MM-dd")),
+            new JsonArray("startDate", "<=", to.ToString("yyyy-MM-dd")));
+        return (await LoadAsync(conditions, "schedule-job-tasks", ct, maxPages: 4)).Where(t => !t.Completed).ToList();
+    }
+
+    private async Task<List<ScheduleTask>> LoadAsync(JsonArray conditions, string queryName, CancellationToken ct, int maxPages = int.MaxValue)
     {
         var result = new List<ScheduleTask>();
         string? page = null;
+        var pages = 0;
         do
         {
             var where = JsonNode.Parse("""{ "and": [["isToDo", false], ["isGroup", false], [["job", "id"], "!=", null]] }""")!;
             var and = (JsonArray)where["and"]!;
-            and.Add(new JsonArray("startDate", "<=", to.ToString("yyyy-MM-dd")));
-            and.Add(new JsonArray("endDate", ">=", from.ToString("yyyy-MM-dd")));
+            foreach (var c in conditions) and.Add(c!.DeepClone());
 
             var args = new JsonObject { ["where"] = where, ["size"] = PageSize, ["sortBy"] = JsonNode.Parse("""[{ "field": "startDate" }]""") };
             if (page is not null) args["page"] = page;
@@ -86,11 +102,11 @@ public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache
                 },
             };
 
-            var connection = (await jobTread.QueryAsync(page is null ? "schedule-week" : "schedule-week-more", query, ct))["organization"]?["tasks"];
+            var connection = (await jobTread.QueryAsync(page is null ? queryName : queryName + "-more", query, ct))["organization"]?["tasks"];
             foreach (var task in connection.Nodes())
                 if (ToTask(task) is { } t) result.Add(t);
             page = connection.Str("nextPage");
-        } while (page is not null);
+        } while (page is not null && ++pages < maxPages);
 
         return result;
     }

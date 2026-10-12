@@ -59,6 +59,18 @@ public partial class IndexModel(
         (Costs.Where(c => c.Key.JobId == jobId && !c.Value.IsEstimate).Sum(c => c.Value.Amount),
          Costs.Where(c => c.Key.JobId == jobId && c.Value.IsEstimate).Sum(c => c.Value.Amount));
 
+    public decimal WeekHours(string jobId) => Costs.Where(c => c.Key.JobId == jobId).Sum(c => c.Value.Hours);
+
+    public decimal PersonWeekHours(string name) => PersonCosts.Where(c => c.Key.Name == name).Sum(c => c.Value.Hours);
+
+    /// <summary>Hours one person is scheduled for on a task's day (0 without start and end times).</summary>
+    public static decimal ScheduledHours(ScheduleTask t) =>
+        t.StartTime is { } s && t.EndTime is { } e && e > s ? (decimal)(e - s).TotalHours : 0;
+
+    /// <summary>"$1,234 · 24h" for a cost cell; either part is left out when zero.</summary>
+    public static string CostLabel(DayCost c) =>
+        string.Join(" · ", new[] { c.Amount > 0 ? Format.Money(c.Amount) : null, c.Hours > 0 ? Format.Number(Math.Round(c.Hours, 1)) + "h" : null }.OfType<string>());
+
     /// <summary>JSON for the schedule editor (week view only).</summary>
     public string? EditorJson { get; private set; }
 
@@ -120,6 +132,40 @@ public partial class IndexModel(
         return new JsonResult(new { results });
     }
 
+    /// <summary>
+    /// The job's upcoming unfinished tasks outside this week, for "+ Add day" (move one instead of adding).
+    /// GET ?handler=JobTasks&amp;jobId=…&amp;date=yyyy-MM-dd (any day in the week shown).
+    /// </summary>
+    public async Task<IActionResult> OnGetJobTasksAsync(string jobId, CancellationToken ct)
+    {
+        if (!JobIdPattern().IsMatch(jobId ?? "")) return BadRequest();
+        var from = LocalClock.WeekStart(Date ?? Today);
+        try
+        {
+            var list = await schedule.GetJobTasksAsync(jobId!, from.AddDays(-14), from.AddDays(120), ct);
+            return new JsonResult(list
+                .Where(t => t.End < from || t.Start > from.AddDays(6))
+                .OrderBy(t => t.Start)
+                .Take(40)
+                .Select(t => new
+                {
+                    id = t.Id, jobId = t.JobId, name = t.Name,
+                    start = t.Start.ToString("yyyy-MM-dd"), end = t.End.ToString("yyyy-MM-dd"),
+                    startTime = t.StartTime?.ToString("HH:mm"), endTime = t.EndTime?.ToString("HH:mm"),
+                    crew = t.Crew.Select(c => c.MembershipId),
+                    parentTaskId = t.ParentTaskId, taskTypeId = t.TaskTypeId, dependents = t.Dependents,
+                }));
+        }
+        catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
+        {
+            logger.LogWarning(e, "Loading tasks for job {JobId} failed", jobId);
+            return StatusCode(502, new { error = "Couldn't load this job's tasks from JobTread." });
+        }
+    }
+
+    [GeneratedRegex("^[A-Za-z0-9]{1,32}$")]
+    private static partial Regex JobIdPattern();
+
     /// <summary>Labor cost per person per day (by-person view): actual up to today, estimated after.</summary>
     public Dictionary<(string Name, DateOnly Day), DayCost> PersonCosts { get; } = [];
 
@@ -137,14 +183,17 @@ public partial class IndexModel(
             {
                 if (day <= Today)
                 {
-                    if (actual.TryGetValue((st.UserId, day), out var a) && a.Cost > 0) PersonCosts[(name, day)] = new DayCost(a.Cost, false);
+                    if (actual.TryGetValue((st.UserId, day), out var a) && (a.Cost > 0 || a.Minutes > 0)) PersonCosts[(name, day)] = new DayCost(a.Cost, false, a.Minutes / 60m);
                 }
                 else
                 {
-                    decimal est = 0;
+                    decimal est = 0, hours = 0;
                     foreach (var t in Tasks.Where(t => t.Covers(day) && t.Crew.Any(c => c.MembershipId == st.MembershipId)))
+                    {
                         est += await laborCosts.EstimatePersonAsync(t, st.MembershipId, ct) ?? 0;
-                    if (est > 0) PersonCosts[(name, day)] = new DayCost(est, true);
+                        hours += ScheduledHours(t);
+                    }
+                    if (est > 0 || hours > 0) PersonCosts[(name, day)] = new DayCost(est, true, hours);
                 }
             }
         }
@@ -167,7 +216,8 @@ public partial class IndexModel(
                             // Only this schedule's people: painters on Crew, supervisors on Supervisors.
                             var users = a.MinutesByUser.Keys.Where(InView).ToList();
                             var cost = users.Sum(u => a.CostByUser.GetValueOrDefault(u));
-                            if (cost > 0) Costs[(jobId, day)] = new DayCost(cost, false);
+                            var minutes = users.Sum(u => a.MinutesByUser.GetValueOrDefault(u));
+                            if (cost > 0 || minutes > 0) Costs[(jobId, day)] = new DayCost(cost, false, minutes / 60m);
                             Actual[(jobId, day)] = users
                                 .Select(u => (Name: staffByUserId.TryGetValue(u, out var st) ? st.Name : "Unknown", Hours: Math.Round(a.MinutesByUser[u] / 60m, 1)))
                                 .OrderByDescending(x => x.Hours)
@@ -176,10 +226,13 @@ public partial class IndexModel(
                     }
                     else
                     {
-                        decimal est = 0;
+                        decimal est = 0, hours = 0;
                         foreach (var t in Tasks.Where(t => t.JobId == jobId && t.Covers(day)))
+                        {
                             est += await laborCosts.EstimateAsync(t, ct) ?? 0;
-                        if (est > 0) Costs[(jobId, day)] = new DayCost(est, true);
+                            hours += ScheduledHours(t) * t.Crew.Count;
+                        }
+                        if (est > 0 || hours > 0) Costs[(jobId, day)] = new DayCost(est, true, hours);
                     }
                 }
             }
@@ -219,7 +272,7 @@ public partial class IndexModel(
             jobs = jobsOnSchedule.OrderBy(j => j.JobName, StringComparer.OrdinalIgnoreCase).Select(j => new
             {
                 id = j.JobId, name = j.JobName, type = ShortType(j.JobType), pm = j.ProjectManager, pmColor = Team.PmColor(j.ProjectManager), hue = JobColors.HueFor(j.JobId),
-                costs = Days.Where(d => Costs.ContainsKey((j.JobId, d))).ToDictionary(d => d.ToString("yyyy-MM-dd"), d => new { amount = Math.Round(Costs[(j.JobId, d)].Amount), estimate = Costs[(j.JobId, d)].IsEstimate }),
+                costs = Days.Where(d => Costs.ContainsKey((j.JobId, d))).ToDictionary(d => d.ToString("yyyy-MM-dd"), d => new { amount = Math.Round(Costs[(j.JobId, d)].Amount), estimate = Costs[(j.JobId, d)].IsEstimate, hours = Math.Round(Costs[(j.JobId, d)].Hours, 1) }),
             }),
             addableJobs = addable,
             tasks = Tasks.Select(t => new
@@ -253,17 +306,6 @@ public partial class IndexModel(
     private bool InView(string userId) => (staffByUserId.TryGetValue(userId, out var st) && !st.IsField) == Supervisors;
 
     public bool IsSupervisorTask(ScheduleTask t) => t.Crew.Count > 0 && t.Crew.All(c => LevelOf(c.Name) == "supervisor");
-
-    /// <summary>"1F · 2P · 1H": the crew balance on a task.</summary>
-    public string Balance(ScheduleTask t)
-    {
-        var levels = t.People.Select(LevelOf).Where(l => l != "supervisor").ToList();
-        if (levels.Count == 0) return "";
-        var parts = new List<string>();
-        void Add(string level, string letter) { var n = levels.Count(l => l == level); if (n > 0) parts.Add($"{n}{letter}"); }
-        Add("foreman", "F"); Add("painter", "P"); Add("helper", "H");
-        return string.Join(" · ", parts);
-    }
 
     private List<ScheduleRow> RowsByJob() => Tasks
         .GroupBy(t => t.JobId)
