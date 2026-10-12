@@ -86,6 +86,7 @@ else
                     </div>
 
                     <dl class="job-figs">
+                        <div><dt>Activity</dt><dd>@Model.Activity(job)</dd></div>
                         <div><dt>Dates</dt><dd>@Format.DateRange(job.Start, job.End)</dd></div>
                         <div><dt>Contract</dt><dd class="num">@Format.Money(job.Contract)</dd></div>
                         <div class="job-budget">

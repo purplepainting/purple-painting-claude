@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using PurpleDashboard.Infrastructure;
 using PurpleDashboard.Integrations.JobTread;
 using static PurpleDashboard.Integrations.JobTread.JobTreadIds;
 
@@ -29,9 +30,11 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         {
             entry.AbsoluteExpirationRelativeToNow = CacheFor;
             var jobs = await LoadOpenJobsAsync(ct);
-            var dates = await LoadJobDatesAsync(jobs.Where(j => j.Stage is not null).Select(j => j.Id).ToList(), ct);
+            var activity = await LoadActivityAsync(jobs.Where(j => j.Stage is not null).Select(j => j.Id).ToList(), ct);
             return (IReadOnlyList<ProjectSummary>)jobs
-                .Select(j => dates.TryGetValue(j.Id, out var d) ? j with { Start = d.Start, End = d.End } : j)
+                .Select(j => activity.TryGetValue(j.Id, out var a)
+                    ? j with { Start = a.Start, End = a.End, LastTimeEntry = a.LastTime, NextScheduled = a.Next }
+                    : j)
                 .ToList();
         }))!;
     }
@@ -118,40 +121,66 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         };
     }
 
-    /// <summary>First and last scheduled task date per job, in chunks of 100 jobs.</summary>
-    private async Task<Dictionary<string, (DateOnly? Start, DateOnly? End)>> LoadJobDatesAsync(List<string> jobIds, CancellationToken ct)
+    private sealed record JobActivity(DateOnly? Start, DateOnly? End, DateOnly? LastTime, DateOnly? Next);
+
+    /// <summary>
+    /// Per job: first/last scheduled task, most recent clock-in, and next scheduled day.
+    /// One JobTread call per 100 jobs, using grouped queries.
+    /// </summary>
+    private async Task<Dictionary<string, JobActivity>> LoadActivityAsync(List<string> jobIds, CancellationToken ct)
     {
-        var result = new Dictionary<string, (DateOnly?, DateOnly?)>();
+        var start = new Dictionary<string, DateOnly?>();
+        var end = new Dictionary<string, DateOnly?>();
+        var lastTime = new Dictionary<string, DateOnly?>();
+        var next = new Dictionary<string, DateOnly?>();
+        var today = LocalClock.Today.ToString("yyyy-MM-dd");
+
         foreach (var chunk in jobIds.Chunk(100))
         {
-            var where = Json("""{ "and": [["isToDo", false], ["isGroup", false]] }""");
-            ((JsonArray)where["and"]!).Add(new JsonArray(new JsonArray("job", "id"), "in", new JsonArray(chunk.Select(id => (JsonNode)id!).ToArray())));
+            JsonArray Ids() => new(chunk.Select(id => (JsonNode)id!).ToArray());
+            JsonArray JobIn() => new(new JsonArray("job", "id"), "in", Ids());
+
+            var scheduledWhere = Json("""{ "and": [["isToDo", false], ["isGroup", false]] }""");
+            ((JsonArray)scheduledWhere["and"]!).Add(JobIn());
+            var upcomingWhere = Json("""{ "and": [["isToDo", false], ["isGroup", false]] }""");
+            ((JsonArray)upcomingWhere["and"]!).Add(new JsonArray("startDate", ">=", today));
+            ((JsonArray)upcomingWhere["and"]!).Add(JobIn());
+
+            JsonObject Grouped(string connection, JsonNode where, string aggs) => new()
+            {
+                ["_"] = connection,
+                ["$"] = new JsonObject
+                {
+                    ["where"] = where,
+                    ["size"] = 100,
+                    ["group"] = Json($$"""{ "by": [["job", "id"]], "aggs": {{aggs}} }"""),
+                },
+                ["withValues"] = new JsonObject(),
+            };
 
             var query = new JsonObject
             {
                 ["organization"] = new JsonObject
                 {
                     ["$"] = new JsonObject { ["id"] = options.Value.OrganizationId },
-                    ["tasks"] = new JsonObject
-                    {
-                        ["$"] = new JsonObject
-                        {
-                            ["where"] = where,
-                            ["size"] = 100,
-                            ["group"] = Json("""{ "by": [["job", "id"]], "aggs": { "start": { "min": "startDate" }, "end": { "max": "endDate" } } }"""),
-                        },
-                        ["withValues"] = new JsonObject(),
-                    },
+                    ["dates"] = Grouped("tasks", scheduledWhere, """{ "start": { "min": "startDate" }, "end": { "max": "endDate" } }"""),
+                    ["upcoming"] = Grouped("tasks", upcomingWhere, """{ "next": { "min": "startDate" } }"""),
+                    ["lastTime"] = Grouped("timeEntries", JobIn(), """{ "last": { "max": "startedAt" } }"""),
                 },
             };
-            var response = await jobTread.QueryAsync("projects-dates", query, ct);
-            foreach (var row in response["organization"]?["tasks"].GroupRows() ?? [])
-            {
-                var id = row["job"].Str("id");
-                if (id is not null) result[id] = (row.Date("start"), row.Date("end"));
-            }
+            var org = (await jobTread.QueryAsync("projects-activity", query, ct))["organization"];
+
+            foreach (var row in org?["dates"].GroupRows() ?? [])
+                if (row["job"].Str("id") is { } id) { start[id] = row.Date("start"); end[id] = row.Date("end"); }
+            foreach (var row in org?["upcoming"].GroupRows() ?? [])
+                if (row["job"].Str("id") is { } id) next[id] = row.Date("next");
+            foreach (var row in org?["lastTime"].GroupRows() ?? [])
+                if (row["job"].Str("id") is { } id && DateTimeOffset.TryParse(row.Str("last"), out var at))
+                    lastTime[id] = LocalClock.ToLocalDate(at);
         }
-        return result;
+
+        return jobIds.ToDictionary(id => id, id => new JobActivity(
+            start.GetValueOrDefault(id), end.GetValueOrDefault(id), lastTime.GetValueOrDefault(id), next.GetValueOrDefault(id)));
     }
 
     private async Task<ProjectDetail> LoadDetailAsync(string jobId, CancellationToken ct)

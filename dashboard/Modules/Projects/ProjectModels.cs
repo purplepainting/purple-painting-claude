@@ -21,8 +21,29 @@ public sealed record ProjectSummary
     public decimal Billed { get; init; }           // approved/pending customer invoices
     public DateOnly? Start { get; init; }          // first scheduled task
     public DateOnly? End { get; init; }            // last scheduled task
+    public DateOnly? LastTimeEntry { get; init; }  // most recent clock-in on the job
+    public DateOnly? NextScheduled { get; init; }  // first scheduled task today or later
 
     public bool IsInternal => HowBidCameIn == "Internal Job";
+
+    public bool IsPreConstruction => Stage == "Pre-Construction / Color Submittals";
+
+    /// <summary>
+    /// Days between today and the nearest activity: the last clock-in (past) or the next scheduled
+    /// day (future). Smaller = more active. Null when the job has neither.
+    /// </summary>
+    public int? ActivityDistance(DateOnly today)
+    {
+        int? last = LastTimeEntry is { } l ? today.DayNumber - l.DayNumber : null;
+        int? next = NextScheduled is { } n ? n.DayNumber - today.DayNumber : null;
+        return (last, next) switch
+        {
+            (null, null) => null,
+            ({ } a, null) => a,
+            (null, { } b) => b,
+            ({ } a, { } b) => Math.Min(a, b),
+        };
+    }
 
     /// <summary>Costs to date ÷ budgeted cost. Null when there's no budget.</summary>
     public decimal? PercentComplete => BudgetCost > 0 ? ActualCost / BudgetCost * 100 : null;

@@ -17,7 +17,7 @@ Locally there's no Entra sign-in in front of the app, so you're shown as "Local 
 To see real JobTread data locally, set the grant key first: `dotnet user-secrets set JOBTREAD_API_KEY <key>`
 (never put it in a file in the repo). Or point at saved sample responses with
 `JobTread__FixtureDirectory=/path/to/folder dotnet run`, where the folder has one `{query name}.json`
-per query (`projects-list`, `projects-dates`, `projects-detail`, `schedule-week`).
+per query (`projects-list`, `projects-activity`, `projects-detail`, `schedule-week`).
 
 ## Layout
 

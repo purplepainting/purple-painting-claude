@@ -97,7 +97,7 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 - "/" opens the Projects list. Global search comes later.
 
 ### 1. Projects (JobTread)
-- Default view: **all active jobs**.
+- Default view: **all active jobs**, sorted **most active first**: nearest clock-in or scheduled day to today. Jobs in Pre-Construction / Color Submittals haven't started, so they sort to the bottom. Each row shows that activity ("Today", "Next Wed 10/14", "Last time Oct 6").
 - Saved views as pills (e.g. All active, Starting this week, Over budget, Public works) plus "+ Save current view". Saved views are stored per user in the dashboard DB.
 - Filters: status, job type, project manager, text search (name/address).
 - Table columns: job, customer, stage (chip), dates, contract amount, budget used (bar + %, warning color over 100%), link to SharePoint folder.

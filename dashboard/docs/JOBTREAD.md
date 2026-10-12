@@ -88,4 +88,14 @@ The schedule is `tasks` (with `isToDo = false`). There's no crew object in JobTr
 - Tasks without a job are office/admin items (payroll, payables, HR). `taskType { name, color }` labels them (e.g. "Admin - Payroll 💸", "Project - Production 🖌️", "Project - SOW 📋").
 - Fields: `startDate`, `endDate`, `startTime`, `endTime`, `progress` (0–1), `completed`.
 
-Job start/end dates (Projects list): `organization.tasks` where `isToDo = false`, `isGroup = false`, `job.id in [...]`, grouped by `job.id` → `min startDate`, `max endDate`.
+Projects list activity (one call per 100 jobs, three grouped aliases on `organization`):
+
+- `dates`: `tasks` where `isToDo = false`, `isGroup = false`, `job.id in [...]`, grouped by `job.id` → `min startDate`, `max endDate`.
+- `upcoming`: same, plus `startDate >= today` → `min startDate` (next scheduled day).
+- `lastTime`: `timeEntries` where `job.id in [...]`, grouped by `job.id` → `max startedAt` (UTC timestamp; convert to Pacific).
+
+Where-clause note: a single condition is passed bare (`"where": [["job","id"], "in", [...]]`), not wrapped in another array.
+
+## Time entries
+
+`timeEntries` fields: `startedAt`, `endedAt` (UTC timestamps), `minutes`, `cost`, `hourlyRate`, `isApproved`, `type`, `user`, `job`, `costItem`, `notes`.
