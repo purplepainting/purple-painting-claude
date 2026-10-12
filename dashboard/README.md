@@ -17,40 +17,41 @@ Locally there's no Entra sign-in in front of the app, so you're shown as "Local 
 To see real JobTread data locally, set the grant key first: `dotnet user-secrets set JOBTREAD_API_KEY <key>`
 (never put it in a file in the repo). Or point at saved sample responses with
 `JobTread__FixtureDirectory=/path/to/folder dotnet run`, where the folder has one `{query name}.json`
-per query (`projects-list`, `projects-dates`, `projects-detail`).
+per query (`projects-list`, `projects-activity`, `projects-detail`, `schedule-week`).
 
 ## Layout
 
 | Path | What it is |
 |---|---|
 | `Program.cs` | App startup: services, routes, `/health` |
-| `Modules/ModuleRegistry.cs` | **The list of modules.** Launchpad tiles come from here, in order |
+| `Modules/ModuleRegistry.cs` | **The list of modules.** The left menu comes from here, in order; the first one is the home page |
 | `Auth/CurrentUser.cs` | The signed-in user, from Easy Auth headers. Inject `CurrentUser` anywhere |
-| `Pages/Index.cshtml` | Launchpad (home) |
 | `Pages/ComingSoon.cshtml` | Placeholder page for any module that isn't built yet |
-| `Pages/Shared/_Layout.cshtml` | Top bar and page frame used by every page |
-| `Pages/Shared/_Icon.cshtml` | Line icons used on tiles |
+| `Pages/Shared/_Layout.cshtml` | Left menu, top bar and page frame used by every page |
+| `ViewComponents/SideNavViewComponent.cs` | Builds the left menu tiles and their numbers |
+| `Pages/Shared/_Icon.cshtml` | Line icons used on menu tiles |
 | `wwwroot/css/site.css` | All styles. Colors, fonts and sizes are CSS variables at the top |
 | `wwwroot/js/site.js` | Small optional scripts (auto-submit filters, load expanded rows) |
 | `Integrations/JobTread/` | The JobTread client. Every JobTread call goes through `IJobTreadClient` |
 | `Modules/Projects/` | Projects data: models, preset views, `ProjectsService` (JobTread queries) |
+| `Modules/Scheduling/` | Schedule data: `ScheduleService` (JobTread tasks), job type colors |
 | `Infrastructure/` | Shared helpers: `LocalClock` (Pacific time), `Format` (money, %, dates) |
 | `docs/JOBTREAD.md` | How our JobTread data is structured and how to query it |
 
 ## Common changes
 
-**Rename, reorder or re-describe a tile:** edit its line in `Modules/ModuleRegistry.cs`.
+**Rename, reorder or re-describe a menu tile:** edit its line in `Modules/ModuleRegistry.cs`.
 
-**Add a new module:** add a line to `ModuleRegistry.All`. It shows up on the launchpad
+**Add a new module:** add a line to `ModuleRegistry.All`. It shows up in the left menu
 straight away with a "Coming soon" page.
 
 **Build out a module** (Projects as the example):
 1. Create `Pages/Projects/Index.cshtml` starting with `@page "/projects"` (the module's key).
    A literal route like this takes priority over the Coming soon page.
-2. In the page, set `ViewData["ModuleName"] = "Projects";` to get the "← Dashboard" top bar.
+2. In the page, set `ViewData["ModuleName"] = "Projects";` for the top bar title.
 3. In `ModuleRegistry.cs`, set the module's status to `ModuleStatus.Live`.
 
-**Add a launchpad key number:** implement `ITileMetric` for the module and register it in `Program.cs`
+**Add a menu tile key number:** implement `ITileMetric` for the module and register it in `Program.cs`
 (see `ActiveProjectsMetric`).
 
 **Add or change a Projects view pill:** edit `Modules/Projects/ProjectViews.cs`.

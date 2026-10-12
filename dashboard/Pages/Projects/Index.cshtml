@@ -69,8 +69,8 @@ else
             <details class="job card" data-detail-url="/projects/@job.Id/detail">
                 <summary class="job-row">
                     <div class="job-progress">
-                        <partial name="_Ring" model="@((job.PercentComplete, "Complete"))" />
-                        <span class="job-billed num" title="Billed ÷ contract">@Format.Percent(job.BilledPercent) billed</span>
+                        <partial name="_Ring" model="@((job.BilledPercent, "Billed"))" />
+                        <span class="job-billed">billed</span>
                     </div>
 
                     <div class="job-main">
@@ -78,28 +78,47 @@ else
                         <div class="job-sub muted">@job.Customer@(job.Address is null ? "" : " · " + job.Address)</div>
                         <div class="job-chips">
                             <span class="chip @IndexModel.StageCss(job.Stage)">@(job.Stage ?? job.BidStage ?? "Bid")</span>
-                            @if (job.UnderBilled) { <span class="chip warn">Under-billed: send a pay app</span> }
-                            @if (job.OverBudget) { <span class="chip warn">Over budget</span> }
+                            @if (job.UnsentChangeOrderCount > 0) { <span class="chip warn">@job.UnsentChangeOrderCount unsent @(job.UnsentChangeOrderCount == 1 ? "change order" : "change orders") · @Format.Money(job.UnsentChangeOrders)</span> }
+                            @if (job.CostsOverBilled) { <span class="chip warn">Costs ahead of billing</span> }
                             @if (job.JobType is not null) { <span class="tag">@job.JobType</span> }
                             @if (job.ProjectManager is not null) { <span class="tag">PM @job.ProjectManager</span> }
                         </div>
                     </div>
 
                     <dl class="job-figs">
+                        <div><dt>Activity</dt><dd>@Model.Activity(job)</dd></div>
                         <div><dt>Dates</dt><dd>@Format.DateRange(job.Start, job.End)</dd></div>
-                        <div><dt>Contract</dt><dd class="num">@Format.Money(job.Contract)</dd></div>
-                        <div class="job-budget">
-                            <dt>Budget used</dt>
-                            <dd>
-                                <span class="bar@(job.OverBudget ? " over" : "")"><span style="width:@Math.Min(job.PercentComplete ?? 0, 100).ToString("0", System.Globalization.CultureInfo.InvariantCulture)%"></span></span>
-                                <span class="num">@Format.Money(job.ActualCost) / @Format.Money(job.BudgetCost)</span>
-                            </dd>
+                        <div>
+                            <dt>Contract</dt>
+                            <dd class="num">@Format.Money(job.Contract)</dd>
+                            @if (job.ContractIncludesPending)
+                            {
+                                <dd class="fig-note num">Approved @Format.Money(job.ApprovedContract)</dd>
+                                <dd class="fig-note num" title="Change orders sent and waiting on approval">Pending @Format.Money(job.PendingOrders)</dd>
+                            }
                         </div>
+                        @if (job.PendingOrders > 0 && job.Stage is null)
+                        {
+                            <div><dt>Proposal pending</dt><dd class="num">@Format.Money(job.PendingOrders)</dd></div>
+                        }
+                        <div><dt>Left to bill</dt><dd class="num">@Format.Money(job.LeftToBill)</dd></div>
+                        <div><dt>Billed</dt><dd class="num">@Format.Money(job.Billed)</dd></div>
+                        @if (job.RetentionHeld > 0)
+                        {
+                            <div><dt>Retention held</dt><dd class="num">@Format.Money(job.RetentionHeld)</dd></div>
+                        }
+                        <div><dt>Costs</dt><dd class="num">@Format.Money(job.ActualCost)</dd></div>
                     </dl>
 
                     <div class="job-profit">
-                        <span class="profit profit-@band.Css num" title="(Billed − costs) ÷ billed">@Format.Percent(job.ProfitPercent)</span>
-                        <span class="profit-label">@(job.ProfitPercent is null ? "Not billed" : "Profit")@if (job.ProfitPercent is not null) {<span class="profit-band"> · @band.Label</span>}</span>
+                        <span class="profit profit-@band.Css num" title="(Contract incl. pending COs − costs) ÷ contract">@Format.Percent(job.ProfitPercent)</span>
+                        <span class="profit-dollars num@(job.Profit < 0 ? " neg" : "")" title="Contract − costs to date">@Format.Money(job.Profit)</span>
+                        <span class="profit-label">@(job.Contract is null ? "No contract yet" : "Profit")@if (job.ProfitPercent is not null) {<span class="profit-band"> · @band.Label</span>}</span>
+                        @if (job.ContractIncludesPending)
+                        {
+                            <span class="cash num" title="Approved contract − costs, if no pending change orders go through">On approved only @Format.Money(job.ProfitOnApproved)</span>
+                        }
+                        <span class="cash num@(job.CashPosition < 0 ? " neg" : "")" title="Invoiced after retention − costs">Cash @Format.Money(job.CashPosition)</span>
                     </div>
 
                     <span class="chevron" aria-hidden="true"></span>
@@ -112,7 +131,6 @@ else
                         {
                             <a class="button secondary" href="@job.FolderUrl" target="_blank" rel="noopener">SharePoint folder</a>
                         }
-                        <span class="muted job-totals num">Billed @Format.Money(job.Billed) · Costs @Format.Money(job.ActualCost)</span>
                     </div>
                     <div class="job-detail-body" aria-live="polite"><p class="muted">Loading cost codes…</p></div>
                 </div>

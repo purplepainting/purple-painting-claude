@@ -34,7 +34,7 @@ Open jobs: `organization.jobs` with `where: ["closedOn", null]`. Around 150 open
 | `projectedPrice` | Contract: total of approved customer orders |
 | `actualCost` | Costs to date: time entries + approved and pending vendor bills (verified to the cent) |
 | `projectedCost` | JobTread's projected final cost (not used yet) |
-| `costItems` where `document.id` is null | The job budget. Sum `cost` for budgeted cost |
+| `costItems` where `document.id` is null | The job budget (copied from the estimate). **Not used for numbers**: Purple Painting doesn't maintain it. The dashboard only uses it to list the cost codes on a job |
 | `closedOn` | Set when the job is closed |
 | `startTask`, `endTask` | Usually empty in our account. Use scheduled task dates instead (below) |
 
@@ -60,18 +60,25 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 
 | Number | How it's read |
 |---|---|
-| Contract | `job.projectedPrice` |
-| Billed | `documents` where `type = customerInvoice` and `status in [approved, pending]`, sum `price` |
+| Approved contract | `job.projectedPrice` = approved customer orders (proposal + approved change orders). The dashboard's contract adds pending change orders on production jobs |
+| Pending change orders | `documents` where `type = customerOrder`, `status = pending`, sum `price`. On a bid this is the proposal waiting on the customer |
+| Unsent change orders | `documents` where `type = customerOrder`, `status = draft`, `name like "%Change Order%"`. The name filter skips old draft proposals |
+| Invoiced (net) | `documents` where `type = customerInvoice` and `status in [approved, pending]`, sum `price`. **This is after retention is held back** |
+| Retention held | `job.retainageCostItem.documentCostItems` where `document.type = customerInvoice`, `document.status in [approved, pending]`, sum `price` (negative; flip the sign). `job.defaultRetainagePercentage` is the rate (e.g. 0.1) |
+| Billed (earned) | Invoiced (net) + retention held. Used for the billed ring and left to bill |
 | Costs to date | `job.actualCost` |
-| Budgeted cost | `costItems` where `document.id` is null, sum `cost` |
 
-Document types seen: `customerOrder` (proposal/contract), `customerInvoice`, `vendorBill`. Statuses: `draft`, `pending`, `approved`, `denied`. Draft and denied are ignored everywhere.
+Pay apps (`isPaymentApplication = true`) carry a negative "Retainage" line linked to the job's `retainageCostItem`, so each invoice's `price` is net of retention.
+
+Change orders are `customerOrder` documents named "Change Order". A job's estimate can also hold unselected option lines (`isSelected = false`); they're in the budget but not the contract (First Presbyterian: $32k budget vs $12k contract).
+
+Document types seen: `customerOrder` (proposal, change orders), `customerInvoice`, `vendorBill`. Statuses: `draft`, `pending`, `approved`, `denied`. Draft and denied are ignored everywhere.
 
 ### Costs by cost code (Projects expanded row)
 
 Three grouped queries on the job, merged by cost code id:
 
-- Budget: `costItems` where `document.id` is null, group by `costCode` → sum `cost`.
+- Codes on the job: `costItems` where `document.id` is null, group by `costCode` (amounts ignored).
 - Labor: `timeEntries`, group by `costItem.costCode` → sum `cost`, sum `minutes`.
 - Bills: `documents` where `type = vendorBill`, `status in [approved, pending]`, then each bill's `costItems` grouped by `costCode` → sum `cost`.
 
@@ -88,4 +95,14 @@ The schedule is `tasks` (with `isToDo = false`). There's no crew object in JobTr
 - Tasks without a job are office/admin items (payroll, payables, HR). `taskType { name, color }` labels them (e.g. "Admin - Payroll 💸", "Project - Production 🖌️", "Project - SOW 📋").
 - Fields: `startDate`, `endDate`, `startTime`, `endTime`, `progress` (0–1), `completed`.
 
-Job start/end dates (Projects list): `organization.tasks` where `isToDo = false`, `isGroup = false`, `job.id in [...]`, grouped by `job.id` → `min startDate`, `max endDate`.
+Projects list activity (one call per 100 jobs, three grouped aliases on `organization`):
+
+- `dates`: `tasks` where `isToDo = false`, `isGroup = false`, `job.id in [...]`, grouped by `job.id` → `min startDate`, `max endDate`.
+- `upcoming`: same, plus `startDate >= today` → `min startDate` (next scheduled day).
+- `lastTime`: `timeEntries` where `job.id in [...]`, grouped by `job.id` → `max startedAt` (UTC timestamp; convert to Pacific).
+
+Where-clause note: a single condition is passed bare (`"where": [["job","id"], "in", [...]]`), not wrapped in another array.
+
+## Time entries
+
+`timeEntries` fields: `startedAt`, `endedAt` (UTC timestamps), `minutes`, `cost`, `hourlyRate`, `isApproved`, `type`, `user`, `job`, `costItem`, `notes`.

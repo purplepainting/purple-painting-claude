@@ -12,7 +12,7 @@ else if (Model.Detail is { } d)
 {
     @if (d.CostCodes.Count == 0)
     {
-        <p class="muted">No budget or costs on this job yet.</p>
+        <p class="muted">No cost codes or costs on this job yet.</p>
     }
     else
     {
@@ -22,35 +22,27 @@ else if (Model.Detail is { } d)
                 <thead>
                     <tr>
                         <th>Cost code</th>
-                        <th class="num">Budget</th>
                         <th class="num">Labor</th>
                         <th class="num">Bills</th>
-                        <th class="num">Actual</th>
-                        <th class="num">Remaining</th>
-                        <th>Used</th>
+                        <th class="num">Total</th>
+                        <th>Share of costs</th>
                         <th class="num">Hours</th>
                     </tr>
                 </thead>
                 <tbody>
                     @foreach (var c in d.CostCodes)
                     {
-                        var over = c.PercentUsed > 100;
+                        var share = d.ShareOfCost(c);
                         <tr class="@(c.HasCosts ? "" : "no-costs")">
                             <td><span class="num muted">@c.Number</span> @c.Name</td>
-                            <td class="num">@Format.Money(c.Budget)</td>
                             <td class="num">@Format.Money(c.Labor)</td>
                             <td class="num">@Format.Money(c.Bills)</td>
                             <td class="num">@Format.Money(c.Actual)</td>
-                            <td class="num@(c.Remaining < 0 ? " neg" : "")">@Format.Money(c.Remaining)</td>
                             <td class="used">
-                                @if (c.PercentUsed is { } used)
+                                @if (share is { } s && c.HasCosts)
                                 {
-                                    <span class="bar@(over ? " over" : "")"><span style="width:@Math.Min(used, 100).ToString("0", System.Globalization.CultureInfo.InvariantCulture)%"></span></span>
-                                    <span class="num@(over ? " neg" : "")">@Format.Percent(used)</span>
-                                }
-                                else if (c.HasCosts)
-                                {
-                                    <span class="chip warn">No budget</span>
+                                    <span class="bar"><span style="width:@Math.Min(s, 100).ToString("0", System.Globalization.CultureInfo.InvariantCulture)%"></span></span>
+                                    <span class="num">@Format.Percent(s)</span>
                                 }
                             </td>
                             <td class="num">@Format.Number(c.Hours)</td>
@@ -60,17 +52,15 @@ else if (Model.Detail is { } d)
                 <tfoot>
                     <tr>
                         <td>Total</td>
-                        <td class="num">@Format.Money(d.TotalBudget)</td>
                         <td class="num">@Format.Money(d.CostCodes.Sum(c => c.Labor))</td>
                         <td class="num">@Format.Money(d.CostCodes.Sum(c => c.Bills))</td>
                         <td class="num">@Format.Money(d.TotalActual)</td>
-                        <td class="num@(d.TotalBudget - d.TotalActual < 0 ? " neg" : "")">@Format.Money(d.TotalBudget - d.TotalActual)</td>
                         <td></td>
                         <td class="num">@Format.Number(d.TotalHours)</td>
                     </tr>
                 </tfoot>
             </table>
         </div>
-        <p class="muted small">Grayed-out codes have budget but no costs yet. Bills include approved and pending vendor bills.</p>
+        <p class="muted small">Grayed-out codes are on the job's estimate but have no costs yet. Bills include approved and pending vendor bills.</p>
     }
 }

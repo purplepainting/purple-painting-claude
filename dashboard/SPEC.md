@@ -40,7 +40,7 @@ The app is the first shell to build on and will change a lot. Keep it easy to mo
 - **Azure only.** No AWS.
 - **Event-driven updates.** JobTread and QuickBooks webhooks push changes, instead of polling. Webhooks are received by the **function app**, which writes into the dashboard database. The dashboard reads from its database, so pages stay fast and API rate limits are respected.
 - **Own database** for (a) cached copies of JobTread and QuickBooks data that the dashboard displays, and (b) dashboard-only data (commissions, bonuses, sales activity, equipment, saved views).
-- **Main screen = launchpad of tiles.** There's no single summary page.
+- **Navigation = a left menu of module tiles** (icon, name, key number), always visible on desktop and behind a menu button on phones. **The home page is the Projects list.** (Changed from the original launchpad-of-tiles design at Kareem's request.)
 - **Each module opens on its main list**, with filters on top. **Saved filter views** (like JobTread's) are used only where they make sense: Projects and Vendors for now.
 - **No Documents tile.** Show a link to the relevant SharePoint folder next to a job or customer.
 
@@ -78,7 +78,7 @@ Mockups: https://claude.ai/artifact/DyfCdU6XShw45GyDAZyeJ9 (Kareem can export or
 
 These tokens live as CSS variables at the top of `dashboard/wwwroot/css/site.css`. Change them there, not in individual pages.
 
-Patterns: a sticky top bar with a "← Dashboard" back link and the module name; pill-shaped saved-view buttons; tables inside white cards that scroll horizontally on small screens; status chips; minimum touch target of 44px. Must work on a phone (crews and salespeople will use it in the field).
+Patterns: a left menu of module tiles and a sticky top bar with the module name (menu button on phones); pill-shaped saved-view buttons; tables inside white cards that scroll horizontally on small screens; status chips; minimum touch target of 44px. Must work on a phone (crews and salespeople will use it in the field).
 
 Phone checklist (iPhone Safari and Android Chrome), already handled in the shell; keep it true for every new screen:
 - Layout fits at 360px wide with no sideways page scroll. Wide tables scroll inside their card (`.table-wrap`).
@@ -90,36 +90,33 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 
 ## 6. Modules, in build order
 
-### Launchpad (home)
-- Greeting with the signed-in user's name, and a search box (global search comes later; it can be non-functional at first).
-- 8 tiles in this order. Each tile shows its name, a one-line description, its data source and one key number:
-  1. Projects · 2. Scheduling · 3. Financials · 4. Customers · 5. Sales and marketing · 6. Vendors and payables · 7. Employees · 8. Equipment and sundries
+### Left menu and home page
+- 8 module tiles in this order, each with its name, a short line (key-number label, or "Coming soon") and its key number:
+  1. Projects · 2. Scheduling · 3. Financials · 4. Customers · 5. Sales & Marketing · 6. Vendors and payables · 7. Employees · 8. Equipment & Sundries
+- The signed-in user's name at the bottom of the menu.
+- "/" opens the Projects list. Global search comes later.
 
 ### 1. Projects (JobTread)
-- Default view: **all active jobs**.
+- Default view: **all active jobs**, sorted **most active first**: nearest clock-in or scheduled day to today. Jobs in Pre-Construction / Color Submittals haven't started, so they sort to the bottom. Each row shows that activity ("Today", "Next Wed 10/14", "Last time Oct 6").
 - Saved views as pills (e.g. All active, Starting this week, Over budget, Public works) plus "+ Save current view". Saved views are stored per user in the dashboard DB.
 - Filters: status, job type, project manager, text search (name/address).
-- Table columns: job, customer, stage (chip), dates, contract amount, budget used (bar + %, warning color over 100%), link to SharePoint folder.
-- **Expandable job rows.** Each job is a row (a card on phones) that expands in place when tapped; tap again to collapse. It must work by touch.
-  - **Collapsed row (the bar you tap)** also shows:
-    - a **% complete ring** (a small donut like QuickBooks Projects), with the number in the middle. **% complete = costs to date ÷ budgeted cost** (capped at 100% on the ring; over 100% shows the warning color).
-    - **billed %** (billed to date ÷ contract) in small text next to the ring. If billed % trails % complete by more than 10 points, flag it ("Under-billed: send a pay app").
-    - **profit %** = (billed to date − costs to date) ÷ billed to date, using JobTread billings and costs. Color bands (Kareem's numbers):
-      - **30% and up: strong** (green chip).
-      - **25–29.9%: okay** (green text, no chip).
-      - **20–24.9%: baseline** (no color).
-      - **Below 20% or negative: below baseline** (warning chip).
-
-      The three thresholds (30 / 25 / 20) are stored as settings, not hard-coded, so they can change without a code change (later per job type if needed).
-  - **Expanded panel:**
-    - **Costs by cost code:** one line per JobTread cost code on the job with budget, actual cost to date, remaining, and % of budget used (bar, warning color over 100%).
-    - **List of all cost codes on the job**, including codes with budget but no costs yet.
-    - Links to the job in JobTread and its SharePoint folder.
-  - Data: the job's budget, cost items and cost codes from JobTread, plus its billings and actual costs. Load the expanded detail when the row opens so the list stays fast.
+- **The JobTread budget is not used** (Purple Painting doesn't maintain it). Each job row shows two things:
+  - **Billing:** contract, billed, **left to bill**, **retention held**, and a **ring = billed ÷ contract**. Billed includes retention withheld on pay apps (it's earned, just collected at the end), so left to bill = contract − billed.
+  - **Profit:** costs to date, **profit = contract − costs** in dollars and **profit % = (contract − costs) ÷ contract**, colored in bands: 30%+ strong (green chip), 25–29.9% okay (green text), 20–24.9% baseline (plain), below 20% or negative (warning chip). Thresholds are settings (`Projects:Margin`).
+  - **Cash position = invoiced after retention − costs**, in smaller text, and a "Costs ahead of billing" flag when costs exceed invoices.
+  - **Change orders:** **contract = approved orders + pending change orders** (sent, awaiting approval; usually agreed, just not signed), shown as two parts under the total: **Approved** and **Pending**. Profit and left to bill use the total (pending COs usually go through, e.g. T&M), and a small "On approved only" line shows profit if none of the pending ones do. On bids, a pending order is the proposal, so it shows as "Proposal pending" instead. **Unsent change orders** (drafts named "Change Order") get a warning chip with count and amount. Denied ones are ignored.
+  - Early in a job, contract − costs reads high because most costs aren't in yet; the billed ring shows how far along it is.
+  - Plus stage chip, job type, PM, activity and scheduled dates.
+- View pills include "Costs ahead of billing" and "Left to bill".
+- **Expandable job rows.** Tap a row to expand it in place (works by touch):
+  - **Costs by cost code:** labor, bills, total, share of the job's costs, and hours per JobTread cost code.
+  - **Every cost code on the job**, including codes on the estimate with no costs yet (grayed out).
+  - Links to the job in JobTread and its SharePoint folder.
+  - Detail loads when the row opens, so the list stays fast.
 
 ### 2. Scheduling (JobTread)
-- Week view by default (Day / Week / Month toggle), with prev/next/today.
-- Rows = crews (plus an "Unassigned" row); job blocks span the days they cover.
+- Week view by default (Day / Week / Month toggle), with prev/next/today. Day and Week are built; Month comes later.
+- JobTread has no crew object (see docs/JOBTREAD.md): each job day is a task with painters assigned. So the week grid has two row modes: **by job** (default; each cell shows the day's task and who's on it) and **by person** (each cell shows the job they're on), plus an "Unassigned" row. On phones the week shows as a day-by-day list with times, people and a map link.
 - Color-coded by job type (interior / exterior / commercial-public works) using colors that differ in lightness, not hue alone.
 - Built from JobTread job dates and crew assignments.
 - **First write-back feature (Kareem's top priority for editing):** build and change the schedule here (drag a job to another crew or day, set start/end, assign crews), then push it to JobTread. JobTread stays the system of record; the dashboard is the editing surface. Plan it as:
@@ -177,4 +174,5 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 - Which job types and crews exist in JobTread, and how crews are represented there.
 - QuickBooks API access: Intuit developer app setup and where OAuth tokens are stored.
 - Projects: whether public works needs its own margin bands (default is 30 / 25 / 20 for all jobs).
+- Projects: a work-based % complete (e.g. costs ÷ contract × 75%) was considered and set aside for now in favor of billing + costs-vs-billed.
 - Beyond scheduling (the first write-back), which fields should be editable from the dashboard, and in which system (JobTread or QuickBooks) each edit lands.

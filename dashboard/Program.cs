@@ -2,10 +2,15 @@ using PurpleDashboard.Auth;
 using PurpleDashboard.Integrations.JobTread;
 using PurpleDashboard.Modules;
 using PurpleDashboard.Modules.Projects;
+using PurpleDashboard.Modules.Scheduling;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddRazorPages();
+builder.Services.AddRazorPages(options =>
+{
+    // Home page = the Projects list (also at /projects).
+    options.Conventions.AddPageRoute("/Projects/Index", "");
+});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<CurrentUser>();
@@ -33,6 +38,8 @@ else
 builder.Services.Configure<MarginBands>(builder.Configuration.GetSection("Projects:Margin"));
 builder.Services.AddScoped<ProjectsService>();
 builder.Services.AddScoped<ITileMetric, ActiveProjectsMetric>();
+builder.Services.AddScoped<ScheduleService>();
+builder.Services.AddScoped<ITileMetric, JobsThisWeekMetric>();
 
 var app = builder.Build();
 

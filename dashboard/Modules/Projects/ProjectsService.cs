@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using PurpleDashboard.Infrastructure;
 using PurpleDashboard.Integrations.JobTread;
 using static PurpleDashboard.Integrations.JobTread.JobTreadIds;
 
@@ -29,14 +30,16 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
         {
             entry.AbsoluteExpirationRelativeToNow = CacheFor;
             var jobs = await LoadOpenJobsAsync(ct);
-            var dates = await LoadJobDatesAsync(jobs.Where(j => j.Stage is not null).Select(j => j.Id).ToList(), ct);
+            var activity = await LoadActivityAsync(jobs.Where(j => j.Stage is not null).Select(j => j.Id).ToList(), ct);
             return (IReadOnlyList<ProjectSummary>)jobs
-                .Select(j => dates.TryGetValue(j.Id, out var d) ? j with { Start = d.Start, End = d.End } : j)
+                .Select(j => activity.TryGetValue(j.Id, out var a)
+                    ? j with { Start = a.Start, End = a.End, LastTimeEntry = a.LastTime, NextScheduled = a.Next }
+                    : j)
                 .ToList();
         }))!;
     }
 
-    /// <summary>Budget and actual cost by cost code for one job.</summary>
+    /// <summary>Actual cost by cost code for one job, plus the codes on its estimate.</summary>
     public async Task<ProjectDetail> GetDetailAsync(string jobId, bool refresh = false, CancellationToken ct = default)
     {
         var key = "projects:detail:" + jobId;
@@ -70,8 +73,10 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
                         {
                           "id": {}, "name": {}, "number": {}, "actualCost": {}, "projectedPrice": {},
                           "location": { "address": {}, "account": { "name": {} } },
-                          "budgetCost": { "_": "costItems", "$": { "where": [["document", "id"], null] }, "sum": { "$": ["cost"] } },
-                          "billed": { "_": "documents", "$": { "where": { "and": [["type", "customerInvoice"], ["status", "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } }
+                          "billed": { "_": "documents", "$": { "where": { "and": [["type", "customerInvoice"], ["status", "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } },
+                          "pendingOrders": { "_": "documents", "$": { "where": { "and": [["type", "customerOrder"], ["status", "pending"]] } }, "sum": { "$": ["price"] }, "count": {} },
+                          "unsentChangeOrders": { "_": "documents", "$": { "where": { "and": [["type", "customerOrder"], ["status", "draft"], ["name", "like", "%Change Order%"]] } }, "sum": { "$": ["price"] }, "count": {} },
+                          "retainageCostItem": { "held": { "_": "documentCostItems", "$": { "where": { "and": [[["document", "type"], "customerInvoice"], [["document", "status"], "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } } }
                         }
                         """),
                     },
@@ -85,7 +90,8 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             };
 
             var response = await jobTread.QueryAsync(page is null ? "projects-list" : "projects-list-more", query, ct);
-            var connection = response["organization"]?["jobs"];
+            var connection = response["organization"]?["jobs"]
+                ?? throw new JobTreadException("Unexpected JobTread response: " + Trim(response.ToJsonString()));
             foreach (var job in connection.Nodes()) result.Add(ToSummary(job));
             page = connection.Str("nextPage");
         } while (page is not null);
@@ -110,47 +116,77 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             SalesPerson = fields.GetValueOrDefault(JobFields.SalesPerson),
             HowBidCameIn = fields.GetValueOrDefault(JobFields.HowBidCameIn),
             FolderUrl = fields.GetValueOrDefault(JobFields.FolderLink),
-            Contract = job.Dec("projectedPrice"),
-            BudgetCost = job["budgetCost"].Dec("sum") ?? 0,
+            ApprovedContract = job.Dec("projectedPrice"),
             ActualCost = job.Dec("actualCost") ?? 0,
-            Billed = job["billed"].Dec("sum") ?? 0,
+            PendingOrders = job["pendingOrders"].Dec("sum") ?? 0,
+            UnsentChangeOrders = job["unsentChangeOrders"].Dec("sum") ?? 0,
+            UnsentChangeOrderCount = (int)(job["unsentChangeOrders"].Dec("count") ?? 0),
+            InvoicedNet = job["billed"].Dec("sum") ?? 0,
+            // Retention lines on invoices are negative; flip to the amount held back.
+            RetentionHeld = -(job["retainageCostItem"]?["held"].Dec("sum") ?? 0),
         };
     }
 
-    /// <summary>First and last scheduled task date per job, in chunks of 100 jobs.</summary>
-    private async Task<Dictionary<string, (DateOnly? Start, DateOnly? End)>> LoadJobDatesAsync(List<string> jobIds, CancellationToken ct)
+    private sealed record JobActivity(DateOnly? Start, DateOnly? End, DateOnly? LastTime, DateOnly? Next);
+
+    /// <summary>
+    /// Per job: first/last scheduled task, most recent clock-in, and next scheduled day.
+    /// One JobTread call per 100 jobs, using grouped queries.
+    /// </summary>
+    private async Task<Dictionary<string, JobActivity>> LoadActivityAsync(List<string> jobIds, CancellationToken ct)
     {
-        var result = new Dictionary<string, (DateOnly?, DateOnly?)>();
+        var start = new Dictionary<string, DateOnly?>();
+        var end = new Dictionary<string, DateOnly?>();
+        var lastTime = new Dictionary<string, DateOnly?>();
+        var next = new Dictionary<string, DateOnly?>();
+        var today = LocalClock.Today.ToString("yyyy-MM-dd");
+
         foreach (var chunk in jobIds.Chunk(100))
         {
-            var where = Json("""{ "and": [["isToDo", false], ["isGroup", false]] }""");
-            ((JsonArray)where["and"]!).Add(new JsonArray(new JsonArray("job", "id"), "in", new JsonArray(chunk.Select(id => (JsonNode)id!).ToArray())));
+            JsonArray Ids() => new(chunk.Select(id => (JsonNode)id!).ToArray());
+            JsonArray JobIn() => new(new JsonArray("job", "id"), "in", Ids());
+
+            var scheduledWhere = Json("""{ "and": [["isToDo", false], ["isGroup", false]] }""");
+            ((JsonArray)scheduledWhere["and"]!).Add(JobIn());
+            var upcomingWhere = Json("""{ "and": [["isToDo", false], ["isGroup", false]] }""");
+            ((JsonArray)upcomingWhere["and"]!).Add(new JsonArray("startDate", ">=", today));
+            ((JsonArray)upcomingWhere["and"]!).Add(JobIn());
+
+            JsonObject Grouped(string connection, JsonNode where, string aggs) => new()
+            {
+                ["_"] = connection,
+                ["$"] = new JsonObject
+                {
+                    ["where"] = where,
+                    ["size"] = 100,
+                    ["group"] = Json($$"""{ "by": [["job", "id"]], "aggs": {{aggs}} }"""),
+                },
+                ["withValues"] = new JsonObject(),
+            };
 
             var query = new JsonObject
             {
                 ["organization"] = new JsonObject
                 {
                     ["$"] = new JsonObject { ["id"] = options.Value.OrganizationId },
-                    ["tasks"] = new JsonObject
-                    {
-                        ["$"] = new JsonObject
-                        {
-                            ["where"] = where,
-                            ["size"] = 100,
-                            ["group"] = Json("""{ "by": [["job", "id"]], "aggs": { "start": { "min": "startDate" }, "end": { "max": "endDate" } } }"""),
-                        },
-                        ["withValues"] = new JsonObject(),
-                    },
+                    ["dates"] = Grouped("tasks", scheduledWhere, """{ "start": { "min": "startDate" }, "end": { "max": "endDate" } }"""),
+                    ["upcoming"] = Grouped("tasks", upcomingWhere, """{ "next": { "min": "startDate" } }"""),
+                    ["lastTime"] = Grouped("timeEntries", JobIn(), """{ "last": { "max": "startedAt" } }"""),
                 },
             };
-            var response = await jobTread.QueryAsync("projects-dates", query, ct);
-            foreach (var row in response["organization"]?["tasks"].GroupRows() ?? [])
-            {
-                var id = row["job"].Str("id");
-                if (id is not null) result[id] = (row.Date("start"), row.Date("end"));
-            }
+            var org = (await jobTread.QueryAsync("projects-activity", query, ct))["organization"];
+
+            foreach (var row in org?["dates"].GroupRows() ?? [])
+                if (row["job"].Str("id") is { } id) { start[id] = row.Date("start"); end[id] = row.Date("end"); }
+            foreach (var row in org?["upcoming"].GroupRows() ?? [])
+                if (row["job"].Str("id") is { } id) next[id] = row.Date("next");
+            foreach (var row in org?["lastTime"].GroupRows() ?? [])
+                if (row["job"].Str("id") is { } id && DateTimeOffset.TryParse(row.Str("last"), out var at))
+                    lastTime[id] = LocalClock.ToLocalDate(at);
         }
-        return result;
+
+        return jobIds.ToDictionary(id => id, id => new JobActivity(
+            start.GetValueOrDefault(id), end.GetValueOrDefault(id), lastTime.GetValueOrDefault(id), next.GetValueOrDefault(id)));
     }
 
     private async Task<ProjectDetail> LoadDetailAsync(string jobId, CancellationToken ct)
@@ -162,7 +198,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
               "budget": {
                 "_": "costItems",
                 "$": { "where": [["document", "id"], null], "size": 100,
-                       "group": { "by": [["costCode", "id"], ["costCode", "name"], ["costCode", "number"]], "aggs": { "cost": { "sum": "cost" } } } },
+                       "group": { "by": [["costCode", "id"], ["costCode", "name"], ["costCode", "number"]], "aggs": { "n": { "count": "id" } } } },
                 "withValues": {}
               },
               "time": {
@@ -199,7 +235,8 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             return line;
         }
 
-        foreach (var row in job["budget"].GroupRows()) For(row["costCode"]).Budget += row.Dec("cost") ?? 0;
+        // The job's estimate lines only supply the list of codes on the job; their amounts aren't used.
+        foreach (var row in job["budget"].GroupRows()) For(row["costCode"]);
         foreach (var row in job["time"].GroupRows())
         {
             var line = For(row["costItem"]?["costCode"]);
@@ -210,7 +247,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             foreach (var row in bill["costItems"].GroupRows()) For(row["costCode"]).Bills += row.Dec("cost") ?? 0;
 
         var costCodes = lines.Values
-            .Select(l => new CostCodeLine(l.Number, l.Name, l.Budget, l.Labor, l.Bills, Math.Round(l.Minutes / 60m, 1)))
+            .Select(l => new CostCodeLine(l.Number, l.Name, l.Labor, l.Bills, Math.Round(l.Minutes / 60m, 1)))
             .OrderBy(l => l.Number is null)
             .ThenBy(l => l.Number, StringComparer.Ordinal)
             .ToList();
@@ -219,11 +256,13 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
 
     private static JsonNode Json(string json) => JsonNode.Parse(json)!;
 
+    private static string Trim(string s) => s.Length > 300 ? s[..300] : s;
+
     private sealed class CostCodeTotals(string? number, string name)
     {
         public string? Number { get; } = number;
         public string Name { get; } = name;
-        public decimal Budget, Labor, Bills, Minutes;
+        public decimal Labor, Bills, Minutes;
     }
 }
 
