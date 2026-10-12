@@ -176,6 +176,8 @@ table.data td.num, table.data th.num { text-align: right; }
 .profit-none { color: var(--muted); }
 .profit-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .profit-dollars { font-size: 13px; font-weight: 600; }
+.cash { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.cash.neg { color: var(--warn-text); }
 .chevron { width: 10px; height: 10px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: 0 4px 4px; transition: transform .15s; }
 .job[open] .chevron { transform: rotate(-135deg); margin-top: 6px; }
 .job-detail { padding: 14px 16px 16px; display: grid; gap: 12px; }
@@ -188,8 +190,8 @@ table.data tr.no-costs td { color: var(--muted); }
 table.data td.used { white-space: nowrap; }
 table.data td.used .bar { width: 60px; margin-right: 6px; }
 
-@media (max-width: 900px) {
-  /* Ring + name on top; dates/contract/budget and profit on the line below. */
+@media (max-width: 1300px) {
+  /* Ring + name on top; the numbers and profit on the line below. */
   .job-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "ring main main" "figs figs profit"; gap: 10px 12px; }
   .job-progress { grid-area: ring; align-self: start; }
   .job-main { grid-area: main; }

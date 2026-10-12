@@ -101,10 +101,12 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 - Saved views as pills (e.g. All active, Starting this week, Over budget, Public works) plus "+ Save current view". Saved views are stored per user in the dashboard DB.
 - Filters: status, job type, project manager, text search (name/address).
 - **The JobTread budget is not used** (Purple Painting doesn't maintain it). Each job row shows two things:
-  - **Billing:** contract, billed, **left to bill**, and a **ring = billed ÷ contract**.
-  - **Costs against invoiced:** costs to date, **billed − costs** in dollars, and **profit % = (billed − costs) ÷ billed**, colored in bands: 30%+ strong (green chip), 25–29.9% okay (green text), 20–24.9% baseline (plain), below 20% or negative (warning chip). Thresholds are settings (`Projects:Margin`).
-  - Plus stage chip, job type, PM, activity, scheduled dates, and a "Costs over billed" flag when costs exceed invoices.
-- View pills include "Costs over billed" and "Left to bill".
+  - **Billing:** contract, billed, **left to bill**, **retention held**, and a **ring = billed ÷ contract**. Billed includes retention withheld on pay apps (it's earned, just collected at the end), so left to bill = contract − billed.
+  - **Profit:** costs to date, **profit = contract − costs** in dollars and **profit % = (contract − costs) ÷ contract**, colored in bands: 30%+ strong (green chip), 25–29.9% okay (green text), 20–24.9% baseline (plain), below 20% or negative (warning chip). Thresholds are settings (`Projects:Margin`).
+  - **Cash position = invoiced after retention − costs**, in smaller text, and a "Costs ahead of billing" flag when costs exceed invoices.
+  - Early in a job, contract − costs reads high because most costs aren't in yet; the billed ring shows how far along it is.
+  - Plus stage chip, job type, PM, activity and scheduled dates.
+- View pills include "Costs ahead of billing" and "Left to bill".
 - **Expandable job rows.** Tap a row to expand it in place (works by touch):
   - **Costs by cost code:** labor, bills, total, share of the job's costs, and hours per JobTread cost code.
   - **Every cost code on the job**, including codes on the estimate with no costs yet (grayed out).

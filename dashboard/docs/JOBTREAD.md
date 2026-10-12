@@ -61,8 +61,12 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 | Number | How it's read |
 |---|---|
 | Contract | `job.projectedPrice` |
-| Billed | `documents` where `type = customerInvoice` and `status in [approved, pending]`, sum `price` |
+| Invoiced (net) | `documents` where `type = customerInvoice` and `status in [approved, pending]`, sum `price`. **This is after retention is held back** |
+| Retention held | `job.retainageCostItem.documentCostItems` where `document.type = customerInvoice`, `document.status in [approved, pending]`, sum `price` (negative; flip the sign). `job.defaultRetainagePercentage` is the rate (e.g. 0.1) |
+| Billed (earned) | Invoiced (net) + retention held. Used for the billed ring and left to bill |
 | Costs to date | `job.actualCost` |
+
+Pay apps (`isPaymentApplication = true`) carry a negative "Retainage" line linked to the job's `retainageCostItem`, so each invoice's `price` is net of retention.
 
 Document types seen: `customerOrder` (proposal/contract), `customerInvoice`, `vendorBill`. Statuses: `draft`, `pending`, `approved`, `denied`. Draft and denied are ignored everywhere.
 

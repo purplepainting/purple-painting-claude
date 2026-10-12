@@ -20,7 +20,7 @@ public static class ProjectViews
         new("active",      "All active",          IsActive),
         new("inprogress",  "In progress",         p => p.Stage == "In Progress"),
         new("starting",    "Starting this week",  p => IsActive(p) && p.Start is { } s && s >= WeekStart() && s < WeekStart().AddDays(7)),
-        new("costsover",   "Costs over billed",   p => (IsActive(p) || p.Stage == "Completed") && p.CostsOverBilled),
+        new("costsover",   "Costs ahead of billing",   p => (IsActive(p) || p.Stage == "Completed") && p.CostsOverBilled),
         new("lefttobill",  "Left to bill",        p => (IsActive(p) || p.Stage == "Completed") && p.LeftToBill > 0),
         new("publicworks", "Public works",        p => IsActive(p) && p.JobType == "Prevailing Wage"),
         new("closeout",    "Completed, not closed", p => p.Stage == "Completed"),
