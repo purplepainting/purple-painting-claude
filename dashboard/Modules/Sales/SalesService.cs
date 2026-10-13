@@ -47,7 +47,7 @@ public sealed record MergedSpend(List<SpendLine> Lines, List<ReplacedSpend> Repl
 /// Sales &amp; Marketing: commissions per salesperson (rules and payments in the dashboard database, jobs and
 /// salesperson from JobTread), door-to-door activity and monthly ad spend.
 /// </summary>
-public sealed class SalesService(ProjectsService projects, IServiceProvider services, DatabaseStatus database)
+public sealed class SalesService(ProjectsService projects, PurpleDashboard.Modules.People.PeopleService people, PurpleDashboard.Modules.People.QbEmployeeStatus qbStatus, IServiceProvider services, DatabaseStatus database)
 {
     public static readonly string[] Bases = ["collected", "contract", "profit"];
 
@@ -78,6 +78,7 @@ public sealed class SalesService(ProjectsService projects, IServiceProvider serv
             ? (await Db.CommissionPayments.AsNoTracking().ToListAsync(ct)).GroupBy(p => (p.JobId, p.Person.ToLowerInvariant())).ToDictionary(g => g.Key, g => g.Sum(p => p.Amount))
             : [];
 
+        var current = await CurrentStaffNamesAsync(ct);
         return jobs.Select(j =>
         {
             var person = j.SalesPerson!.Trim();
@@ -88,7 +89,27 @@ public sealed class SalesService(ProjectsService projects, IServiceProvider serv
             var earned = rule is null ? 0 : Math.Round(basisAmount * rule.Percent / 100m, 2);
             return new JobCommission(j.Id, j.Name, j.Number, person, j.Stage, contract, collected, j.Profit, rule, earned,
                 paid.GetValueOrDefault((j.Id, person.ToLowerInvariant())));
-        }).OrderByDescending(c => c.Owed).ThenBy(c => c.Person).ToList();
+        })
+        // Nothing to pay on a job with no contract and nothing collected.
+        .Where(c => c.Contract > 0 || c.Collected > 0 || c.Paid > 0)
+        // Someone who's left (not JobTread staff anymore, or inactive in QuickBooks) only shows while they're still owed something.
+        .Where(c => c.Owed > 0 || current is null || current.Contains(c.Person))
+        .OrderByDescending(c => c.Owed).ThenBy(c => c.Person).ToList();
+    }
+
+    /// <summary>Names of current staff: internal in JobTread and not inactive in QuickBooks. Null if JobTread couldn't be read (then nobody is hidden).</summary>
+    private async Task<HashSet<string>?> CurrentStaffNamesAsync(CancellationToken ct)
+    {
+        try
+        {
+            var active = await qbStatus.ActiveByIdAsync(ct);
+            return (await people.GetStaffAsync(ct)).Where(s => PurpleDashboard.Modules.People.QbEmployeeStatus.IsCurrent(s, active))
+                .Select(s => s.Name.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is PurpleDashboard.Integrations.JobTread.JobTreadException or HttpRequestException or TaskCanceledException)
+        {
+            return null;
+        }
     }
 
     public static List<PersonCommissions> ByPerson(IEnumerable<JobCommission> jobs) => jobs

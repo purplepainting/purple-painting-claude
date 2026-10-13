@@ -85,6 +85,7 @@ builder.Services.AddHostedService<JobTreadChangeWatcher>();
 builder.Services.AddHttpClient<JobTreadOAuth>(c => c.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddScoped<PurpleDashboard.Modules.People.PeopleService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.People.TeamDirectory>();
+builder.Services.AddScoped<PurpleDashboard.Modules.People.QbEmployeeStatus>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.People.TeamMembersMetric>();
 builder.Services.AddScoped<ProjectsService>();
 builder.Services.AddScoped<ITileMetric, ActiveProjectsMetric>();

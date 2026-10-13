@@ -14,6 +14,7 @@
     </div>
     <form class="filters" method="get">
         @if (Model.Show is not null) { <input type="hidden" name="show" value="@Model.Show"> }
+        @if (Model.Former) { <input type="hidden" name="former" value="true"> }
         <input type="search" name="q" value="@Model.Q" placeholder="Search name, role or level" aria-label="Search employees">
         <button class="button secondary" type="submit">Search</button>
         @if (!string.IsNullOrWhiteSpace(Model.Q)) { <a class="link-button" asp-page="/Employees/Index" asp-route-show="@Model.Show">Clear</a> }
@@ -41,7 +42,14 @@
 else
 {
     <p class="list-meta muted">
-        @Model.Total people in JobTread (new people show up here on their own) · QB = QuickBooks base pay · JT = JobTread burdened rate · hours are this week
+        @Model.Total people (from JobTread; new people show up here on their own) · QB = QuickBooks base pay · JT = JobTread burdened rate · hours are this week
+        @if (Model.FormerIds.Count > 0)
+        {
+            <text> · </text>
+            @if (Model.Former) { <a asp-page="/Employees/Index" asp-route-show="@Model.Show" asp-route-q="@Model.Q">Hide former employees</a> }
+            else { <a asp-page="/Employees/Index" asp-route-show="@Model.Show" asp-route-q="@Model.Q" asp-route-former="true">Show @Model.FormerIds.Count former employee@(Model.FormerIds.Count == 1 ? "" : "s")</a> }
+            <span title="Inactive in QuickBooks but still a member in JobTread: remove them in JobTread to clear this.">(off payroll, still in JobTread)</span>
+        }
     </p>
 
     @foreach (var (title, members) in new[] { ("Crew", Model.Crew), ("Management & office", Model.Supervisors) })
@@ -60,6 +68,7 @@ else
                             <div class="job-sub muted">
                                 @s.Role
                                 <span class="emp-rates-inline num">· QB @IndexModel.Pay(m.Profile?.QbBasePay, m.Profile?.QbPayType) · JT @IndexModel.Pay(s.BaseRate?.HourlyRate, null)</span>
+                                @if (Model.FormerIds.Contains(s.MembershipId)) { <span class="chip bad small-chip" title="Inactive in QuickBooks but still a member in JobTread">Off payroll · still in JobTread</span> }
                                 @if (s.QboEmployeeId is null) { <span class="chip warn small-chip" title="No QuickBooks employee linked in JobTread">No QuickBooks link</span> }
                                 @if (m.Profile?.Notes is { } notes) { <span class="emp-note" title="@notes">· @notes</span> }
                             </div>
