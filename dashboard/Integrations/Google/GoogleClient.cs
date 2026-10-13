@@ -606,7 +606,7 @@ public sealed class GoogleClient(
             if (Has("NOT_ADS_USER"))
                 return new("The connected Google account isn't a user on any Google Ads account. Connect with the login that owns the Ads account.") { Kind = "ads-access" };
             if (Has("USER_PERMISSION_DENIED") || Has("CUSTOMER_NOT_FOUND"))
-                return new("The connected Google account can't read that Ads account through the manager account used. Pick the account again, or check GOOGLE_ADS_LOGIN_CUSTOMER_ID.") { Kind = "ads-access" };
+                return new("The connected Google account can't read that Ads account through the manager account used. Pick the account again, or check GOOGLE_ADS_LOGIN_CUSTOMER_ID." + AdsDetail(text)) { Kind = "ads-access" };
             if (Has("CUSTOMER_NOT_ENABLED"))
                 return new("That Google Ads account isn't active (cancelled, suspended or never finished setting up).") { Kind = "ads-access" };
             if (Has("PROHIBITED_") || Has("phone_calls"))
@@ -622,7 +622,24 @@ public sealed class GoogleClient(
             if (status == 403)
                 return new("The connected Google account can't manage that Business Profile (it needs to be an owner or manager of the profile).") { Kind = "business-access" };
         }
-        return new($"Google returned {status}: {message}");
+        return new($"Google returned {status}: {message}" + (api == "ads" ? AdsDetail(text) : ""));
+    }
+
+    /// <summary>The Google Ads error code and its own explanation (from error.details[].errors[]), e.g.
+    /// " Google: USER_PERMISSION_DENIED: User doesn't have permission to access customer…". Empty when there's none.</summary>
+    private static string AdsDetail(string text)
+    {
+        try
+        {
+            var errors = (ErrorObject(JsonNode.Parse(text))?["details"] as JsonArray ?? [])
+                .SelectMany(d => d?["errors"] as JsonArray ?? []).OfType<JsonObject>().FirstOrDefault();
+            if (errors is null) return "";
+            var code = (errors["errorCode"] as JsonObject)?.Select(kv => kv.Value?.ToString()).FirstOrDefault();
+            var detail = errors["message"]?.GetValue<string>();
+            var both = string.Join(": ", new[] { code, detail }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            return both.Length == 0 ? "" : $" Google: {Trim(both)}";
+        }
+        catch (Exception e) when (e is JsonException or InvalidOperationException) { return ""; }
     }
 
     // ---- JSON helpers ----
