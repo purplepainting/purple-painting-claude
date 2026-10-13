@@ -872,3 +872,4 @@ table.data.unmatched td { white-space: nowrap; }
   .meta-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .meta-kpis .kpi { padding: 10px 12px; }
 }
+.notice-inline.good { color: var(--good-text); margin: 8px 0 0; font-weight: 600; }
