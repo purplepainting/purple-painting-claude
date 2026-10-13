@@ -110,7 +110,8 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 - **Costs by cost code** (bottom of the dropdown, loaded when the row opens): labor, bills, total, share of the job's costs, and hours per JobTread cost code, including codes on the estimate with no costs yet (grayed out).
 
 ### 2. Scheduling (JobTread)
-- Week view by default (Day / Week / Month toggle), with prev/next/today. Day and Week are built; Month comes later.
+- Week view by default (Day / Week / Month toggle), with prev/next/today. Day, Week and Month are built.
+- **Built (month view, read only):** Monday–Sunday grid of the weeks overlapping the month, prev/next month, same Crew/Management toggle. Each day lists its jobs as chips in the job's color (most people first, up to 4 then "+N more"); a job opens its timeline, a date opens the Day view. On phones each day shows a colored dot per job, and tapping a day lists its jobs under the grid. No labor costs or editing.
 - JobTread has no crew object (see docs/JOBTREAD.md): each job day is a task with painters assigned. So the week grid has two row modes: **by job** (default; each cell shows the day's task and who's on it) and **by person** (each cell shows the job they're on), plus an "Unassigned" row. On phones the week shows as a day-by-day list with times, people and a map link.
 - Color-coded by job type (interior / exterior / commercial-public works) using colors that differ in lightness, not hue alone.
 - Built from JobTread job dates and crew assignments.
@@ -142,8 +143,9 @@ Tabs: **Company · Job P&L · Reconciliation · Bonuses & distributions · Commi
 ### 4. Customers (JobTread + QuickBooks + reviews)
 - List on the left (search; filters: All / Owes money / Review to request), detail on the right (stacks on mobile).
 - Detail: contact info, lifetime revenue, outstanding balance (QuickBooks), the customer's jobs (JobTread), links to JobTread and SharePoint.
-- **Reviews:** dashboard-owned review status per job (requested / received + platform + rating / ask later), with a "Request review" button. The button only records the request in Phase 1.
-- **Built (first pass):** `/customers`: JobTread jobs (open + closed in the last 12 months) grouped by customer, QuickBooks balance and contact info matched by name (QuickBooks customers who owe but have no recent job also show). Filters All / Owes money / Review to request (completed jobs with no review status). Each job: stage, contract, billed, unpaid, JobTread and SharePoint links, and review status (requested / received with platform and stars / ask later / not asking; JobReviews table). Tile: customers owing. The review button only records status (no messages sent).
+- **Reviews:** dashboard-owned review status **per customer, not per job** (Kareem: "we only want 1 review per customer, even if they have multiple jobs"): requested / received + platform + rating / ask later / not asking. Saving only records the status in Phase 1.
+- **Built (first pass):** `/customers`: JobTread jobs (open + closed in the last 12 months) grouped by JobTread customer account, QuickBooks balance and contact info matched by name (QuickBooks customers who owe but have no recent job also show). Filters All / Owes money / Review to request. Each job: stage, contract, billed, unpaid, JobTread and SharePoint links. Tile: customers owing.
+- **Built: reviews per customer** (CustomerReviews table, keyed by JobTread account id). One review form per customer in the expanded customer (status, platform, stars, notes, Save) and a status chip on the customer row. A customer is a **review to request** when they have at least one completed job, JobTread's "Left Review" customer field isn't "Left a Review", and they have no review status in the dashboard. Customers marked "Left a Review" in JobTread show a "Left a review (JobTread)" chip; a dashboard status, when there is one, shows instead. The KPI and filter count customers. Saving doesn't change JobTread's "Left Review" field (that would be a JobTread write; not approved yet). The earlier per-job JobReviews table is kept but no longer used (its rows have only a job id).
 
 ### 5. Sales and marketing
 **Built (first pass):** `/sales` with three tabs.

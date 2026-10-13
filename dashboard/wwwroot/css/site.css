@@ -286,6 +286,53 @@ table.data td.used .bar { width: 60px; margin-right: 6px; }
   .schedule-title { width: 100%; margin: 4px 0 0; font-size: 18px; order: 5; }
 }
 
+/* ---------- Schedule: month view (read only) ---------- */
+.month-job, .month-day-job { --jc-bg: hsl(var(--h, 270) 75% var(--l, 92%)); --jc-fg: hsl(var(--h, 270) 60% 18%); --jc-edge: hsl(var(--h, 270) 62% 42%); }
+.month-card { overflow: hidden; }
+.month-grid { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 12.5px; }
+.month-grid thead th { font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px; background: #FBFAFD; text-align: left; border-bottom: 1px solid var(--border); }
+.month-cell { position: relative; height: 128px; padding: 4px 5px 6px; vertical-align: top; border-bottom: 1px solid var(--border); border-left: 1px solid var(--border); }
+.month-cell:first-child { border-left: 0; }
+.month-grid tr:last-child .month-cell { border-bottom: 0; }
+.month-cell.other-month { background: #FBFAFD; }
+.month-cell.other-month .month-num { color: var(--muted); opacity: .7; }
+.month-cell.today { background: #FAF7FD; }
+.month-date { display: flex; min-height: 26px; align-items: center; color: var(--text); text-decoration: none; font-weight: 700; }
+.month-num { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 4px; border-radius: 999px; }
+@media (hover: hover) { .month-date:hover .month-num { background: var(--purple-50); color: var(--purple-700); } }
+.month-cell.today .month-num { background: var(--purple-600); color: #fff; }
+.month-jobs { display: grid; gap: 3px; }
+.month-job { display: block; padding: 2px 6px; border-radius: 5px; background: var(--jc-bg); color: var(--jc-fg); border-left: 3px solid var(--jc-edge); font-weight: 600; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (hover: hover) { .month-job:hover { text-decoration: underline; } }
+.month-job.done { opacity: .55; }
+.month-more { font-size: 12px; font-weight: 600; color: var(--purple-700); text-decoration: none; padding: 0 2px; }
+.month-dots { display: none; }
+.month-count { font-size: 11px; font-weight: 700; color: var(--muted); line-height: 1; }
+.month-days { display: none; }
+
+@media (max-width: 760px) {
+  /* Phones: each day is a tap target with a dot per job; the tapped day's jobs list under the grid. */
+  .month-grid thead th { padding: 6px 0; text-align: center; font-size: 11px; }
+  .month-cell { height: 58px; padding: 3px 2px; text-align: center; }
+  .month-date { justify-content: center; min-height: 24px; }
+  .month-date::after { content: ""; position: absolute; inset: 0; }
+  .month-jobs { display: none; }
+  .month-dots { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 3px; padding: 2px 1px 0; }
+  .month-dots .swatch { width: 8px; height: 8px; border-radius: 50%; }
+  .month-cell.selected { box-shadow: inset 0 0 0 2px var(--purple-600); }
+  .month-days { display: block; margin-top: 16px; }
+  .month-day { display: none; }
+  .month-day.selected { display: block; }
+}
+.month-day h2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; margin: 0 0 8px; }
+.month-day h2.today { color: var(--purple-600); }
+.month-open { display: inline-flex; align-items: center; min-height: var(--touch); font-size: 14px; font-weight: 600; text-decoration: none; }
+.month-day-job { display: grid; gap: 4px; padding: 12px 14px; margin-bottom: 8px; border-left: 5px solid var(--jc-edge); color: var(--text); text-decoration: none; }
+.month-day-job.done { opacity: .55; }
+.month-day-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.month-day-job .block-title { display: inline-flex; align-items: center; gap: 6px; font-size: 15px; }
+.month-day-tasks { font-size: 13px; overflow-wrap: anywhere; }
+
 /* ---------- Schedule: what actually happened (past days) ---------- */
 .pchip.no-show { text-decoration: line-through; opacity: .55; }
 .pchip.unscheduled { outline: 2px dashed currentColor; outline-offset: -2px; }
@@ -461,6 +508,11 @@ table.data tr.burden-row td:first-child { padding-left: 24px; }
 .cust-job { border-top: 1px solid var(--border); padding-top: 10px; display: grid; gap: 4px; }
 .cust-job-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .cust-links { margin-left: auto; display: flex; gap: 4px; }
+.cust-review { border: 1px solid var(--border); border-radius: 10px; background: var(--purple-50); padding: 10px 12px; }
+.cust-review-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.cust-review .inline-form select, .cust-review .inline-form input { min-height: 44px; }
+.cust-review-chip { margin-left: 8px; vertical-align: 1px; }
+@media (max-width: 760px) { .cust-review .inline-form .field.grow { flex-basis: 100%; } }
 .connection-head { flex-wrap: wrap; } .connection-head h2 { margin-right: auto; }
 
 /* Job timeline */

@@ -61,7 +61,7 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 
 | Id | Name | Notes |
 |---|---|---|
-| `22PXCpKpiwSy` | Left Review | "Left a Review" / "No Review" (blank on many older accounts). Per customer, not per job, no date. Customers marked "Left a Review" are left out of "Review to request" on /customers. |
+| `22PXCpKpiwSy` | Left Review | "Left a Review" / "No Review" (blank on many older accounts). Per customer, not per job, no date. Read on the jobs list as `location.account.leftReview` (with `location.account.id`, the customer account id the dashboard keys reviews by). Customers marked "Left a Review" are left out of "Review to request" on /customers and show a "Left a review (JobTread)" chip. The dashboard only reads it: saving a review on /customers doesn't change it (writing it back would be a JobTread write, not approved yet). |
 
 ## Money on a job
 
