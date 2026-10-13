@@ -13,7 +13,7 @@ namespace PurpleDashboard.Modules.Scheduling;
 /// </summary>
 public sealed class ScheduleService(IJobTreadClient jobTread, IMemoryCache cache, IOptions<JobTreadOptions> options)
 {
-    private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(2);
+    private static TimeSpan CacheFor => PurpleDashboard.Infrastructure.JobTreadFreshness.For(PurpleDashboard.Infrastructure.JobTreadFreshness.Schedule);
 
     // JobTread rejects a query (413) when its largest possible result is too big: page size times
     // every nested list's size. Keep pages and nested sizes small (crews are 1-4 people; 3 job fields).

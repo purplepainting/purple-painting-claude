@@ -14,7 +14,7 @@ namespace PurpleDashboard.Modules.Projects;
 /// </summary>
 public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache, IOptions<JobTreadOptions> options, PeopleService people)
 {
-    private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(2);
+    private static TimeSpan CacheFor => PurpleDashboard.Infrastructure.JobTreadFreshness.For(PurpleDashboard.Infrastructure.CacheSignals.Projects);
     private const int ListPageSize = 50;
     private const int ActivityBatchSize = 30;
     private const string ListCacheKey = "projects:list";

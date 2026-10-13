@@ -26,7 +26,7 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
         var key = $"labor:actual:{from:yyyy-MM-dd}:{to:yyyy-MM-dd}";
         return (await cache.GetOrCreateAsync(key, async entry =>
         {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
+            entry.AbsoluteExpirationRelativeToNow = PurpleDashboard.Infrastructure.JobTreadFreshness.For(PurpleDashboard.Infrastructure.CacheSignals.Labor);
             entry.AddExpirationToken(PurpleDashboard.Infrastructure.CacheSignals.Token(PurpleDashboard.Infrastructure.CacheSignals.Labor));
             var result = new Dictionary<(string, DateOnly), ActualDay>();
             await foreach (var e in TimeEntriesAsync(LocalClock.StartOfDayUtc(from), LocalClock.StartOfDayUtc(to.AddDays(1)), ct))
@@ -51,7 +51,7 @@ public sealed class LaborCostService(IJobTreadClient jobTread, IMemoryCache cach
         var key = $"labor:person:{from:yyyy-MM-dd}:{to:yyyy-MM-dd}";
         return (await cache.GetOrCreateAsync(key, async entry =>
         {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2);
+            entry.AbsoluteExpirationRelativeToNow = PurpleDashboard.Infrastructure.JobTreadFreshness.For(PurpleDashboard.Infrastructure.CacheSignals.Labor);
             entry.AddExpirationToken(PurpleDashboard.Infrastructure.CacheSignals.Token(PurpleDashboard.Infrastructure.CacheSignals.Labor));
             var result = new Dictionary<(string, DateOnly), (decimal, decimal)>();
             await foreach (var e in TimeEntriesAsync(LocalClock.StartOfDayUtc(from), LocalClock.StartOfDayUtc(to.AddDays(1)), ct))
