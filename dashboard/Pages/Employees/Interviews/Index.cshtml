@@ -134,18 +134,6 @@ else
     }
 }
 
-@if (Model.ShowPastImport && !Model.DaysTab)
-{
-    <section class="card import-past">
-        <h2>Import past applicants</h2>
-        <p class="muted small">One time: adds everyone from the old Interviews spreadsheets (2023 to 2025) as "Past applicant", with each interview in their history and the old interview days. Upload the past-applicants.json file; running it again adds nothing.</p>
-        <form method="post" asp-page-handler="ImportPast" enctype="multipart/form-data" class="inline-form">
-            <input type="file" name="file" accept=".json,application/json" required>
-            <button class="button secondary" type="submit">Import</button>
-        </form>
-    </section>
-}
-
 <partial name="_DocsBox" />
 
 @section Scripts {
