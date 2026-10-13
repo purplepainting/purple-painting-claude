@@ -22,6 +22,7 @@ public class JobsModel(JobReconciliationService recon, QuickBooksClient quickBoo
 
     public async Task OnGetAsync(bool refresh, CancellationToken ct)
     {
+        if (refresh) PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.ClearCache();
         ViewData["Title"] = "Job by job";
         ViewData["ModuleName"] = "Financials";
         Connected = await quickBooks.GetConnectionAsync(ct) is not null;

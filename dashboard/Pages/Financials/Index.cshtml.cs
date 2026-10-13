@@ -36,6 +36,7 @@ public class IndexModel(FinancialsService financials, QuickBooksClient quickBook
 
     public async Task OnGetAsync(bool refresh, CancellationToken ct)
     {
+        if (refresh) PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.ClearCache();
         ViewData["Title"] = "Financials";
         ViewData["ModuleName"] = "Financials";
         (RangeFrom, RangeTo) = Range();

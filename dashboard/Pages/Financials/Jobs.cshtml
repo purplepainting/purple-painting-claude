@@ -27,7 +27,7 @@ else if (Model.Report is { } r)
     <p class="list-meta muted">
         Each job's whole life: JobTread (invoices net of retention, costs to date) vs QuickBooks (P&amp;L by customer/job, all dates; labor = field wages + burden).
         QuickBooks columns are matched to JobTread jobs by job name or number, or by customer when they have one job. ·
-        loaded @r.LoadedAt.ToString("h:mm tt") · <a asp-page="/Financials/Jobs" asp-route-show="@Model.Show" asp-route-refresh="true">Refresh</a>
+        loaded @r.LoadedAt.ToString("h:mm tt") · <a class="refresh-button" asp-page="/Financials/Jobs" asp-route-show="@Model.Show" asp-route-refresh="true">↻ Refresh JobTread + QuickBooks</a> @if (PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.DataAsOf is { } qbAsOf) { <span class="muted small">QuickBooks as of @Format.QbAsOf(qbAsOf)</span> }
     </p>
 
     <div class="kpis">

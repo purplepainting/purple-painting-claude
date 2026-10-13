@@ -1,10 +1,14 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Primitives;
 using PurpleDashboard.Data;
+using PurpleDashboard.Infrastructure;
 
 namespace PurpleDashboard.Integrations.QuickBooks;
 
@@ -14,6 +18,8 @@ namespace PurpleDashboard.Integrations.QuickBooks;
 /// /quickbooks/callback with a code, which is swapped for tokens here. Access tokens last an hour
 /// and are kept in memory; the refresh token (100 days, replaced on each refresh) is saved encrypted
 /// in the dashboard database. This class never writes to QuickBooks.
+/// Query and report results are kept until the next 5am (QuickBooks only needs a daily refresh) or until
+/// someone presses Refresh on a QuickBooks page (<see cref="ClearCache"/>).
 /// </summary>
 public sealed class QuickBooksClient(
     HttpClient http,
@@ -21,6 +27,7 @@ public sealed class QuickBooksClient(
     IServiceProvider services,
     DatabaseStatus database,
     IDataProtectionProvider protection,
+    IMemoryCache cache,
     ILogger<QuickBooksClient> logger)
 {
     private const string AuthorizeUrl = "https://appcenter.intuit.com/connect/oauth2";
@@ -31,6 +38,44 @@ public sealed class QuickBooksClient(
     // One access token for the whole app; refreshing is serialized so two requests don't both spend the refresh token.
     private static readonly SemaphoreSlim RefreshLock = new(1, 1);
     private static (string Token, string RealmId, DateTime ExpiresAt)? access;
+
+    private const int DailyRefreshHour = 5;
+    private static CancellationTokenSource resetSignal = new();
+    private static readonly ConcurrentDictionary<string, DateTime> LoadedAt = new();
+
+    /// <summary>Drop all cached QuickBooks data (the Refresh button on QuickBooks pages).</summary>
+    public static void ClearCache()
+    {
+        LoadedAt.Clear();
+        var old = Interlocked.Exchange(ref resetSignal, new CancellationTokenSource());
+        old.Cancel();
+        old.Dispose();
+    }
+
+    /// <summary>When the oldest QuickBooks data currently shown was pulled (local time), or null if none is cached.</summary>
+    public static DateTime? DataAsOf => LoadedAt.IsEmpty ? null : TimeZoneInfo.ConvertTimeFromUtc(LoadedAt.Values.Min(), LocalClock.Zone);
+
+    private static DateTimeOffset NextDailyRefresh()
+    {
+        var now = LocalClock.Now;
+        var next = now.Date.AddHours(DailyRefreshHour);
+        if (next <= now) next = next.AddDays(1);
+        return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(next, LocalClock.Zone), TimeSpan.Zero);
+    }
+
+    private async Task<T> CachedAsync<T>(string key, Func<Task<T>> load)
+    {
+        key = "qb:" + key;
+        return (await cache.GetOrCreateAsync(key, async entry =>
+        {
+            entry.AbsoluteExpiration = NextDailyRefresh();
+            entry.AddExpirationToken(new CancellationChangeToken(resetSignal.Token));
+            entry.RegisterPostEvictionCallback((k, _, _, _) => LoadedAt.TryRemove((string)k, out _));
+            var value = await load();
+            LoadedAt[key] = DateTime.UtcNow;
+            return value;
+        }))!;
+    }
 
     private IDataProtector Protector => protection.CreateProtector("QuickBooks.RefreshToken");
     private QuickBooksOptions Options => options.Value;
@@ -79,6 +124,7 @@ public sealed class QuickBooksClient(
         db.QuickBooksConnections.Add(connection);
         await db.SaveChangesAsync(ct);
         access = (tokens.AccessToken, realmId, DateTime.UtcNow.AddSeconds(tokens.ExpiresIn - 120));
+        ClearCache();
 
         try
         {
@@ -96,6 +142,7 @@ public sealed class QuickBooksClient(
     /// <summary>Disconnect: revoke the token at Intuit (best effort) and forget the connection.</summary>
     public async Task DisconnectAsync(CancellationToken ct)
     {
+        ClearCache();
         var db = services.GetRequiredService<DashboardDb>();
         foreach (var c in await db.QuickBooksConnections.ToListAsync(ct))
         {
@@ -123,7 +170,10 @@ public sealed class QuickBooksClient(
     /// A query in QuickBooks' SQL-like language, e.g. "select * from Invoice where Balance &gt; '0'".
     /// <paramref name="entity"/> is the result list to read (e.g. "Invoice"). Follows pages of up to 1000 rows.
     /// </summary>
-    public async Task<List<JsonNode>> QueryAsync(string entity, string query, CancellationToken ct)
+    public async Task<List<JsonNode>> QueryAsync(string entity, string query, CancellationToken ct) =>
+        (await CachedAsync("query:" + query, () => LoadQueryAsync(entity, query, ct))).Select(n => n.DeepClone()).ToList();
+
+    private async Task<List<JsonNode>> LoadQueryAsync(string entity, string query, CancellationToken ct)
     {
         if (Options.FixtureDirectory is not null)
             return ((await FixtureAsync($"query-{entity}", ct))["QueryResponse"]?[entity] as JsonArray ?? []).OfType<JsonNode>().Select(n => n.DeepClone()).ToList();
@@ -140,7 +190,10 @@ public sealed class QuickBooksClient(
     }
 
     /// <summary>A report, e.g. ReportAsync("ProfitAndLoss", new() { ["start_date"] = "2026-01-01", ["end_date"] = "2026-10-12" }).</summary>
-    public Task<JsonNode> ReportAsync(string report, Dictionary<string, string> parameters, CancellationToken ct) =>
+    public async Task<JsonNode> ReportAsync(string report, Dictionary<string, string> parameters, CancellationToken ct) =>
+        (await CachedAsync("report:" + report + "?" + string.Join("&", parameters.OrderBy(p => p.Key).Select(p => p.Key + "=" + p.Value)), () => LoadReportAsync(report, parameters, ct))).DeepClone();
+
+    private Task<JsonNode> LoadReportAsync(string report, Dictionary<string, string> parameters, CancellationToken ct) =>
         Options.FixtureDirectory is not null ? FixtureAsync(report + (parameters.TryGetValue("summarize_column_by", out var by) && by != "Month" ? "-" + by : ""), ct) : GetAsync($"reports/{report}?" + string.Join("&", parameters.Select(p => $"{p.Key}={Uri.EscapeDataString(p.Value)}")), ct);
 
     private async Task<JsonNode> FixtureAsync(string name, CancellationToken ct)
