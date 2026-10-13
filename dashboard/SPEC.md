@@ -110,7 +110,8 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 - **Costs by cost code** (bottom of the dropdown, loaded when the row opens): labor, bills, total, share of the job's costs, and hours per JobTread cost code, including codes on the estimate with no costs yet (grayed out).
 
 ### 2. Scheduling (JobTread)
-- Week view by default (Day / Week / Month toggle), with prev/next/today. Day and Week are built; Month comes later.
+- Week view by default (Day / Week / Month toggle), with prev/next/today. Day, Week and Month are built.
+- **Built (month view, read only):** Monday–Sunday grid of the weeks overlapping the month, prev/next month, same Crew/Management toggle. Each day lists its jobs as chips in the job's color (most people first, up to 4 then "+N more"); a job opens its timeline, a date opens the Day view. On phones each day shows a colored dot per job, and tapping a day lists its jobs under the grid. No labor costs or editing.
 - JobTread has no crew object (see docs/JOBTREAD.md): each job day is a task with painters assigned. So the week grid has two row modes: **by job** (default; each cell shows the day's task and who's on it) and **by person** (each cell shows the job they're on), plus an "Unassigned" row. On phones the week shows as a day-by-day list with times, people and a map link.
 - Color-coded by job type (interior / exterior / commercial-public works) using colors that differ in lightness, not hue alone.
 - Built from JobTread job dates and crew assignments.
