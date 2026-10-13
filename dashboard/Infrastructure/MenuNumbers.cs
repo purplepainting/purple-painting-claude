@@ -8,9 +8,11 @@ namespace PurpleDashboard.Infrastructure;
 /// refresh and the next page gets the new ones. Each metric runs in its own scope, in parallel, and a
 /// failed metric keeps its last value.
 /// </summary>
-public sealed class MenuNumbers(IServiceScopeFactory scopes, ILogger<MenuNumbers> logger)
+public sealed class MenuNumbers(IServiceScopeFactory scopes, PurpleDashboard.Data.DatabaseStatus database, ILogger<MenuNumbers> logger)
 {
     private static readonly TimeSpan MaxAge = TimeSpan.FromMinutes(1);
+    // Right after a restart the database is still connecting; numbers that need it come back blank, so try again soon.
+    private static readonly TimeSpan RetryWhileStarting = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan MetricTimeout = TimeSpan.FromSeconds(45);
 
     private volatile IReadOnlyDictionary<string, string> values = new Dictionary<string, string>();
@@ -29,8 +31,13 @@ public sealed class MenuNumbers(IServiceScopeFactory scopes, ILogger<MenuNumbers
         if (Interlocked.Exchange(ref refreshing, 1) == 1) return;
         _ = Task.Run(async () =>
         {
+            var databaseReady = !database.Configured || database.Available;
             try { await RefreshAsync(); }
-            finally { refreshedAt = DateTime.UtcNow; Interlocked.Exchange(ref refreshing, 0); }
+            finally
+            {
+                refreshedAt = databaseReady ? DateTime.UtcNow : DateTime.UtcNow - MaxAge + RetryWhileStarting;
+                Interlocked.Exchange(ref refreshing, 0);
+            }
         });
     }
 
