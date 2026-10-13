@@ -62,6 +62,16 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 | Id | Name | Notes |
 |---|---|---|
 | `22PXCpKpiwSy` | Left Review | "Left a Review" / "No Review" (blank on many older accounts). Per customer, not per job, no date. Read on the jobs list as `location.account.leftReview` (with `location.account.id`, the customer account id the dashboard keys reviews by). Customers marked "Left a Review" are left out of "Review to request" on /customers and show a "Left a review (JobTread)" chip. The dashboard only reads it: saving a review on /customers doesn't change it (writing it back would be a JobTread write, not approved yet). |
+| `22PWNYKhTU6S` | Lead Source | Option field. The website form (`functions/SquarespaceWebhook`) sets it when it creates the account, from the click id: gclid → "Google Ad", fbclid → "Meta", ndclid → "NextDoor", otherwise "Website Form" (or "Referral"). Others are picked by hand. Options (Oct 2026): Website Form, Door Knocking, Google Ad, Meta, NextDoor, Cold Outreach, Bid Invite, Advertisement, Other, Partner Referral, Employee Referral, Partner, Google, Returning Client, Mom Group, Client Referral, Events & Networking ("Referral" isn't an option although the form can write it). Read on the jobs list as `location.account.leadSource` (alias of `customFieldValues` filtered to this id), with `location.account.createdAt`. Many older accounts are blank. Used by Sales → Ads & lead sources. |
+
+### New leads by Lead Source (Sales → Ads & lead sources)
+
+New customer accounts in a period, counted by Lead Source in one request (two root fields):
+
+- `customField(id: 22PWNYKhTU6S).customFieldValues` where `account.createdAt` is in the range (Pacific midnight boundaries as UTC), `size: 100`, `group: { by: ["value"], aggs: { n: { count: "id" } } }`, `withValues`, `nextPage`. One row per value with its count; accounts with no Lead Source have no value row.
+- `organization.accounts` (aliased `newAccounts`) where `type = customer` and `createdAt` in the range, `count`. Total minus the grouped counts = new accounts with no Lead Source.
+
+Fixture name `sales-leads`. Cached like projects (dropped on account events).
 
 ## Money on a job
 

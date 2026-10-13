@@ -19,10 +19,20 @@ public sealed record PersonCommissions(string Person, CommissionRule? Rule, int 
     public decimal Owed => Math.Max(0, Earned - Paid);
 }
 
-/// <summary>A lead source: jobs sold by JobTread's "How bid came in", spend and leads for the channel with the same name. ApiSource = the API the spend came from ("Google Ads", "Meta"), null when entered by hand.</summary>
-public sealed record LeadSource(string Source, int Jobs, decimal Contract, decimal Spend, decimal? Leads = null, string? ApiSource = null)
+/// <summary>
+/// A lead source row: jobs sold to customers whose JobTread account has this Lead Source (mapped to a spend channel by
+/// <see cref="SalesService.ChannelFor"/>), spend and platform-reported leads for that channel, and new JobTread customer
+/// accounts in the period with this Lead Source (JtLeads). WonLeads = of those new accounts, how many have a sold job.
+/// ApiSource = the API the spend came from ("Google Ads", "Meta"), null when entered by hand.
+/// NoLeadSource = jobs whose customer has no Lead Source, grouped by the job's "How bid came in" instead.
+/// </summary>
+public sealed record LeadSource(string Source, int Jobs, decimal Contract, decimal Spend, decimal? Leads = null, string? ApiSource = null,
+    int? JtLeads = null, int WonLeads = 0, bool NoLeadSource = false)
 {
     public bool FromApi => ApiSource is not null;
+    public decimal? CostPerJtLead => Spend > 0 && JtLeads > 0 ? Spend / JtLeads.Value : null;
+    /// <summary>New accounts in the period that bought ÷ new accounts in the period.</summary>
+    public decimal? CloseRate => JtLeads > 0 ? (decimal)WonLeads / JtLeads.Value : null;
 }
 
 /// <summary>One month of spend for a channel: entered by hand (AdSpends) or from an ad platform API (ApiSource: "Google Ads", "Meta").</summary>
@@ -170,7 +180,25 @@ public sealed class SalesService(ProjectsService projects, IServiceProvider serv
     {
         static string N(string s) => new(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
         var n = N(channel);
-        return n == N(adsChannel) || n is "google" or "googleads" or "adwords" or "googleadwords";
+        return n == N(adsChannel) || n is "google" or "googlead" or "googleads" or "adwords" or "googleadwords";
+    }
+
+    /// <summary>Channel name for Nextdoor (manual spend; JobTread's Lead Source says "NextDoor").</summary>
+    public const string NextdoorChannel = "Nextdoor";
+
+    /// <summary>
+    /// The one place a JobTread "Lead Source" value (or a hand-entered spend channel) is turned into the channel the ads
+    /// view groups by, so jobs, JobTread leads and spend line up: Google Ad / Google / Google Ads → the Google Ads channel
+    /// (Google:AdsChannel, default "Google Ads"); Meta / Facebook / Instagram → "Facebook/Instagram" (Meta's channel);
+    /// NextDoor → "Nextdoor". Anything else is kept as written (grouping is case-insensitive).
+    /// </summary>
+    public static string ChannelFor(string source, string googleChannel)
+    {
+        var s = source.Trim();
+        if (IsGoogleAdsChannel(s, googleChannel)) return googleChannel;
+        if (MetaAdsService.ChannelAliases.Contains(s)) return MetaAdsService.Channel;
+        if (string.Equals(new string(s.Where(char.IsLetterOrDigit).ToArray()), "nextdoor", StringComparison.OrdinalIgnoreCase)) return NextdoorChannel;
+        return s;
     }
 
     /// <summary>
@@ -205,23 +233,44 @@ public sealed class SalesService(ProjectsService projects, IServiceProvider serv
         return new MergedSpend(lines, replaced);
     }
 
+    /// <summary>Row name for sold jobs whose customer account has no Lead Source: grouped by the job's "How bid came in".</summary>
+    public static string NoLeadSourceLabel(string? howBidCameIn) =>
+        string.IsNullOrWhiteSpace(howBidCameIn) ? "No lead source" : $"No lead source (bid: {howBidCameIn.Trim()})";
+
     /// <summary>
-    /// Jobs sold by "How bid came in" (JobTread) next to ad spend for channels with the same name. Which ad
-    /// produced which lead isn't tracked yet, so this is a side-by-side, not attribution.
+    /// Ads → revenue by lead source. Sold jobs are grouped by the customer account's Lead Source in JobTread (set by the
+    /// website form from the ad click id, or by hand), mapped to a channel by <see cref="ChannelFor"/>, next to spend and
+    /// platform leads for that channel and new JobTread customer accounts in the period with that Lead Source
+    /// (<paramref name="jtLeads"/>). Jobs whose customer has no Lead Source fall back to "How bid came in", in rows marked
+    /// NoLeadSource. WonLeads counts new accounts from the leads period that have a sold job.
     /// </summary>
-    public static List<LeadSource> LeadSources(IEnumerable<ProjectSummary> jobs, IEnumerable<SpendLine> spend)
+    public static List<LeadSource> LeadSources(IEnumerable<ProjectSummary> jobs, IEnumerable<SpendLine> spend, string googleChannel, JobTreadLeads? jtLeads = null)
     {
-        var bySource = jobs.GroupBy(j => string.IsNullOrWhiteSpace(j.HowBidCameIn) ? "Not set" : j.HowBidCameIn!.Trim(), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => (Jobs: g.Count(), Contract: g.Sum(j => j.Contract ?? 0)), StringComparer.OrdinalIgnoreCase);
-        var spendBy = spend.GroupBy(s => s.Channel.Trim(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key,
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        var jobList = jobs.ToList();
+        string KeyOf(ProjectSummary j) => j.CustomerLeadSource is { } ls ? ChannelFor(ls, googleChannel) : NoLeadSourceLabel(j.HowBidCameIn);
+
+        var bySource = jobList.GroupBy(KeyOf, cmp)
+            .ToDictionary(g => g.Key, g => (Jobs: g.Count(), Contract: g.Sum(j => j.Contract ?? 0)), cmp);
+        var noSource = jobList.Where(j => j.CustomerLeadSource is null).Select(KeyOf).ToHashSet(cmp);
+        var spendBy = spend.GroupBy(s => ChannelFor(s.Channel, googleChannel), cmp).ToDictionary(g => g.Key,
             g => (Amount: g.Sum(s => s.Amount), Leads: g.Any(s => s.Leads is not null) ? g.Sum(s => s.Leads ?? 0) : (decimal?)null, Api: g.Select(s => s.ApiSource).FirstOrDefault(a => a is not null)),
-            StringComparer.OrdinalIgnoreCase);
-        return bySource.Keys.Union(spendBy.Keys, StringComparer.OrdinalIgnoreCase)
+            cmp);
+        var leadsBy = (jtLeads?.BySource ?? new Dictionary<string, int>())
+            .GroupBy(kv => ChannelFor(kv.Key, googleChannel), cmp).ToDictionary(g => g.Key, g => g.Sum(kv => kv.Value), cmp);
+        var wonBy = jtLeads is null ? new Dictionary<string, int>(cmp) : jobList
+            .Where(j => j.CustomerLeadSource is not null && j.CustomerId is not null && j.CustomerCreatedOn >= jtLeads.From && j.CustomerCreatedOn <= jtLeads.To)
+            .GroupBy(KeyOf, cmp).ToDictionary(g => g.Key, g => g.Select(j => j.CustomerId).Distinct().Count(), cmp);
+
+        return bySource.Keys.Union(spendBy.Keys, cmp).Union(leadsBy.Keys, cmp)
             .Select(k =>
             {
                 var sp = spendBy.GetValueOrDefault(k);
-                return new LeadSource(k, bySource.GetValueOrDefault(k).Jobs, bySource.GetValueOrDefault(k).Contract, sp.Amount, sp.Leads, sp.Api);
+                var none = noSource.Contains(k);
+                int? jt = jtLeads is null || none ? null : leadsBy.GetValueOrDefault(k);
+                return new LeadSource(k, bySource.GetValueOrDefault(k).Jobs, bySource.GetValueOrDefault(k).Contract, sp.Amount, sp.Leads, sp.Api,
+                    jt, wonBy.GetValueOrDefault(k), none);
             })
-            .OrderByDescending(s => s.Contract).ToList();
+            .OrderBy(s => s.NoLeadSource).ThenByDescending(s => s.Contract).ThenByDescending(s => s.JtLeads ?? 0).ThenByDescending(s => s.Spend).ToList();
     }
 }

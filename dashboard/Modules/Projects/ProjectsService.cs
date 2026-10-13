@@ -90,7 +90,9 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
                         ["nodes"] = Json("""
                         {
                           "id": {}, "name": {}, "number": {}, "actualCost": {}, "projectedPrice": {},
-                          "location": { "address": {}, "account": { "id": {}, "name": {}, "leftReview": { "_": "customFieldValues", "$": { "where": [["customField", "id"], "22PXCpKpiwSy"] }, "nodes": { "value": {} } } } },
+                          "location": { "address": {}, "account": { "id": {}, "name": {}, "createdAt": {},
+                            "leftReview": { "_": "customFieldValues", "$": { "where": [["customField", "id"], "22PXCpKpiwSy"] }, "nodes": { "value": {} } },
+                            "leadSource": { "_": "customFieldValues", "$": { "where": [["customField", "id"], "22PWNYKhTU6S"] }, "nodes": { "value": {} } } } },
                           "billed": { "_": "documents", "$": { "where": { "and": [["type", "customerInvoice"], ["status", "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } },
                           "unpaid": { "_": "documents", "$": { "where": { "and": [["type", "customerInvoice"], ["status", "in", ["approved", "pending"]]] } }, "sum": { "$": ["balance"] } },
                           "pendingOrders": { "_": "documents", "$": { "where": { "and": [["type", "customerOrder"], ["status", "pending"]] } }, "sum": { "$": ["price"] }, "count": {} },
@@ -130,6 +132,8 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             CustomerId = job["location"]?["account"].Str("id"),
             Address = job["location"].Str("address"),
             CustomerLeftReview = job["location"]?["account"]?["leftReview"]?.Nodes().FirstOrDefault().Str("value") is { } review ? review == "Left a Review" : null,
+            CustomerLeadSource = job["location"]?["account"]?["leadSource"]?.Nodes().FirstOrDefault().Str("value") is { } lead && !string.IsNullOrWhiteSpace(lead) ? lead.Trim() : null,
+            CustomerCreatedOn = DateTimeOffset.TryParse(job["location"]?["account"].Str("createdAt"), out var created) ? LocalClock.ToLocalDate(created) : null,
             Stage = fields.GetValueOrDefault(JobFields.ProductionStage),
             BidStage = fields.GetValueOrDefault(JobFields.JobWalkBidStage) ?? fields.GetValueOrDefault(JobFields.DigitalBidStage),
             JobType = fields.GetValueOrDefault(JobFields.JobType),

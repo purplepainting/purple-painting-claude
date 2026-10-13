@@ -12,6 +12,10 @@ public sealed record ProjectSummary
     public string? Address { get; init; }
     /// <summary>The customer's "Left Review" field in JobTread: true = "Left a Review", false = "No Review", null = blank.</summary>
     public bool? CustomerLeftReview { get; init; }
+    /// <summary>The customer account's "Lead Source" field in JobTread (e.g. "Google Ad", "Meta", "NextDoor", "Client Referral"); null when blank.</summary>
+    public string? CustomerLeadSource { get; init; }
+    /// <summary>When the customer account was created in JobTread (Pacific date). Ties sold jobs back to the new leads of a period.</summary>
+    public DateOnly? CustomerCreatedOn { get; init; }
     public string? Stage { get; init; }            // Production Stage custom field
     public string? BidStage { get; init; }         // Job Walk or Digital Takeoff bid stage
     public string? JobType { get; init; }

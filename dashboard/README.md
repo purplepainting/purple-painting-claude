@@ -17,7 +17,7 @@ Locally there's no Entra sign-in in front of the app, so you're shown as "Local 
 To see real JobTread data locally, set the grant key first: `dotnet user-secrets set JOBTREAD_API_KEY <key>`
 (never put it in a file in the repo). Or point at saved sample responses with
 `JobTread__FixtureDirectory=/path/to/folder dotnet run`, where the folder has one `{query name}.json`
-per query (`financials-months`, `projects-list`, `projects-activity`, `projects-detail`, `schedule-week`, `people-staff`, `labor-entries`, and for pushes `schedule-job-tasks`, `schedule-current`, `schedule-update`, `schedule-create`, `schedule-delete`).
+per query (`financials-months`, `projects-list`, `projects-activity`, `projects-detail`, `schedule-week`, `people-staff`, `labor-entries`, `projects-closed`, `sales-leads`, and for pushes `schedule-job-tasks`, `schedule-current`, `schedule-update`, `schedule-create`, `schedule-delete`).
 
 **QuickBooks locally:** `QuickBooks__FixtureDirectory=/path` serves saved reports (`ProfitAndLoss.json`, `query-{Entity}.json`) instead of calling Intuit.
 
@@ -41,7 +41,7 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Data/Migrations/` | Schema history. Add one with `dotnet ef migrations add <Name> -o Data/Migrations` |
 | `Integrations/QuickBooks/` | QuickBooks Online connection (read only). Setup: `docs/QUICKBOOKS.md` |
 | `Integrations/Google/` | Google connection (read only): one company Google account for Google Ads (`googleAds:searchStream`) and Business Profile reviews. Setup: `docs/GOOGLE.md` |
-| `Modules/Sales/GoogleAdsService.cs` | Google Ads by month and campaign for Sales & Marketing; `SalesService.MergeApiSpend` puts it (and Meta, via `MetaAdsService.SpendSource`) in Ads → revenue without double counting |
+| `Modules/Sales/GoogleAdsService.cs` | Google Ads by month and campaign for Sales & Marketing; `SalesService.MergeApiSpend` puts it (and Meta, via `MetaAdsService.SpendSource`) in Ads → revenue without double counting. Jobs are attributed by the customer's JobTread Lead Source; `SalesService.ChannelFor` maps Lead Source values to spend channels, `JobTreadLeadsService` counts new accounts by Lead Source |
 | `Modules/Customers/GoogleReviewsService.cs`, `ReviewMatcher.cs` | Google reviews for Customers, matched to customers by name (display only) |
 | `Integrations/Meta/` | Facebook/Instagram ads via the Meta Marketing API (read only; API version constant in `MetaOptions`). Setup: `docs/META.md`. Connections card: `ViewComponents/MetaConnectionViewComponent.cs`; Sales section: `Modules/Sales/MetaAdsService.cs`, `Pages/Sales/_MetaAds.cshtml` |
 | `Modules/Financials/` | Financials: QuickBooks report parsing, account rules (which account counts as wages, burden, job cost, overhead), JobTread vs QuickBooks by month |
