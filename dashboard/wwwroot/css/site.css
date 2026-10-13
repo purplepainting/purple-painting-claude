@@ -811,3 +811,47 @@ table.data.chg-diff tr.changed td:last-child { font-weight: 600; background: var
   .chg-row .chevron { display: none; }
   .chg-detail { padding: 10px 12px 12px; }
 }
+
+/* Google (Connections card, Sales ads section, Customers reviews) */
+.setup-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.setup-list li { position: relative; padding-left: 26px; overflow-wrap: anywhere; }
+.setup-list li::before { position: absolute; left: 0; top: 1px; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; }
+.setup-list li.ok::before { content: "✓"; background: var(--good-bg); color: var(--good-text); }
+.setup-list li.todo { color: var(--warn-text); }
+.setup-list li.todo::before { content: "!"; background: var(--warn-bg); color: var(--warn-text); }
+.link-form select { width: 100%; font: inherit; font-size: 16px; min-height: var(--touch); }
+.gads-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 8px; }
+.gads-head .section-title { margin: 0; }
+.gads-refresh { margin-left: auto; }
+.gads-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 4px 0 6px; }
+.gads-kpis > div { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--purple-50); min-width: 0; }
+.gads-kpis b { font-size: 19px; }
+.gads-sub { font-size: 14px; margin: 14px 0 6px; }
+.gads-sub .muted { font-weight: 500; margin-left: 4px; }
+.gads table.data td:first-child { white-space: nowrap; }
+.gads table.data.campaigns td:first-child { white-space: normal; min-width: 190px; }
+table.data tr.in-period td:first-child { box-shadow: inset 3px 0 0 var(--purple-600); }
+table.data tr.replaced td { color: var(--muted); }
+table.data tr.replaced td.num { text-decoration: line-through; }
+.api-chip { margin-left: 6px; font-size: 11px; padding: 1px 7px; vertical-align: 1px; }
+a.kpi-link { color: inherit; text-decoration: none; }
+@media (hover: hover) { a.kpi-link:hover { border-color: var(--purple-600); } }
+.stars { color: #B45309; letter-spacing: 1px; white-space: nowrap; }
+.stars.big { font-size: 20px; }
+.stars-cell { color: #B45309; white-space: nowrap; }
+.review-text { margin: 4px 0 0; font-size: 14px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; }
+.review-reply { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--purple-100); font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.google-review { background: #FFFBF2; border-color: #F3E3C3; }
+.greviews-head { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.greviews-score { display: grid; justify-items: center; gap: 2px; min-width: 110px; }
+.greviews-avg { font-size: 36px; font-weight: 700; line-height: 1; }
+.greviews-meta { display: grid; gap: 4px; flex: 1 1 280px; min-width: 0; }
+.review-feed { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.review-card { padding: 12px 14px; display: grid; align-content: start; gap: 2px; min-width: 0; }
+.review-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.review-match { margin-left: auto; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+.review-more { margin-bottom: 12px; }
+table.data.unmatched td { white-space: nowrap; }
+.review-more > summary { list-style: none; display: inline-flex; margin-bottom: 10px; cursor: pointer; }
+.review-more > summary::-webkit-details-marker { display: none; }
+@media (max-width: 520px) { .review-feed { grid-template-columns: minmax(0, 1fr); } .gads-refresh { margin-left: 0; } }

@@ -8,9 +8,9 @@ using PurpleDashboard.Modules.Customers;
 
 namespace PurpleDashboard.Pages.Customers;
 
-public class IndexModel(CustomersService customers, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(CustomersService customers, GoogleReviewsService googleReviews, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
 {
-    /// <summary>"all" (default), "owes", "review".</summary>
+    /// <summary>"all" (default), "owes", "review", "google" (the Google reviews panel).</summary>
     [BindProperty(SupportsGet = true)] public string? Show { get; set; }
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }
 
@@ -18,6 +18,8 @@ public class IndexModel(CustomersService customers, ChangeLogWriter changeLog, D
     /// <summary>Review status per customer, by JobTread account id.</summary>
     public Dictionary<string, CustomerReview> Reviews { get; private set; } = [];
     public string? Error { get; private set; }
+    public GoogleReviewsView Google { get; private set; } = GoogleReviewsView.Fail(null, "", "not-loaded");
+    private IReadOnlyDictionary<string, ReviewMatch> GoogleByCustomer => Google.ByCustomer;
     public bool CanEdit => database.Available;
     [TempData] public string? Message { get; set; }
 
@@ -25,7 +27,7 @@ public class IndexModel(CustomersService customers, ChangeLogWriter changeLog, D
         .Where(c => Show switch
         {
             "owes" => c.Owes >= 1,
-            "review" => CustomersService.NeedsReview(c, Reviews),
+            "review" => CustomersService.NeedsReview(c, Reviews, GoogleByCustomer),
             _ => true,
         })
         .Where(c => string.IsNullOrWhiteSpace(Q) || c.Name.Contains(Q.Trim(), StringComparison.OrdinalIgnoreCase)
@@ -43,6 +45,7 @@ public class IndexModel(CustomersService customers, ChangeLogWriter changeLog, D
         {
             All = await customers.GetAsync(refresh, ct);
             Reviews = await customers.ReviewsAsync(ct);
+            Google = await googleReviews.GetAsync(All, refresh, ct);
         }
         catch (Exception e) when (e is JobTreadException or QuickBooksException or HttpRequestException or TaskCanceledException)
         {
@@ -70,11 +73,20 @@ public class IndexModel(CustomersService customers, ChangeLogWriter changeLog, D
     public (string Label, string Css, string? Title)? ReviewChip(CustomerView c)
     {
         var r = c.AccountId is { } id ? Reviews.GetValueOrDefault(id) : null;
+        if (Google.For(c) is { } g)
+            return (GoogleChip(g), "good", $"Google review by {g.Review.Reviewer}, {g.Review.Created:MMM d, yyyy}" + (g.How == "close" ? " (close name match)" : "")
+                + (c.LeftReviewInJobTread ? "" : ". JobTread isn't marked \"Left a Review\" yet; update it there by hand."));
         if (c.LeftReviewInJobTread) return ("Left a review (JobTread)", "good", "JobTread customer field \"Left Review\"");
         if (r is not null) return (ReviewLabel(r), r.Status == "received" ? "good" : "", r.UpdatedBy is { } by ? $"Updated {r.UpdatedAt:MMM d} by {by}" : null);
-        if (CustomersService.NeedsReview(c, Reviews)) return ("Review to request", "warn", null);
+        if (CustomersService.NeedsReview(c, Reviews, GoogleByCustomer)) return ("Review to request", "warn", null);
         return null;
     }
+
+    public bool NeedsReview(CustomerView c) => CustomersService.NeedsReview(c, Reviews, GoogleByCustomer);
+
+    public static string GoogleChip(ReviewMatch m) => m.Review.Stars > 0 ? $"Google review ★{m.Review.Stars}" : "Google review";
+
+    public static string Stars(int n) => n <= 0 ? "" : new string('★', n) + new string('☆', 5 - n);
 
     public static string ReviewLabel(CustomerReview? r) => r?.Status switch
     {

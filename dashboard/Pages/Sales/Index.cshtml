@@ -3,6 +3,7 @@
 @using PurpleDashboard.Infrastructure
 @using PurpleDashboard.Integrations.JobTread
 @using PurpleDashboard.Modules.Sales
+@using PurpleDashboard.Integrations.Google
 
 <div class="module-head">
     <div class="pills" role="tablist" aria-label="Sales sections">
@@ -19,6 +20,7 @@
                 <option value="30" selected="@(Model.Period == "30")">Last 30 days</option>
                 <option value="" selected="@(Model.Period is null or "90")">Last 90 days</option>
                 <option value="ytd" selected="@(Model.Period == "ytd")">Year to date</option>
+                @if (Model.CurrentTab == "ads") { <option value="12" selected="@(Model.Period == "12")">Last 12 months</option> }
             </select>
         </form>
     }
@@ -188,26 +190,101 @@ else if (Model.CurrentTab == "doors" && Model.Error is null)
         </section>
     }
 }
-else if (Model.Error is null)
+else if (Model.CurrentTab == "ads")
 {
-    var totalSpend = Model.Spend.Sum(s => s.Amount);
+    var totalSpend = Model.CountedSpend.Sum(s => s.Amount);
     var totalContract = Model.Sources.Sum(s => s.Contract);
-    <div class="kpis">
-        <div class="card kpi"><span class="kpi-label">Ad spend</span><span class="kpi-value num">@Format.Money(totalSpend)</span><span class="kpi-sub">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy")</span></div>
-        <div class="card kpi"><span class="kpi-label">Jobs sold (open + last year)</span><span class="kpi-value num">@Model.Sources.Sum(s => s.Jobs)</span></div>
-        <div class="card kpi"><span class="kpi-label">Contract value</span><span class="kpi-value num">@Format.Money(totalContract)</span></div>
-    </div>
+    var g = Model.Google;
+    if (Model.Error is null)
+    {
+        <div class="kpis">
+            <div class="card kpi"><span class="kpi-label">Ad spend</span><span class="kpi-value num">@Format.Money(totalSpend)</span><span class="kpi-sub">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy")@(g?.Ready == true ? " · Google Ads from the API" : "")</span></div>
+            <div class="card kpi"><span class="kpi-label">Jobs sold (open + last year)</span><span class="kpi-value num">@Model.Sources.Sum(s => s.Jobs)</span></div>
+            <div class="card kpi"><span class="kpi-label">Contract value</span><span class="kpi-value num">@Format.Money(totalContract)</span></div>
+        </div>
+    }
 
+    <section class="card fin-section gads">
+        <div class="gads-head">
+            <h2 class="section-title">Google Ads</h2>
+            @if (g?.Ready == true)
+            {
+                <span class="chip good">From Google Ads API</span>
+                <span class="muted small">@(g.Connection?.AdsCustomerName) · @AdsAccountId(g.Connection?.AdsCustomerId)</span>
+                <span class="gads-refresh"><a class="refresh-button" asp-page="/Sales/Index" asp-route-tab="ads" asp-route-period="@Model.Period" asp-route-refresh="true">↻ Refresh</a>@if (GoogleClient.AdsAsOf is { } asOf) { <span class="muted small"> as of @Format.QbAsOf(asOf)</span> }</span>
+            }
+            else
+            {
+                <span class="chip warn">@(g?.ProblemKind is "not-configured" or "not-connected" ? "Not connected" : "Needs attention")</span>
+            }
+        </div>
+        @if (g is { Ready: false })
+        {
+            <p class="muted">@g.Problem @if (g.ProblemKind != "not-configured") { <a href="/connections">Open Connections</a> }</p>
+            <p class="muted small">Until then, enter Google Ads spend by hand below like any other channel.</p>
+        }
+        else if (g?.Report is { } report)
+        {
+            string fromMonth = Model.From.ToString("yyyy-MM"), toMonth = Model.To.ToString("yyyy-MM");
+            var inPeriod = Model.GoogleMonths.Where(m => string.CompareOrdinal(m.Month, fromMonth) >= 0 && string.CompareOrdinal(m.Month, toMonth) <= 0).ToList();
+            var pCost = inPeriod.Sum(m => m.Cost); var pClicks = inPeriod.Sum(m => m.Clicks); var pLeads = inPeriod.Sum(m => m.Conversions);
+            <div class="gads-kpis">
+                <div><span class="kpi-label">Spend</span><b class="num">@Format.Money(pCost)</b></div>
+                <div><span class="kpi-label">Clicks</span><b class="num">@pClicks.ToString("#,0")</b></div>
+                <div><span class="kpi-label">Leads</span><b class="num">@Format.Number(pLeads)</b></div>
+                <div><span class="kpi-label">Cost per lead</span><b class="num">@(pLeads > 0 ? Format.Money(pCost / pLeads) : "—")</b></div>
+                @if (report.PhoneCallsAvailable) { <div><span class="kpi-label">Calls from ads</span><b class="num">@inPeriod.Sum(m => m.PhoneCalls ?? 0).ToString("#,0")</b></div> }
+            </div>
+            <p class="muted small">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy") (whole months). Leads = Google Ads conversions: whatever the account counts as one (calls from ads, form fills). Read only: the dashboard never changes ads.</p>
+
+            <h3 class="gads-sub">By month <span class="muted small">last 12 months</span></h3>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Month</th><th class="num">Spend</th><th class="num">Impr.</th><th class="num">Clicks</th><th class="num">Leads</th>@if (report.PhoneCallsAvailable) { <th class="num">Calls</th> }<th class="num">Cost / lead</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in Enumerable.Reverse(Model.GoogleMonths))
+                        {
+                            var inRange = string.CompareOrdinal(m.Month, fromMonth) >= 0 && string.CompareOrdinal(m.Month, toMonth) <= 0;
+                            <tr class="@(inRange ? "in-period" : "")"><td>@MonthLabel(m.Month)</td><td class="num">@Format.Money(m.Cost)</td><td class="num">@m.Impressions.ToString("#,0")</td><td class="num">@m.Clicks.ToString("#,0")</td><td class="num">@Format.Number(m.Conversions)</td>@if (report.PhoneCallsAvailable) { <td class="num">@m.PhoneCalls?.ToString("#,0")</td> }<td class="num">@Format.Money(m.CostPerLead)</td></tr>
+                        }
+                        @{ var tc = Model.GoogleMonths.Sum(m => m.Cost); var tl = Model.GoogleMonths.Sum(m => m.Conversions); }
+                        <tr class="total"><td>12 months</td><td class="num">@Format.Money(tc)</td><td class="num">@Model.GoogleMonths.Sum(m => m.Impressions).ToString("#,0")</td><td class="num">@Model.GoogleMonths.Sum(m => m.Clicks).ToString("#,0")</td><td class="num">@Format.Number(tl)</td>@if (report.PhoneCallsAvailable) { <td class="num">@Model.GoogleMonths.Sum(m => m.PhoneCalls ?? 0).ToString("#,0")</td> }<td class="num">@(tl > 0 ? Format.Money(tc / tl) : "—")</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 class="gads-sub">By campaign <span class="muted small">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy")</span></h3>
+            <div class="table-wrap">
+                <table class="data campaigns">
+                    <thead><tr><th>Campaign</th><th>Status</th><th class="num">Spend</th><th class="num">Impr.</th><th class="num">Clicks</th><th class="num">CTR</th><th class="num">Leads</th>@if (report.PhoneCallsAvailable) { <th class="num">Calls</th> }<th class="num">Cost / lead</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in Model.GoogleCampaigns)
+                        {
+                            <tr><td>@c.Name</td><td><span class="chip @(c.Status == "ENABLED" ? "good" : "")">@GoogleAdsService.StatusLabel(c.Status)</span></td><td class="num">@Format.Money(c.Cost)</td><td class="num">@c.Impressions.ToString("#,0")</td><td class="num">@c.Clicks.ToString("#,0")</td><td class="num">@(c.ClickRate is { } ctr ? ctr.ToString("0.0") + "%" : "—")</td><td class="num">@Format.Number(c.Conversions)</td>@if (report.PhoneCallsAvailable) { <td class="num">@c.PhoneCalls?.ToString("#,0")</td> }<td class="num">@Format.Money(c.CostPerLead)</td></tr>
+                        }
+                        @if (Model.GoogleCampaigns.Count == 0) { <tr><td colspan="9" class="muted">No Google Ads spend in this period.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    @if (Model.Error is null)
+    {
     <section class="card fin-section">
-        <h2 class="section-title">Lead sources</h2>
-        <p class="muted small">Jobs by JobTread's "How bid came in", next to ad spend for a channel with the same name. Which ad produced which lead isn't tracked yet (to decide), so this is side by side, not attribution.</p>
+        <h2 class="section-title">Ads → revenue by lead source</h2>
+        <p class="muted small">Jobs by JobTread's "How bid came in", next to spend and leads for a channel with the same name. @(g?.Ready == true ? $"{Model.GoogleChannel} spend and leads come from the Google Ads API; other channels are entered by hand. " : "")Which ad produced which lead isn't tracked yet (to decide), so this is side by side, not attribution.</p>
+        @if (Model.ReplacedSpendIds.Count > 0)
+        {
+            <p class="notice-inline warn small">@Model.ReplacedSpendIds.Count hand-entered Google Ads @(Model.ReplacedSpendIds.Count == 1 ? "month isn't" : "months aren't") counted: the Google Ads API has @(Model.ReplacedSpendIds.Count == 1 ? "that month" : "those months"), so the API figure is used instead (see "Spend entered").</p>
+        }
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>Source</th><th class="num">Jobs</th><th class="num">Contract</th><th class="num">Spend</th><th class="num">Contract per $1 spent</th></tr></thead>
+                <thead><tr><th>Source</th><th class="num">Jobs</th><th class="num">Contract</th><th class="num">Spend</th><th class="num">Leads</th><th class="num">Contract per $1 spent</th></tr></thead>
                 <tbody>
                     @foreach (var s in Model.Sources)
                     {
-                        <tr><td>@s.Source</td><td class="num">@s.Jobs</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
+                        <tr><td>@s.Source@if (s.FromApi) { <span class="chip good api-chip" title="Spend and leads from the Google Ads API">API</span> }</td><td class="num">@s.Jobs</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Leads is { } l ? Format.Number(l) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
                     }
                 </tbody>
             </table>
@@ -220,13 +297,13 @@ else if (Model.Error is null)
             <h2 class="section-title">Enter monthly spend</h2>
             <form method="post" asp-page-handler="Spend" asp-route-period="@Model.Period" class="inline-form wrap">
                 <label class="field"><span>Month</span><input type="month" name="month" value="@LocalClock.Today.ToString("yyyy-MM")" required></label>
-                <label class="field"><span>Channel</span><input name="channel" list="channels" required placeholder="e.g. Google Ads"></label>
+                <label class="field"><span>Channel</span><input name="channel" list="channels" required placeholder="e.g. Facebook"></label>
                 <datalist id="channels">@foreach (var s in Model.Sources) { <option value="@s.Source"></option> }</datalist>
                 <label class="field"><span>Amount</span><input name="amount" inputmode="decimal" required style="width:120px"></label>
                 <label class="field"><span>Leads (optional)</span><input type="number" name="leads" min="0" style="width:110px"></label>
                 <button class="button" type="submit">Save</button>
             </form>
-            <p class="muted small">Use the same channel names as JobTread's "How bid came in" so they line up. Saving the same month and channel again replaces it.</p>
+            <p class="muted small">Use the same channel names as JobTread's "How bid came in" so they line up. Saving the same month and channel again replaces it.@(g?.Ready == true ? $" {Model.GoogleChannel} comes from the API for the last 12 months; no need to enter it." : "")</p>
         </section>
     }
 
@@ -240,7 +317,9 @@ else if (Model.Error is null)
                     <tbody>
                         @foreach (var s in Model.Spend)
                         {
-                            <tr><td>@s.Month</td><td>@s.Channel</td><td class="num">@Format.Money(s.Amount)</td><td class="num">@(s.Leads?.ToString() ?? "—")</td>
+                            var replaced = Model.ReplacedSpendIds.Contains(s.Id);
+                            var api = replaced ? Model.GoogleMonths.FirstOrDefault(m => m.Month == s.Month) : null;
+                            <tr class="@(replaced ? "replaced" : "")"><td>@s.Month</td><td>@s.Channel@if (replaced) { <span class="chip warn api-chip" title="Google Ads API for @s.Month: @Format.Money(api?.Cost)">Not counted · API: @Format.Money(api?.Cost)</span> }</td><td class="num">@Format.Money(s.Amount)</td><td class="num">@(s.Leads?.ToString() ?? "—")</td>
                                 <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeleteSpend" asp-route-period="@Model.Period" onsubmit="return confirm('Delete?')"><input type="hidden" name="id" value="@s.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
                         }
                     </tbody>
@@ -248,10 +327,13 @@ else if (Model.Error is null)
             </div>
         </section>
     }
+    }
 }
 
 @functions {
     static string IndexModelPct(decimal part, decimal whole) => whole == 0 ? "—" : Format.Percent(100m * part / whole);
+    static string MonthLabel(string month) => DateOnly.TryParseExact(month + "-01", "yyyy-MM-dd", out var d) ? d.ToString("MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo("en-US")) : month;
+    static string AdsAccountId(string? id) => id is null ? "" : AdsAccount.FormatId(id);
 }
 
 @section Scripts {

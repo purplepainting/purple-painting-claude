@@ -1,0 +1,88 @@
+@model PurpleDashboard.Pages.Customers.IndexModel
+@using PurpleDashboard.Integrations.Google
+@using PurpleDashboard.Modules.Customers
+@using PurpleDashboard.Pages.Customers
+@* Google reviews panel on Customers (?show=google). Read only: nothing here writes to Google or JobTread. *@
+@{
+    var g = Model.Google;
+    var matchedById = g.Matches.ToDictionary(m => m.Review.Id, m => m);
+    const int FirstCount = 25;
+}
+
+@if (g.Data is not { } data)
+{
+    <div class="card notice@(g.ProblemKind is "not-configured" or "not-connected" ? "" : " warn")">
+        <strong>Google reviews aren't available yet.</strong>
+        <p>@g.Problem @if (g.ProblemKind is not "not-configured") { <a href="/connections">Open Connections</a> }</p>
+    </div>
+}
+else
+{
+    <section class="card fin-section greviews-head">
+        <div class="greviews-score">
+            <span class="greviews-avg num">@(data.AverageRating?.ToString("0.0") ?? "—")</span>
+            <span class="stars big" aria-hidden="true">@IndexModel.Stars((int)Math.Round(data.AverageRating ?? 0))</span>
+            <span class="muted small">@data.TotalCount Google reviews</span>
+        </div>
+        <div class="greviews-meta">
+            <b>@(g.Connection?.BusinessLocationTitle ?? "Business Profile")</b>
+            <span class="muted small">@g.ByCustomer.Count customers matched by name · @g.Unmatched.Count reviews not matched · newest @(data.Reviews.FirstOrDefault()?.Created.ToString("MMM d, yyyy") ?? "—")</span>
+            <span class="muted small">Matching is by name only (exact or close). It's for display: JobTread's "Left Review" field stays the record; update it there by hand. Replying to reviews is done in Google.</span>
+        </div>
+    </section>
+
+    <h2 class="section-title">Recent reviews</h2>
+    <div class="review-feed">
+        @foreach (var r in data.Reviews.Take(FirstCount)) { ReviewCard(r, matchedById.GetValueOrDefault(r.Id), g); }
+        @if (data.Reviews.Count == 0) { <div class="card empty-state"><p class="muted">No Google reviews yet.</p></div> }
+    </div>
+    @if (data.Reviews.Count > FirstCount)
+    {
+        <details class="review-more">
+            <summary class="button secondary">Show @(data.Reviews.Count - FirstCount) older reviews</summary>
+            <div class="review-feed">
+                @foreach (var r in data.Reviews.Skip(FirstCount)) { ReviewCard(r, matchedById.GetValueOrDefault(r.Id), g); }
+            </div>
+        </details>
+    }
+
+    <section class="card fin-section">
+        <h2 class="section-title">Not matched to a customer <span class="muted">@g.Unmatched.Count</span></h2>
+        <p class="muted small">Reviewers whose Google name doesn't match exactly one customer from the last 12 months (open jobs, closed jobs, QuickBooks customers who owe). Check them by hand; nothing is changed anywhere.</p>
+        <div class="table-wrap">
+            <table class="data unmatched">
+                <thead><tr><th>Reviewer</th><th>Stars</th><th>Date</th><th>Why</th></tr></thead>
+                <tbody>
+                    @foreach (var u in g.Unmatched.OrderByDescending(u => u.Review.Created))
+                    {
+                        <tr><td>@u.Review.Reviewer</td><td class="stars-cell">@IndexModel.Stars(u.Review.Stars)</td><td>@u.Review.Created.ToString("MMM d, yyyy")</td><td class="muted">@u.Why</td></tr>
+                    }
+                    @if (g.Unmatched.Count == 0) { <tr><td colspan="4" class="muted">Every review matched a customer.</td></tr> }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@functions {
+    void ReviewCard(GoogleReview r, ReviewMatch? m, GoogleReviewsView g)
+    {
+        <article class="card review-card">
+            <div class="review-head">
+                <span class="stars" aria-label="@r.Stars out of 5 stars">@IndexModel.Stars(r.Stars)</span>
+                <b>@r.Reviewer</b>
+                <span class="muted small">@r.Created.ToString("MMM d, yyyy")</span>
+                @if (m is not null)
+                {
+                    <a class="chip good review-match" href="/customers?q=@Uri.EscapeDataString(m.Customer.Name)" title="@(m.How == "close" ? "Close name match" : "Same name")">@m.Customer.Name@(m.How == "close" ? " ≈" : "")</a>
+                }
+                else
+                {
+                    <span class="chip review-match" title="@g.Unmatched.FirstOrDefault(u => u.Review.Id == r.Id)?.Why">Not matched</span>
+                }
+            </div>
+            @if (r.Comment is { } comment) { <p class="review-text">@comment</p> } else { <p class="muted small">No comment, stars only.</p> }
+            @if (r.Reply is { } reply) { <p class="review-reply"><b>Our reply@(r.RepliedAt is { } ra ? " · " + ra.ToString("MMM d") : ""):</b> @reply</p> }
+        </article>
+    }
+}

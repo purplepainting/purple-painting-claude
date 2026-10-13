@@ -19,7 +19,14 @@ public sealed record PersonCommissions(string Person, CommissionRule? Rule, int 
     public decimal Owed => Math.Max(0, Earned - Paid);
 }
 
-public sealed record LeadSource(string Source, int Jobs, decimal Contract, decimal Spend);
+/// <summary>A lead source: jobs sold by JobTread's "How bid came in", spend and leads for the channel with the same name. FromApi = spend came from the Google Ads API.</summary>
+public sealed record LeadSource(string Source, int Jobs, decimal Contract, decimal Spend, decimal? Leads = null, bool FromApi = false);
+
+/// <summary>One month of spend for a channel: entered by hand (AdSpends) or from the Google Ads API.</summary>
+public sealed record SpendLine(string Month, string Channel, decimal Amount, decimal? Leads, bool FromApi);
+
+/// <summary>Spend for a period with Google Ads from the API. Replaced = hand-entered Google rows not counted because the API has that month.</summary>
+public sealed record MergedSpend(List<SpendLine> Lines, List<AdSpend> Replaced);
 
 /// <summary>
 /// Sales &amp; Marketing: commissions per salesperson (rules and payments in the dashboard database, jobs and
@@ -141,16 +148,53 @@ public sealed class SalesService(ProjectsService projects, IServiceProvider serv
     public async Task DeleteSpendAsync(int id, CancellationToken ct) => await Db.AdSpends.Where(s => s.Id == id).ExecuteDeleteAsync(ct);
 
     /// <summary>
+    /// Whether a hand-entered channel is Google Ads (the API's channel name, or "Google", "Google Ads", "AdWords").
+    /// Local Services Ads or the Business Profile aren't in the Google Ads API, so names like "Google LSA" stay manual.
+    /// </summary>
+    public static bool IsGoogleAdsChannel(string channel, string adsChannel)
+    {
+        static string N(string s) => new(s.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+        var n = N(channel);
+        return n == N(adsChannel) || n is "google" or "googleads" or "adwords" or "googleadwords";
+    }
+
+    /// <summary>
+    /// Spend for months from..to: Google Ads from the API (as <paramref name="adsChannel"/>), every other channel as entered.
+    /// A hand-entered Google Ads row for a month the API covers isn't counted (no double counting); it's returned in Replaced.
+    /// Without API data (<paramref name="google"/> null) everything entered counts.
+    /// </summary>
+    public static MergedSpend MergeGoogleSpend(IEnumerable<AdSpend> manual, IReadOnlyList<AdsMonth>? google, string fromMonth, string toMonth, string adsChannel)
+    {
+        var apiMonths = (google ?? []).Where(m => string.CompareOrdinal(m.Month, fromMonth) >= 0 && string.CompareOrdinal(m.Month, toMonth) <= 0).ToList();
+        var covered = apiMonths.Select(m => m.Month).ToHashSet();
+        var lines = new List<SpendLine>();
+        var replaced = new List<AdSpend>();
+        foreach (var s in manual)
+        {
+            if (covered.Contains(s.Month) && IsGoogleAdsChannel(s.Channel, adsChannel)) replaced.Add(s);
+            else lines.Add(new SpendLine(s.Month, s.Channel.Trim(), s.Amount, s.Leads, false));
+        }
+        lines.AddRange(apiMonths.Where(m => m.Cost > 0 || m.Conversions > 0).Select(m => new SpendLine(m.Month, adsChannel, Math.Round(m.Cost, 2), m.Conversions, true)));
+        return new MergedSpend(lines, replaced);
+    }
+
+    /// <summary>
     /// Jobs sold by "How bid came in" (JobTread) next to ad spend for channels with the same name. Which ad
     /// produced which lead isn't tracked yet, so this is a side-by-side, not attribution.
     /// </summary>
-    public static List<LeadSource> LeadSources(IEnumerable<ProjectSummary> jobs, IEnumerable<AdSpend> spend)
+    public static List<LeadSource> LeadSources(IEnumerable<ProjectSummary> jobs, IEnumerable<SpendLine> spend)
     {
         var bySource = jobs.GroupBy(j => string.IsNullOrWhiteSpace(j.HowBidCameIn) ? "Not set" : j.HowBidCameIn!.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => (Jobs: g.Count(), Contract: g.Sum(j => j.Contract ?? 0)), StringComparer.OrdinalIgnoreCase);
-        var spendBy = spend.GroupBy(s => s.Channel.Trim(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Sum(s => s.Amount), StringComparer.OrdinalIgnoreCase);
+        var spendBy = spend.GroupBy(s => s.Channel.Trim(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key,
+            g => (Amount: g.Sum(s => s.Amount), Leads: g.Any(s => s.Leads is not null) ? g.Sum(s => s.Leads ?? 0) : (decimal?)null, Api: g.Any(s => s.FromApi)),
+            StringComparer.OrdinalIgnoreCase);
         return bySource.Keys.Union(spendBy.Keys, StringComparer.OrdinalIgnoreCase)
-            .Select(k => new LeadSource(k, bySource.GetValueOrDefault(k).Jobs, bySource.GetValueOrDefault(k).Contract, spendBy.GetValueOrDefault(k)))
+            .Select(k =>
+            {
+                var sp = spendBy.GetValueOrDefault(k);
+                return new LeadSource(k, bySource.GetValueOrDefault(k).Jobs, bySource.GetValueOrDefault(k).Contract, sp.Amount, sp.Leads, sp.Api);
+            })
             .OrderByDescending(s => s.Contract).ToList();
     }
 }

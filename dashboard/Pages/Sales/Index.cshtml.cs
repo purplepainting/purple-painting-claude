@@ -10,13 +10,13 @@ using PurpleDashboard.Modules.Sales;
 
 namespace PurpleDashboard.Pages.Sales;
 
-public class IndexModel(SalesService sales, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SalesService sales, GoogleAdsService googleAds, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"commissions" (default), "doors", "ads".</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
     /// <summary>Commissions filter: "owed" (default), "all".</summary>
     [BindProperty(SupportsGet = true)] public string? Show { get; set; }
-    /// <summary>Door-to-door and ads period: "30" days, "90" (default), "ytd".</summary>
+    /// <summary>Door-to-door and ads period: "30" days, "90" (default), "ytd", "12" (last 12 months, ads only).</summary>
     [BindProperty(SupportsGet = true)] public string? Period { get; set; }
 
     public string CurrentTab => Tab is "doors" or "ads" ? Tab : "commissions";
@@ -30,6 +30,14 @@ public class IndexModel(SalesService sales, ChangeLogWriter changeLog, DatabaseS
     public List<SalesActivity> Activity { get; private set; } = [];
     public List<AdSpend> Spend { get; private set; } = [];
     public List<LeadSource> Sources { get; private set; } = [];
+    /// <summary>Spend counted for the period: Google Ads from the API when connected, everything else as entered.</summary>
+    public List<SpendLine> CountedSpend { get; private set; } = [];
+    /// <summary>Hand-entered Google Ads rows not counted because the API has those months.</summary>
+    public HashSet<int> ReplacedSpendIds { get; private set; } = [];
+    public GoogleAdsView? Google { get; private set; }
+    public List<AdsMonth> GoogleMonths { get; private set; } = [];
+    public List<AdsCampaign> GoogleCampaigns { get; private set; } = [];
+    public string GoogleChannel => googleAds.Channel;
     public DateOnly From { get; private set; }
     public DateOnly To { get; private set; }
 
@@ -39,7 +47,13 @@ public class IndexModel(SalesService sales, ChangeLogWriter changeLog, DatabaseS
         ViewData["ModuleName"] = "Sales & Marketing";
         var today = LocalClock.Today;
         To = today;
-        From = Period switch { "30" => today.AddDays(-30), "ytd" => new DateOnly(today.Year, 1, 1), _ => today.AddDays(-90) };
+        From = Period switch
+        {
+            "30" => today.AddDays(-30),
+            "ytd" => new DateOnly(today.Year, 1, 1),
+            "12" when Tab == "ads" => new DateOnly(today.Year, today.Month, 1).AddMonths(-11),
+            _ => today.AddDays(-90),
+        };
 
         try
         {
@@ -55,9 +69,19 @@ public class IndexModel(SalesService sales, ChangeLogWriter changeLog, DatabaseS
             }
             else
             {
-                Spend = await sales.SpendAsync(From.ToString("yyyy-MM"), To.ToString("yyyy-MM"), ct);
+                string fromMonth = From.ToString("yyyy-MM"), toMonth = To.ToString("yyyy-MM");
+                Google = await googleAds.GetAsync(refresh, ct);
+                if (Google.Report is { } report)
+                {
+                    GoogleMonths = GoogleAdsService.Months(report);
+                    GoogleCampaigns = GoogleAdsService.Campaigns(report, fromMonth, toMonth);
+                }
+                Spend = await sales.SpendAsync(fromMonth, toMonth, ct);
+                var merged = SalesService.MergeGoogleSpend(Spend, Google.Ready ? GoogleMonths : null, fromMonth, toMonth, googleAds.Channel);
+                CountedSpend = merged.Lines;
+                ReplacedSpendIds = merged.Replaced.Select(r => r.Id).ToHashSet();
                 var jobs = (await sales.SoldJobsAsync(refresh, ct)).Where(j => j.ApprovedContract > 0).ToList();
-                Sources = SalesService.LeadSources(jobs, Spend);
+                Sources = SalesService.LeadSources(jobs, CountedSpend);
             }
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
