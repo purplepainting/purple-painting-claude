@@ -11,11 +11,12 @@ namespace PurpleDashboard.Pages.Employees.Interviews;
 /// One interview day: the slots (replaces the Interviews M-D-YYYY spreadsheet), booking, moving and cancelling,
 /// the reminder / day-of confirmation checklist, and the texts filled in with each person's time.
 /// </summary>
-public class DayModel(HiringService hiring, CurrentUser me) : PageModel
+public class DayModel(HiringService hiring, CurrentUser me, Permissions permissions) : PageModel
 {
     [BindProperty(SupportsGet = true)] public int Id { get; set; }
     [TempData] public string? Message { get; set; }
-    public bool CanEdit => hiring.Available;
+    public bool CanEdit => hiring.Available && permissions.Can(Perm.HiringEdit);
+    public bool DbAvailable => hiring.Available;
 
     public InterviewDay Day { get; private set; } = null!;
     public List<TimeOnly> Slots { get; private set; } = [];
@@ -27,7 +28,7 @@ public class DayModel(HiringService hiring, CurrentUser me) : PageModel
 
     public async Task<IActionResult> OnGetAsync(CancellationToken ct)
     {
-        if (await hiring.DayAsync(Id, ct) is not { } day) return CanEdit ? NotFound() : RedirectToPage("/Employees/Interviews/Index");
+        if (await hiring.DayAsync(Id, ct) is not { } day) return DbAvailable ? NotFound() : RedirectToPage("/Employees/Interviews/Index");
         Day = day;
         ViewData["Title"] = $"Hiring · {Format.Day(day.Date)}";
         ViewData["ModuleName"] = "Hiring";

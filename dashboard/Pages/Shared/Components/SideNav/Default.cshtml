@@ -4,7 +4,7 @@
     {
         var active = m.Key == Model.ActiveKey;
         var live = m.Status == ModuleStatus.Live;
-        <a class="navtile@(active ? " active" : "")@(live ? "" : " is-soon")" href="@m.Route" aria-current="@(active ? "page" : null)">
+        <a class="navtile@(active ? " active" : "")@(live ? "" : " is-soon")" href="@Model.Links[m.Key]" aria-current="@(active ? "page" : null)">
             <span class="navtile-icon"><partial name="_Icon" model="m.Icon" /></span>
             <span class="navtile-text">
                 <span class="navtile-name">@m.Name</span>

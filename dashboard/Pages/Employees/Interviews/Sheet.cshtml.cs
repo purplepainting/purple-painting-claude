@@ -8,17 +8,18 @@ using PurpleDashboard.Modules.Hiring;
 namespace PurpleDashboard.Pages.Employees.Interviews;
 
 /// <summary>The Interview Questions sheet on a phone or tablet. Saving moves the candidate to Interviewed.</summary>
-public class SheetModel(HiringService hiring, CurrentUser me) : PageModel
+public class SheetModel(HiringService hiring, CurrentUser me, Permissions permissions) : PageModel
 {
     [BindProperty(SupportsGet = true)] public int Id { get; set; }
     [BindProperty] public InterviewSheet Form { get; set; } = new();
     public HiringCandidate C { get; private set; } = null!;
-    public bool CanEdit => hiring.Available;
+    public bool CanEdit => hiring.Available && permissions.Can(Perm.HiringEdit);
+    public bool DbAvailable => hiring.Available;
     public bool IsNew { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(CancellationToken ct)
     {
-        if (await hiring.CandidateAsync(Id, ct) is not { } c) return CanEdit ? NotFound() : RedirectToPage("/Employees/Interviews/Index");
+        if (await hiring.CandidateAsync(Id, ct) is not { } c) return DbAvailable ? NotFound() : RedirectToPage("/Employees/Interviews/Index");
         C = c;
         ViewData["Title"] = $"Interview sheet · {c.Name}";
         ViewData["ModuleName"] = "Hiring";

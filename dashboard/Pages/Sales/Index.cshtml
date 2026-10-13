@@ -7,7 +7,7 @@
 
 <div class="module-head">
     <div class="pills" role="tablist" aria-label="Sales sections">
-        @foreach (var (key, label) in new[] { ("commissions", "Commissions"), ("doors", "Door-to-door"), ("ads", "Ads & lead sources") })
+        @foreach (var (key, label) in Model.Tabs)
         {
             <a class="pill@(Model.CurrentTab == key ? " active" : "")" asp-page="/Sales/Index" asp-route-tab="@(key == "commissions" ? null : key)">@label</a>
         }
@@ -32,7 +32,7 @@
 
 @if (Model.CurrentTab == "commissions" && Model.Error is null)
 {
-    <p class="list-meta muted">Salesperson comes from each job in JobTread. Set each person's rate below; "collected" pays as the customer pays (invoices minus unpaid, before retention).</p>
+    <p class="list-meta muted">Salesperson comes from each job in JobTread. @(Model.CanEditCommissions ? "Set each person's rate below; " : "")"collected" pays as the customer pays (invoices minus unpaid, before retention).</p>
 
     <section class="card fin-section">
         <h2 class="section-title">Salespeople</h2>
@@ -44,6 +44,7 @@
                     {
                         <tr>
                             <td>
+                                @if (!Model.CanEditCommissions) { <b>@p.Person</b> } else {
                                 <details class="acct-list">
                                     <summary><b>@p.Person</b></summary>
                                     <form method="post" asp-page-handler="Rule" class="inline-form">
@@ -53,9 +54,10 @@
                                             @foreach (var b in SalesService.Bases) { <option value="@b" selected="@((p.Rule?.Basis ?? "collected") == b)">% @SalesService.BasisLabel(b)</option> }
                                         </select>
                                         <input name="notes" value="@p.Rule?.Notes" placeholder="Notes (optional)" aria-label="Notes">
-                                        <button class="button secondary" type="submit" disabled="@(!Model.CanEdit)">Save</button>
+                                        <button class="button secondary" type="submit">Save</button>
                                     </form>
                                 </details>
+                                }
                             </td>
                             <td class="@(p.Rule is null ? "neg" : "")">@IndexModel.Rate(p.Rule)</td>
                             <td class="num">@p.Jobs</td>
@@ -96,7 +98,7 @@
                 </summary>
                 <div class="job-detail bonus-detail">
                     <p class="muted small">@c.Person: @IndexModel.Rate(c.Rule) · job profit @Format.Money(c.Profit) · <a href="@JobTreadIds.JobUrl(c.JobId)" target="_blank" rel="noopener">JobTread ↗</a></p>
-                    @if (Model.CanEdit)
+                    @if (Model.CanEditCommissions)
                     {
                         <form method="post" asp-page-handler="Pay" asp-route-show="@Model.Show" class="inline-form">
                             <input type="hidden" name="jobId" value="@c.JobId"><input type="hidden" name="jobName" value="@c.JobName"><input type="hidden" name="person" value="@c.Person">
@@ -116,7 +118,7 @@
                                 {
                                     <tr>
                                         <td>@Format.Date(p.PaidOn)</td><td class="num">@Format.Money(p.Amount)</td><td class="muted">@p.Note</td>
-                                        <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeletePayment" asp-route-show="@Model.Show" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@p.Id"><input type="hidden" name="jobId" value="@c.JobId"><button class="link-button" type="submit">Delete</button></form> }</td>
+                                        <td>@if (Model.CanEditCommissions) { <form method="post" asp-page-handler="DeletePayment" asp-route-show="@Model.Show" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@p.Id"><input type="hidden" name="jobId" value="@c.JobId"><button class="link-button" type="submit">Delete</button></form> }</td>
                                     </tr>
                                 }
                             </tbody>
@@ -139,7 +141,7 @@
                         {
                             <tr>
                                 <td>@Format.Date(p.PaidOn)</td><td>@p.Person</td><td>@p.JobName</td><td class="num">@Format.Money(p.Amount)</td><td class="muted">@p.Note</td>
-                                <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeletePayment" asp-route-show="@Model.Show" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@p.Id"><button class="link-button" type="submit">Delete</button></form> }</td>
+                                <td>@if (Model.CanEditCommissions) { <form method="post" asp-page-handler="DeletePayment" asp-route-show="@Model.Show" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@p.Id"><button class="link-button" type="submit">Delete</button></form> }</td>
                             </tr>
                         }
                     </tbody>
@@ -158,7 +160,7 @@ else if (Model.CurrentTab == "doors" && Model.Error is null)
         <div class="card kpi"><span class="kpi-label">Sold $</span><span class="kpi-value num">@Format.Money(a.Sum(x => x.SoldAmount))</span></div>
     </div>
 
-    @if (Model.CanEdit)
+    @if (Model.CanEditDoors)
     {
         <section class="card fin-section">
             <h2 class="section-title">Log activity</h2>
@@ -203,7 +205,7 @@ else if (Model.CurrentTab == "doors" && Model.Error is null)
                         @foreach (var x in a)
                         {
                             <tr><td>@Format.Date(x.Date)</td><td>@x.Rep</td><td class="num">@x.Doors</td><td class="num">@x.Leads</td><td class="num">@x.Sold</td><td class="num">@Format.Money(x.SoldAmount)</td><td class="muted">@x.Notes</td>
-                                <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeleteActivity" asp-route-period="@Model.Period" onsubmit="return confirm('Delete this entry?')"><input type="hidden" name="id" value="@x.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
+                                <td>@if (Model.CanEditDoors) { <form method="post" asp-page-handler="DeleteActivity" asp-route-period="@Model.Period" onsubmit="return confirm('Delete this entry?')"><input type="hidden" name="id" value="@x.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
                         }
                     </tbody>
                 </table>
@@ -324,7 +326,7 @@ else if (Model.CurrentTab == "ads")
         </div>
     </section>
 
-    @if (Model.CanEdit)
+    @if (Model.CanEditAds)
     {
         <section class="card fin-section">
             <h2 class="section-title">Enter monthly spend</h2>
@@ -352,7 +354,7 @@ else if (Model.CurrentTab == "ads")
                         {
                             var r = Model.ReplacedSpend.GetValueOrDefault(s.Id);
                             <tr class="@(r is not null ? "replaced" : "")"><td>@s.Month</td><td>@s.Channel@if (r is not null) { <span class="chip warn api-chip" title="@r.ApiName API for @s.Month: @Format.Money(r.ApiAmount)">Not counted · API: @Format.Money(r.ApiAmount)</span> }</td><td class="num">@Format.Money(s.Amount)</td><td class="num">@(s.Leads?.ToString() ?? "—")</td>
-                                <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeleteSpend" asp-route-period="@Model.Period" onsubmit="return confirm('Delete?')"><input type="hidden" name="id" value="@s.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
+                                <td>@if (Model.CanEditAds) { <form method="post" asp-page-handler="DeleteSpend" asp-route-period="@Model.Period" onsubmit="return confirm('Delete?')"><input type="hidden" name="id" value="@s.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
                         }
                     </tbody>
                 </table>

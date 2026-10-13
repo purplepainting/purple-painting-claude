@@ -22,9 +22,11 @@
     <partial name="_HiringNav" model="@("")" />
 </div>
 
-@if (!Model.CanEdit) { <div class="card notice warn"><p>The dashboard database isn't available, so the sheet can't be saved right now.</p></div> }
+@if (!Model.DbAvailable) { <div class="card notice warn"><p>The dashboard database isn't available, so the sheet can't be saved right now.</p></div> }
 
 <form method="post" class="sheet card">
+    @* Read only without hiring.edit (or without the database). *@
+    <fieldset disabled="@(!Model.CanEdit)" style="display:contents">
     <div class="sheet-head">
         <h1 class="hire-h1">Interview sheet</h1>
         <a class="link-button" href="/employees/interviews/candidate/@c.Id">← @c.Name</a>
@@ -130,9 +132,10 @@
     <label class="field sheet-wide"><span>Notes</span><textarea name="Form.Notes" rows="3">@f.Notes</textarea></label>
 
     <div class="sheet-actions">
-        <button class="button" type="submit" disabled="@(!Model.CanEdit)">Save @(Model.IsNew ? "· moves to Interviewed" : "sheet")</button>
+        @if (Model.CanEdit) { <button class="button" type="submit">Save @(Model.IsNew ? "· moves to Interviewed" : "sheet")</button> }
         <a class="link-button" href="/employees/interviews/candidate/@c.Id">Cancel</a>
     </div>
+    </fieldset>
 </form>
 
 @section Scripts {

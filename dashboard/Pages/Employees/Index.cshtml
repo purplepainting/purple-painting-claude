@@ -21,7 +21,7 @@
     </form>
 </div>
 
-@if (!Model.CanEdit)
+@if (!Model.DbCanSave)
 {
     <div class="card notice warn">
         <strong>Read only for now.</strong>
@@ -42,7 +42,7 @@
 else
 {
     <p class="list-meta muted">
-        @Model.Total people (from JobTread; new people show up here on their own) · QB = QuickBooks base pay · JT = JobTread burdened rate · hours are this week
+        @Model.Total people (from JobTread; new people show up here on their own)@(Model.ShowPay ? " · QB = QuickBooks base pay · JT = JobTread burdened rate" : "") · hours are this week
         @if (Model.FormerIds.Count > 0)
         {
             <text> · </text>
@@ -67,7 +67,7 @@ else
                             <div class="job-title">@s.Name</div>
                             <div class="job-sub muted">
                                 @s.Role
-                                <span class="emp-rates-inline num">· QB @IndexModel.Pay(m.Profile?.QbBasePay, m.Profile?.QbPayType) · JT @IndexModel.Pay(s.BaseRate?.HourlyRate, null)</span>
+                                @if (Model.ShowPay) { <span class="emp-rates-inline num">· QB @IndexModel.Pay(m.Profile?.QbBasePay, m.Profile?.QbPayType) · JT @IndexModel.Pay(s.BaseRate?.HourlyRate, null)</span> }
                                 @if (Model.FormerIds.Contains(s.MembershipId)) { <span class="chip bad small-chip" title="Inactive in QuickBooks but still a member in JobTread">Off payroll · still in JobTread</span> }
                                 @if (s.QboEmployeeId is null) { <span class="chip warn small-chip" title="No QuickBooks employee linked in JobTread">No QuickBooks link</span> }
                                 @if (m.Profile?.Notes is { } notes) { <span class="emp-note" title="@notes">· @notes</span> }
@@ -75,12 +75,15 @@ else
                         </div>
                         <span class="emp-figs">
                             <span class="pchip @m.ChipClass" style="@m.ChipStyle" title="@(m.LevelIsSet ? "Set on this page" : "Default (from settings / JobTread role)")">@m.LevelLabel@(m.LevelIsSet ? "" : "*")</span>
-                            @if (m.SuggestedLevel is { } sl) { <span class="chip warn small-chip" title="QuickBooks base pay points to @Levels.Label(sl)">Pay says @Levels.Label(sl)</span> }
+                            @if (Model.ShowPay && m.SuggestedLevel is { } sl) { <span class="chip warn small-chip" title="QuickBooks base pay points to @Levels.Label(sl)">Pay says @Levels.Label(sl)</span> }
                             @if (m.IsSupervisor && (m.Staff.Role == "Project Manager" || !string.IsNullOrEmpty(m.Profile?.Color))) { <span class="pm-tag" style="@PmColorOptions.StyleFor(m.Color)">@s.FirstName</span> }
+                            @if (Model.ShowPay)
+                            {
                             <span class="emp-rates num">
                                 <span title="QuickBooks base pay">QB @IndexModel.Pay(m.Profile?.QbBasePay, m.Profile?.QbPayType)</span>
                                 <span class="muted" title="JobTread burdened rate@(s.BaseRate is { } br ? $" ({br.Name})" : "")">JT @IndexModel.Pay(s.BaseRate?.HourlyRate, null)</span>
                             </span>
+                            }
                             <span class="emp-hours num muted">@(Model.Hours(m) > 0 ? Format.Number(Model.Hours(m)) + " hrs" : "—")</span>
                         </span>
                         <span class="chevron" aria-hidden="true"></span>

@@ -10,7 +10,7 @@ using PurpleDashboard.Modules.Sales;
 
 namespace PurpleDashboard.Pages.Sales;
 
-public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsService metaAds, JobTreadLeadsService jtLeads, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsService metaAds, JobTreadLeadsService jtLeads, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, Permissions permissions, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"commissions" (default), "doors", "ads".</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
@@ -19,8 +19,25 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
     /// <summary>Door-to-door and ads period: "30" days, "90" (default), "ytd", "12" (last 12 months, ads only).</summary>
     [BindProperty(SupportsGet = true)] public string? Period { get; set; }
 
-    public string CurrentTab => Tab is "doors" or "ads" ? Tab : "commissions";
+    /// <summary>The tabs this person may see, in order: key, label, view permission.</summary>
+    public IReadOnlyList<(string Key, string Label)> Tabs =>
+        new[] { ("commissions", "Commissions", Perm.CommissionsView), ("doors", "Door-to-door", Perm.SalesView), ("ads", "Ads & lead sources", Perm.AdsView) }
+            .Where(t => permissions.Can(t.Item3)).Select(t => (t.Item1, t.Item2)).ToList();
+
+    /// <summary>The tab asked for when allowed, else the first allowed one.</summary>
+    public string CurrentTab
+    {
+        get
+        {
+            var asked = Tab is "doors" or "ads" ? Tab : "commissions";
+            return Tabs.Any(t => t.Key == asked) ? asked : Tabs.FirstOrDefault().Key ?? "commissions";
+        }
+    }
+    /// <summary>The database is up (saving possible at all).</summary>
     public bool CanEdit => database.Available;
+    public bool CanEditCommissions => database.Available && permissions.Can(Perm.CommissionsEdit);
+    public bool CanEditDoors => database.Available && permissions.Can(Perm.SalesEdit);
+    public bool CanEditAds => database.Available && permissions.Can(Perm.AdsEdit);
     public string? Error { get; private set; }
     [TempData] public string? Message { get; set; }
     /// <summary>Job id of the commission row to keep open (after recording or deleting a payment there).</summary>

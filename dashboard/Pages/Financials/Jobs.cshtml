@@ -1,5 +1,6 @@
 @page "/financials/jobs"
 @model PurpleDashboard.Pages.Financials.JobsModel
+@inject PurpleDashboard.Auth.Permissions Access
 @using PurpleDashboard.Infrastructure
 @using PurpleDashboard.Integrations.JobTread
 
@@ -9,7 +10,7 @@
         <a class="pill active" href="/financials/jobs">Job by job</a>
         <a class="pill" href="/financials?tab=burden">Labor burden</a>
         <a class="pill" href="/financials?tab=overhead">Overhead</a>
-        <a class="pill" href="/financials/bonuses">Bonuses</a>
+        @if (Access.Can(PurpleDashboard.Auth.Perm.BonusesView)) { <a class="pill" href="/financials/bonuses">Bonuses</a> }
     </div>
 </div>
 

@@ -12,7 +12,10 @@ cd dashboard
 dotnet run
 ```
 
-Locally there's no Entra sign-in in front of the app, so you're shown as "Local Developer".
+Locally there's no Entra sign-in in front of the app, so you're shown as "Local Developer" (`dev@localhost`, an admin
+via `appsettings.Development.json`). To try another role, open any page with `?devuser=sam@purplepainting.net` (kept
+in a cookie; `?devuser=` goes back) or set `Dev:UserEmail`. Development only. Then give that person a role on
+Settings → Users & access (needs the local database below).
 
 To see real JobTread data locally, set the grant key first: `dotnet user-secrets set JOBTREAD_API_KEY <key>`
 (never put it in a file in the repo). Or point at saved sample responses with
@@ -34,6 +37,11 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Program.cs` | App startup: services, routes, `/health` |
 | `Modules/ModuleRegistry.cs` | **The list of modules.** The left menu comes from here, in order; the first one is the home page |
 | `Auth/CurrentUser.cs` | The signed-in user, from Easy Auth headers. Inject `CurrentUser` anywhere |
+| `Auth/AccessRoles.cs` | Users & access: every permission key (`Perm`) and the role → permission table (`AccessRoles.Table`) |
+| `Auth/AccessMap.cs` | Which permission each page folder and each POST handler needs, and which menu tiles show (default deny) |
+| `Auth/AccessFilter.cs` | Enforces the map before every page handler; 403 page / JSON. Lists unmapped handlers at startup |
+| `Auth/Permissions.cs`, `UserAccessStore.cs` | `Permissions.Can("key")` for the current person (scoped); the `UserAccess` table (role, overrides, first/last seen) |
+| `Pages/Settings/Access.cshtml` | Settings → Users & access: roles and per-person overrides (admins), `wwwroot/js/access.js` |
 | `Pages/ComingSoon.cshtml` | Placeholder page for any module that isn't built yet |
 | `Pages/Shared/_Layout.cshtml` | Left menu, top bar and page frame used by every page |
 | `Data/DashboardDb.cs` | The dashboard database (EF Core): tables and the `DatabaseStatus` pages check before saving |
@@ -88,6 +96,22 @@ straight away with a "Coming soon" page.
 
 **Add a table:** add the class and `DbSet` in `Data/DashboardDb.cs`, then `dotnet ef migrations add <Name> -o Data/Migrations` and commit the migration. It's applied on the next deploy. Check `DatabaseStatus.Available` before writing.
 
+**Users & access: wiring a new page or handler** (see SPEC.md 4b). Every page and every POST handler is
+checked against `Auth/AccessMap.cs`; anything missing there works for admins only (and logs "Access map: … isn't
+mapped" at startup), so a new page is safe by default but nobody else can use it until it's mapped:
+1. **Page:** if it's in a mapped folder (e.g. `Pages/Equipment/`) it already needs that folder's view key. Otherwise
+   add `["/Folder/Page"] = AccessRule.For(Perm.SomethingView)` to `AccessMap.Pages` (a prefix: the longest match wins).
+2. **POST handler:** add `["/Folder/Page#HandlerName"] = AccessRule.For(Perm.SomethingEdit)` to `AccessMap.Handlers`
+   (`OnPostSaveAsync` → `#Save`, plain `OnPost` → `#`). GET handlers that change something (OAuth starts) go there too.
+3. **UI:** inject `Permissions` and fold the edit key into the page's `CanEdit`
+   (`public bool CanEdit => database.Available && permissions.Can(Perm.SomethingEdit);`); show Save buttons and edit
+   forms only when it's true. Keep a separate `DbAvailable` for "the database is down" notices.
+4. **New permission key:** add the constant and its row in `Perm.Areas` (the access page shows it), then give it to
+   roles in `AccessRoles.Table`. New menu module: add its key to `AccessMap.Modules`.
+5. **Search:** a new search group checks its view key in `SearchService.SearchAsync`.
+Example (monthly bonuses): `["/Financials/Bonuses"]` (any page starting with it) needs `bonuses.view`, its POST
+handlers `bonuses.edit`, an effort-rating handler `bonuses.rate`, and `["/Settings/Bonuses"]` needs `settings.bonuses`.
+
 **Change colors or fonts:** edit the variables in `:root` at the top of `wwwroot/css/site.css`.
 
 **Phones:** every screen must work on iPhone and Android. Follow the phone checklist in SPEC.md section 5; the shared styles already handle most of it.
@@ -112,6 +136,10 @@ seen and the current minutes per area. QuickBooks data isn't signalled and keeps
 
 Never commit secrets. Settings go in Azure: PurpleDashboard > Settings > Environment variables,
 and are read with `builder.Configuration`. List any new setting names in the PR description.
+
+`ADMIN_EMAILS`: comma-separated emails that are always Admin (can't be locked out, still admin if the database is
+down). The default in `appsettings.json` is `kareem@purplepainting.net`; setting it in Azure replaces that list, so
+include Kareem there too.
 
 The database connection string is under PurpleDashboard > Settings > Environment variables > **Connection strings**, name `Dashboard`, type SQLAzure.
 

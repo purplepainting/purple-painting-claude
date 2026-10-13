@@ -21,6 +21,13 @@ public class ErrorModel : PageModel
             Heading = "Page not found";
             Message = "That page doesn't exist. It may have moved.";
         }
+        if (code == 403)
+        {
+            Heading = "No access";
+            ViewData["Title"] = "No access";
+            Message = HttpContext.Items[PurpleDashboard.Auth.AccessFilter.DeniedItem] as string
+                ?? "You don't have access to this page. Ask an admin if you need it.";
+        }
         if (code is not null) Response.StatusCode = code.Value;
     }
 }

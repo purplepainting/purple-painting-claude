@@ -8,7 +8,7 @@ using PurpleDashboard.Modules.Customers;
 
 namespace PurpleDashboard.Pages.Customers;
 
-public class IndexModel(CustomersService customers, GoogleReviewsService googleReviews, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(CustomersService customers, GoogleReviewsService googleReviews, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, Permissions permissions, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"all" (default), "owes", "review", "google" (the Google reviews panel).</summary>
     [BindProperty(SupportsGet = true)] public string? Show { get; set; }
@@ -20,7 +20,8 @@ public class IndexModel(CustomersService customers, GoogleReviewsService googleR
     public string? Error { get; private set; }
     public GoogleReviewsView Google { get; private set; } = GoogleReviewsView.Fail(null, "", "not-loaded");
     private IReadOnlyDictionary<string, ReviewMatch> GoogleByCustomer => Google.ByCustomer;
-    public bool CanEdit => database.Available;
+    public bool CanEdit => database.Available && permissions.Can(Perm.CustomersEdit);
+    public bool DbAvailable => database.Available;
     [TempData] public string? Message { get; set; }
 
     public IEnumerable<CustomerView> Shown => All
