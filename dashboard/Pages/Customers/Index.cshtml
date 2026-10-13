@@ -60,33 +60,37 @@ else
                     }
                     @if (c.AccountId is not null && (c.HasCompletedJob || r is not null || c.LeftReviewInJobTread))
                     {
-                        var status = r?.Status ?? (c.LeftReviewInJobTread ? "received" : "requested");
+                        var status = r?.Status is "requested" or "later" or "skip" ? r.Status : "requested";
                         <section class="cust-review" aria-label="Review for @c.Name">
                             <div class="cust-review-head">
                                 <b>Review</b>
                                 @if (chip is { } rc) { <span class="chip @rc.Css" title="@rc.Title">@rc.Label</span> }
                                 <span class="muted small">One per customer@(c.Jobs.Count > 1 ? $", covers all {c.Jobs.Count} jobs" : "")</span>
                             </div>
+                            @if (c.LeftReviewInJobTread)
+                            {
+                                <p class="muted small">Marked "Left a Review" on the customer in JobTread. Change it there if that's wrong.</p>
+                            }
+                            else
+                            {
                             <form method="post" asp-page-handler="Review" asp-route-show="@Model.Show" asp-route-q="@Model.Q" class="inline-form">
                                 <input type="hidden" name="accountId" value="@c.AccountId"><input type="hidden" name="customerName" value="@c.Name">
                                 <label class="field"><span>Status</span>
                                     <select name="status">
                                         <option value="requested" selected="@(status == "requested")">Requested</option>
-                                        <option value="received" selected="@(status == "received")">Received</option>
                                         <option value="later" selected="@(status == "later")">Ask later</option>
                                         <option value="skip" selected="@(status == "skip")">Not asking</option>
                                     </select>
                                 </label>
-                                <label class="field"><span>Platform</span>
+                                <label class="field"><span>Asked for</span>
                                     <select name="platform"><option value="">—</option>@foreach (var p in CustomersService.Platforms) { <option selected="@(r?.Platform == p)">@p</option> }</select>
-                                </label>
-                                <label class="field"><span>Stars</span>
-                                    <select name="rating"><option value="">—</option>@for (var s = 5; s >= 1; s--) { <option value="@s" selected="@(r?.Rating == s)">@s ★</option> }</select>
                                 </label>
                                 <label class="field grow"><span>Notes</span><input name="notes" value="@r?.Notes"></label>
                                 <button class="button secondary" type="submit" disabled="@(!Model.CanEdit)">Save</button>
                             </form>
+                            <p class="muted small">When they leave the review, mark "Left a Review" on the customer in JobTread; it shows here automatically.</p>
                             @if (!Model.CanEdit) { <p class="muted small">Saving needs the dashboard database.</p> }
+                            }
                         </section>
                     }
                     @foreach (var j in c.Jobs)
