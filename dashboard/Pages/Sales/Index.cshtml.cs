@@ -10,7 +10,7 @@ using PurpleDashboard.Modules.Sales;
 
 namespace PurpleDashboard.Pages.Sales;
 
-public class IndexModel(SalesService sales, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SalesService sales, MetaAdsService metaAds, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"commissions" (default), "doors", "ads".</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
@@ -29,6 +29,14 @@ public class IndexModel(SalesService sales, ChangeLogWriter changeLog, DatabaseS
     public List<CommissionPayment> Payments { get; private set; } = [];
     public List<SalesActivity> Activity { get; private set; } = [];
     public List<AdSpend> Spend { get; private set; } = [];
+    /// <summary>Facebook/Instagram ads from the Meta API (ads tab). Null on other tabs.</summary>
+    public MetaAdsView? Meta { get; private set; }
+    /// <summary>Spend used for totals and lead sources: manual rows, with Meta's number replacing manual Facebook/Instagram rows for months it covers.</summary>
+    public List<AdSpend> EffectiveSpend { get; private set; } = [];
+    /// <summary>Manual rows not counted because Meta's API number for the same channel and month is used instead.</summary>
+    public List<AdSpend> ReplacedSpend { get; private set; } = [];
+    /// <summary>Refresh link in the Facebook/Instagram section: drop cached Meta data.</summary>
+    [BindProperty(SupportsGet = true)] public bool MetaRefresh { get; set; }
     public List<LeadSource> Sources { get; private set; } = [];
     public DateOnly From { get; private set; }
     public DateOnly To { get; private set; }
@@ -56,8 +64,10 @@ public class IndexModel(SalesService sales, ChangeLogWriter changeLog, DatabaseS
             else
             {
                 Spend = await sales.SpendAsync(From.ToString("yyyy-MM"), To.ToString("yyyy-MM"), ct);
+                Meta = await metaAds.LoadAsync(From, To, MetaRefresh, ct);
+                (EffectiveSpend, ReplacedSpend) = MetaAdsService.MergeSpend(Spend, Meta.Report, From.ToString("yyyy-MM"), To.ToString("yyyy-MM"));
                 var jobs = (await sales.SoldJobsAsync(refresh, ct)).Where(j => j.ApprovedContract > 0).ToList();
-                Sources = SalesService.LeadSources(jobs, Spend);
+                Sources = SalesService.LeadSources(jobs, EffectiveSpend);
             }
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)

@@ -27,6 +27,8 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     /// <summary>No longer used (reviews are per customer now, see CustomerReviews). Kept so the table and its rows stay.</summary>
     public DbSet<JobReview> JobReviews => Set<JobReview>();
     public DbSet<CustomerReview> CustomerReviews => Set<CustomerReview>();
+    /// <summary>Facebook/Instagram ads (Meta Marketing API) connection. Entity in Data/MetaConnection.cs.</summary>
+    public DbSet<MetaConnection> MetaConnections => Set<MetaConnection>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {

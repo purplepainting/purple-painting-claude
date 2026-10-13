@@ -53,6 +53,18 @@ builder.Services.Configure<PurpleDashboard.Integrations.QuickBooks.QuickBooksOpt
 });
 builder.Services.AddHttpClient<PurpleDashboard.Integrations.QuickBooks.QuickBooksClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
+// Facebook/Instagram ads (Meta Marketing API, read only). App keys from META_APP_ID / META_APP_SECRET in Azure; see docs/META.md.
+builder.Services.Configure<PurpleDashboard.Integrations.Meta.MetaOptions>(o =>
+{
+    o.AppId = builder.Configuration["META_APP_ID"];
+    o.AppSecret = builder.Configuration["META_APP_SECRET"];
+    o.RedirectUri = builder.Configuration["META_REDIRECT_URI"];
+    o.LoginConfigId = builder.Configuration["META_LOGIN_CONFIG_ID"];
+    if (builder.Environment.IsDevelopment()) o.FixtureDirectory = builder.Configuration["Meta:FixtureDirectory"];
+});
+builder.Services.AddHttpClient<PurpleDashboard.Integrations.Meta.MetaClient>(c => c.Timeout = TimeSpan.FromSeconds(60));
+builder.Services.AddScoped<PurpleDashboard.Modules.Sales.MetaAdsService>();
+
 // Modules
 builder.Services.AddScoped<ChangeLogWriter>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Changes.ChangeLogReader>();

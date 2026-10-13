@@ -190,7 +190,7 @@ else if (Model.CurrentTab == "doors" && Model.Error is null)
 }
 else if (Model.Error is null)
 {
-    var totalSpend = Model.Spend.Sum(s => s.Amount);
+    var totalSpend = Model.EffectiveSpend.Sum(s => s.Amount);
     var totalContract = Model.Sources.Sum(s => s.Contract);
     <div class="kpis">
         <div class="card kpi"><span class="kpi-label">Ad spend</span><span class="kpi-value num">@Format.Money(totalSpend)</span><span class="kpi-sub">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy")</span></div>
@@ -212,7 +212,10 @@ else if (Model.Error is null)
                 </tbody>
             </table>
         </div>
+        <partial name="_MetaSpendNote" model="Model" />
     </section>
+
+    <partial name="_MetaAds" model="Model.Meta" />
 
     @if (Model.CanEdit)
     {
@@ -240,7 +243,7 @@ else if (Model.Error is null)
                     <tbody>
                         @foreach (var s in Model.Spend)
                         {
-                            <tr><td>@s.Month</td><td>@s.Channel</td><td class="num">@Format.Money(s.Amount)</td><td class="num">@(s.Leads?.ToString() ?? "—")</td>
+                            <tr class="@(Model.ReplacedSpend.Contains(s) ? "replaced" : "")"><td>@s.Month</td><td>@s.Channel@if (Model.ReplacedSpend.Contains(s)) { <span class="chip" title="Meta's API number for this month is used instead, so this row isn't counted">Meta API used</span> }</td><td class="num">@Format.Money(s.Amount)</td><td class="num">@(s.Leads?.ToString() ?? "—")</td>
                                 <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeleteSpend" asp-route-period="@Model.Period" onsubmit="return confirm('Delete?')"><input type="hidden" name="id" value="@s.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
                         }
                     </tbody>

@@ -658,3 +658,24 @@ table.data.chg-diff tr.changed td:last-child { font-weight: 600; background: var
   .chg-row .chevron { display: none; }
   .chg-detail { padding: 10px 12px 12px; }
 }
+
+/* ---- Facebook & Instagram ads (Sales > Ads & lead sources, Pages/Sales/_MetaAds.cshtml) ---- */
+.meta-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 8px; }
+.meta-head .section-title { margin: 0; }
+.meta-ads .sub-title { font-size: 14px; margin: 16px 0 6px; }
+.meta-ads .sub-title .muted { font-weight: 500; margin-left: 4px; }
+.meta-ads .notice-inline { margin-bottom: 8px; }
+.meta-kpis .kpi { box-shadow: none; background: var(--bg); }
+.meta-note { margin: 8px 0 0; }
+table.data tr.replaced td { color: var(--muted); }
+table.data tr.replaced td.num { text-decoration: line-through; }
+table.data tr.replaced .chip { font-size: 11px; padding: 1px 7px; margin-left: 6px; }
+.meta-account-form { min-width: 0; }
+.meta-account-form .field { flex: 1 1 240px; min-width: 0; }
+.meta-account-form select { width: 100%; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+.meta-ads table.data td:first-child { min-width: 11em; }
+.meta-ads table.data td.month { white-space: nowrap; min-width: 0; }
+@media (max-width: 640px) {
+  .meta-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .meta-kpis .kpi { padding: 10px 12px; }
+}

@@ -1,0 +1,85 @@
+@model PurpleDashboard.ViewComponents.MetaConnectionCard
+@using PurpleDashboard.Infrastructure
+@{
+    var c = Model.Connection;
+    var warn = Model.Expired || Model.ExpiresSoon || Model.NeedsReconnect;
+}
+<section class="card connection" id="meta">
+    <div class="connection-head">
+        <h2>Facebook &amp; Instagram ads</h2>
+        @if (!Model.Configured) { <span class="chip warn">Not set up</span> }
+        else if (c is null) { <span class="chip warn">Not connected</span> }
+        else if (Model.Expired || Model.NeedsReconnect) { <span class="chip warn">Reconnect needed</span> }
+        else if (Model.ExpiresSoon) { <span class="chip warn">Expires in @Model.DaysLeft day@(Model.DaysLeft == 1 ? "" : "s")</span> }
+        else if (c.AdAccountId is null) { <span class="chip warn">Pick an ad account</span> }
+        else { <span class="chip good">Connected</span> }
+    </div>
+
+    @if (!Model.Configured)
+    {
+        <p class="muted">The dashboard's Meta app isn't set up yet. Missing setting@(Model.MissingSettings.Length == 1 ? "" : "s") in Azure:
+            @Html.Raw(string.Join(" and ", Model.MissingSettings.Select(s => $"<code>{s}</code>"))).
+            See docs/META.md for the steps, then come back here.</p>
+    }
+    else if (!Model.DatabaseAvailable && !Model.Fixtures)
+    {
+        <p class="muted">The dashboard database isn't available, so a connection can't be saved right now.</p>
+    }
+    else if (c is null)
+    {
+        <p class="muted">One shared connection for everyone (read only). Connect once with a Facebook user who can see the Purple Painting ad account, and Sales &amp; Marketing shows Facebook and Instagram spend, clicks and leads by month and campaign.</p>
+        <div><a class="button" asp-page="/Connections/Meta" asp-page-handler="Connect">Connect Facebook</a></div>
+        <p class="muted small">Opens Facebook's sign-in. The dashboard only asks for <code>ads_read</code> (view ad results) and never changes your ads.</p>
+    }
+    else
+    {
+        <dl class="detail-grid">
+            <div><dt>Facebook user</dt><dd>@(c.UserName ?? "—")</dd></div>
+            <div><dt>Connected</dt><dd>@Format.Date(DateOnly.FromDateTime(c.ConnectedAt.ToLocalTime()))@(c.ConnectedBy is { } by ? $" by {by}" : "")</dd></div>
+            <div><dt>Good until</dt><dd class="@(warn ? "neg" : "")">@(c.ExpiresAt is { } exp ? Format.Date(DateOnly.FromDateTime(exp.ToLocalTime())) : "No expiry given")@if (Model.DaysLeft is { } d && d >= 0) { <span class="muted small"> (@d day@(d == 1 ? "" : "s") left)</span> }</dd></div>
+            <div><dt>Ad account</dt><dd>@(c.AdAccountName ?? "Not picked yet")</dd></div>
+        </dl>
+
+        @if (Model.Expired || Model.NeedsReconnect)
+        {
+            <p class="notice-inline warn">@(Model.Problem ?? "The Facebook approval has expired.") Click <b>Reconnect</b> and sign in to Facebook again to keep ads data coming in.</p>
+        }
+        else if (Model.ExpiresSoon)
+        {
+            <p class="notice-inline warn">Meta's approval runs out in @Model.DaysLeft day@(Model.DaysLeft == 1 ? "" : "s") and can't renew itself. Click <b>Reconnect</b> and sign in to Facebook again (takes a minute) for another 60 days.</p>
+        }
+        else if (Model.Problem is not null)
+        {
+            <p class="notice-inline warn">@Model.Problem</p>
+        }
+
+        @if (Model.Accounts.Count > 0)
+        {
+            <form method="post" asp-page="/Connections/Meta" asp-page-handler="Account" class="inline-form meta-account-form">
+                <label class="field grow">
+                    <span>Ad account to read</span>
+                    <select name="adAccountId" aria-label="Ad account">
+                        @if (c.AdAccountId is null) { <option value="">Pick one…</option> }
+                        @foreach (var a in Model.Accounts)
+                        {
+                            <option value="@a.Id" selected="@(a.Id == c.AdAccountId)">@a.Name@(a.Business is { } b ? $" · {b}" : "")@(a.Active ? "" : " (inactive)") · @a.Id.Replace("act_", "")</option>
+                        }
+                    </select>
+                </label>
+                <button class="button secondary" type="submit" disabled="@(Model.Fixtures && !Model.DatabaseAvailable)">Save</button>
+            </form>
+        }
+        else if (Model.Problem is null)
+        {
+            <p class="notice-inline warn">This Facebook user can't see any ad accounts. Reconnect with a user who has access to the Purple Painting ad account (in Meta Business Settings).</p>
+        }
+
+        <div class="form-actions">
+            <a class="@(warn ? "button" : "link-button")" asp-page="/Connections/Meta" asp-page-handler="Connect">Reconnect</a>
+            <form method="post" asp-page="/Connections/Meta" asp-page-handler="Disconnect" onsubmit="return confirm('Disconnect Facebook/Instagram ads from the dashboard?')">
+                <button class="link-button" type="submit">Disconnect</button>
+            </form>
+        </div>
+        <p class="muted small">Read only: the dashboard reads ad results and never changes campaigns, budgets or ads.@(Model.Fixtures ? " Showing sample data (Meta:FixtureDirectory)." : "")</p>
+    }
+</section>
