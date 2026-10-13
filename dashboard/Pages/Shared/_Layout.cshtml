@@ -33,7 +33,12 @@
             @await Component.InvokeAsync("SideNav")
             @if (Me.DisplayName is not null)
             {
-                <div class="sidebar-user" title="@Me.Email">Signed in as @Me.DisplayName · <a href="/connections">Connections</a> · <a href="/changes">Change log</a> · <a href="/.auth/logout?post_logout_redirect_uri=/">Sign out</a></div>
+                var path = Context.Request.Path.Value ?? "";
+                var inSettings = path.StartsWith("/settings", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/connections", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/changes", StringComparison.OrdinalIgnoreCase);
+                <div class="sidebar-user" title="@Me.Email">
+                    <span class="sidebar-user-name">@Me.DisplayName</span>
+                    <a class="settings-button@(inSettings ? " active" : "")" href="/settings" aria-current="@(inSettings ? "page" : null)"><partial name="_Icon" model="@("settings")" /><span>Settings</span></a>
+                </div>
             }
         </aside>
         <label for="nav-toggle" class="scrim" aria-hidden="true"></label>
