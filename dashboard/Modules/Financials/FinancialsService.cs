@@ -24,6 +24,9 @@ public sealed class FinancialPeriod
     public decimal JtInternalLabor { get; set; }
     public decimal JtInternalHours { get; set; }
     public decimal JtInternalBills { get; set; }
+    /// <summary>Catch-up documents dated in this month by mistake (already counted, and in QuickBooks in earlier months), left out.</summary>
+    public decimal JtSkippedInvoiced { get; set; }
+    public decimal JtSkippedBills { get; set; }
 
     // QuickBooks
     public decimal QbIncome { get; set; }
@@ -44,7 +47,7 @@ public sealed class FinancialPeriod
     public decimal JtJobHours => JtHours - JtInternalHours;
     public decimal JtJobLabor => JtLaborCost - JtInternalLabor;
     /// <summary>Invoices − bills − time at burdened rates, on real jobs (internal jobs left out).</summary>
-    public decimal JtJobProfit => JtInvoiced - JtJobLabor - (JtBills - JtInternalBills);
+    public decimal JtJobProfit => JtInvoiced - JtSkippedInvoiced - JtJobLabor - (JtBills - JtInternalBills - JtSkippedBills);
     public decimal QbNetBeforeBonuses => QbNet + QbBonuses;
     /// <summary>JobTread job profit − QuickBooks net before bonuses: positive = JobTread shows more profit than there was.</summary>
     public decimal NetDelta => JtJobProfit - QbNetBeforeBonuses;
@@ -82,8 +85,21 @@ public sealed class FinancialsReport
 /// JobTread bills; differences are listed as flags to clean up.
 /// </summary>
 public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClient jobTread, AccountRules rules, IMemoryCache cache, IOptions<JobTreadOptions> jtOptions,
-    PurpleDashboard.Modules.Projects.ProjectsService projects)
+    PurpleDashboard.Modules.Projects.ProjectsService projects, IOptions<AccountRulesOptions> accountOptions)
 {
+    /// <summary>
+    /// JobTread documents dated in August 2026 by mistake during the QuickBooks catch-up (Kareem, Oct 2026). Payment
+    /// applications can't be re-dated once out of draft, so JobTread's profit leaves them out instead.
+    /// </summary>
+    private static readonly string[] DefaultSkip =
+    [
+        // Goleta Valley Cottage Hospital pay apps #61–66 (QuickBooks: Nov 2024–Feb 2026, Mar, Apr, May, Jun, Jul 2026).
+        "22PczYwzaMp3", "22PczYyK5Ax2", "22PczYz9XkkV", "22PczZ2LxAFM", "22PczZ3LqwJV", "22PczZ4GvVMn",
+        // "QB Historical Catch-Up" bills: GVCH #40, #41; 1509 Shoreline #69, #70 (costs from before JobTread).
+        "22PczRNiNi5a", "22PczRQSP45K", "22PdWh4syfJM", "22PdWh5YphGD",
+    ];
+    private IReadOnlyList<string> Skip => accountOptions.Value.SkipDocuments.Count > 0 ? accountOptions.Value.SkipDocuments : DefaultSkip;
+
     public Task<FinancialsReport> GetAsync(DateOnly from, DateOnly to, string basis, bool refresh, CancellationToken ct)
     {
         var key = $"financials:{from:yyyy-MM-dd}:{to:yyyy-MM-dd}:{basis}";
@@ -149,6 +165,7 @@ public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClie
             QbBurden = periods.Sum(p => p.QbBurden), QbJobCosts = periods.Sum(p => p.QbJobCosts), QbOverhead = periods.Sum(p => p.QbOverhead),
             QbBonuses = periods.Sum(p => p.QbBonuses), JtInternalLabor = periods.Sum(p => p.JtInternalLabor),
             JtInternalHours = periods.Sum(p => p.JtInternalHours), JtInternalBills = periods.Sum(p => p.JtInternalBills),
+            JtSkippedInvoiced = periods.Sum(p => p.JtSkippedInvoiced), JtSkippedBills = periods.Sum(p => p.JtSkippedBills),
         };
 
         List<CategoryTotal> Categories(AccountKind kind) => classified
@@ -256,6 +273,18 @@ public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClie
                 ["cost"] = new JsonObject { ["_"] = "sum", ["$"] = "cost" },
                 ["minutes"] = new JsonObject { ["_"] = "sum", ["$"] = "minutes" },
             };
+            foreach (var (alias, from) in new[] { ("sinv", "inv"), ("sbill", "bill") })
+            {
+                if (Skip.Count == 0) break;
+                var and = (JsonArray)org[$"{from}{i}"]!["$"]!["where"]!["and"]!.DeepClone();
+                and.Add(new JsonArray("id", "in", new JsonArray(Skip.Select(id => (JsonNode?)JsonValue.Create(id)).ToArray())));
+                org[$"{alias}{i}"] = new JsonObject
+                {
+                    ["_"] = "documents",
+                    ["$"] = new JsonObject { ["where"] = new JsonObject { ["and"] = and } },
+                    ["sum"] = new JsonObject { ["$"] = from == "inv" ? "price" : "cost" },
+                };
+            }
             if (internalIds.Count == 0) continue;
             var timeAnd = (JsonArray)org[$"time{i}"]!["$"]!["where"]!["and"]!.DeepClone();
             timeAnd.Add(OnInternal());
@@ -287,6 +316,8 @@ public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClie
             JtInternalLabor = result?[$"itime{i}"].Dec("cost") ?? 0,
             JtInternalHours = Math.Round((result?[$"itime{i}"].Dec("minutes") ?? 0) / 60m, 1),
             JtInternalBills = result?[$"ibill{i}"].Dec("sum") ?? 0,
+            JtSkippedInvoiced = result?[$"sinv{i}"].Dec("sum") ?? 0,
+            JtSkippedBills = result?[$"sbill{i}"].Dec("sum") ?? 0,
         }).ToList();
     }
 

@@ -13,6 +13,8 @@ public sealed record AccountClass(AccountKind Kind, string Category);
 public sealed class AccountRulesOptions
 {
     public Dictionary<string, string> Accounts { get; set; } = [];
+    /// <summary>JobTread document ids left out of JobTread vs QuickBooks (Financials:SkipDocuments); empty = the defaults in FinancialsService.</summary>
+    public List<string> SkipDocuments { get; set; } = [];
 }
 
 public sealed class AccountRules(Microsoft.Extensions.Options.IOptions<AccountRulesOptions> options)
