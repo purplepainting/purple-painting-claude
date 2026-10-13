@@ -33,6 +33,11 @@ public partial class IndexModel(
 
     public bool IsDay => Mode == "day";
     public bool IsMonth => Mode == "month";
+
+    /// <summary>Tasks counted in the summary line: in Month, only the month itself (not the spill-over days of the grid).</summary>
+    public IEnumerable<ScheduleTask> SummaryTasks => IsMonth
+        ? Tasks.Where(t => t.Start <= Anchor.AddMonths(1).AddDays(-1) && t.End >= Anchor)
+        : Tasks;
     public bool ByPerson => By == "person";
     public bool Supervisors => Who == "supervisors";
     public DateOnly Today { get; } = LocalClock.Today;
