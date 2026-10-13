@@ -7,7 +7,7 @@ public sealed class CommissionsOwedMetric(SalesService sales) : ITileMetric
 
     public async Task<string?> GetValueAsync(CancellationToken ct)
     {
-        var owed = (await sales.CommissionsAsync(false, ct)).Sum(c => c.Owed);
+        var owed = SalesService.ByPerson(await sales.CommissionsAsync(false, ct), await sales.UnallocatedAsync(ct)).Sum(p => p.Owed);
         return owed >= 1000 ? "$" + Math.Round(owed / 1000m).ToString("#,0") + "k" : "$" + Math.Round(owed).ToString("#,0");
     }
 }

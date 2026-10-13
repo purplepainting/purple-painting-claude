@@ -26,7 +26,7 @@
     }
 </div>
 
-@if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
+@if (Model.Message is not null && Model.Open is null) { <div class="card notice"><p>@Model.Message</p></div> }
 @if (!Model.CanEdit) { <div class="card notice warn"><p>The dashboard database isn't available, so nothing can be saved right now.</p></div> }
 @if (Model.Error is not null) { <div class="card notice warn"><strong>Couldn't load.</strong><p>@Model.Error</p></div> }
 
@@ -62,11 +62,11 @@
                             <td class="@(p.Rule is null ? "neg" : "")">@IndexModel.Rate(p.Rule)</td>
                             <td class="num">@p.Jobs</td>
                             <td class="num">@Format.Money(p.Earned)</td>
-                            <td class="num">@Format.Money(p.Paid)</td>
+                            <td class="num">@Format.Money(p.Paid + p.Unallocated)@if (p.Unallocated != 0) { <div class="muted small" title="Paid through payroll beyond their owed jobs; lowers what they're owed">incl. @Format.Money(p.Unallocated) unallocated</div> }</td>
                             <td class="num"><b>@Format.Money(p.Owed)</b></td>
                         </tr>
                     }
-                    <tr class="total"><td>Total</td><td></td><td class="num">@Model.People.Sum(p => p.Jobs)</td><td class="num">@Format.Money(Model.People.Sum(p => p.Earned))</td><td class="num">@Format.Money(Model.People.Sum(p => p.Paid))</td><td class="num">@Format.Money(Model.People.Sum(p => p.Owed))</td></tr>
+                    <tr class="total"><td>Total</td><td></td><td class="num">@Model.People.Sum(p => p.Jobs)</td><td class="num">@Format.Money(Model.People.Sum(p => p.Earned))</td><td class="num">@Format.Money(Model.People.Sum(p => p.Paid + p.Unallocated))</td><td class="num">@Format.Money(Model.People.Sum(p => p.Owed))</td></tr>
                 </tbody>
             </table>
         </div>
@@ -118,7 +118,7 @@
                                 {
                                     <tr>
                                         <td>@Format.Date(p.PaidOn)</td><td class="num">@Format.Money(p.Amount)</td><td class="muted">@p.Note</td>
-                                        <td>@if (Model.CanEditCommissions) { <form method="post" asp-page-handler="DeletePayment" asp-route-show="@Model.Show" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@p.Id"><input type="hidden" name="jobId" value="@c.JobId"><button class="link-button" type="submit">Delete</button></form> }</td>
+                                        <td>@if (Model.IsLocked(p.Person, p.PaidOn)) { <span class="muted small" title="Paid & locked month">🔒</span> } else if (Model.CanEditCommissions) { <form method="post" asp-page-handler="DeletePayment" asp-route-show="@Model.Show" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@p.Id"><input type="hidden" name="jobId" value="@c.JobId"><button class="link-button" type="submit">Delete</button></form> }</td>
                                     </tr>
                                 }
                             </tbody>
@@ -128,6 +128,95 @@
             </details>
         }
     </div>
+
+    @if (Model.Checks is { } chk)
+    {
+        var cm = chk.Month;
+        var cmKey = CommissionPayroll.Key(cm);
+        var cmLabel = CommissionPayroll.Label(cm);
+        string Cents(decimal d) => d.ToString("$#,##0.00;-$#,##0.00");
+        bool InlineFor(string id) => Model.Open == id && Model.Message is not null;
+        <section class="fin-section-plain" id="checks" style="margin-top:16px">
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between">
+                <h2 class="section-title">Payroll checks · @cmLabel</h2>
+                <form method="get" data-autosubmit class="filters">
+                    @if (Model.Show is not null) { <input type="hidden" name="show" value="@Model.Show"> }
+                    <select name="month" aria-label="Payroll month">
+                        @foreach (var m in CommissionPayroll.Months()) { <option value="@CommissionPayroll.Key(m)" selected="@(m == cm)">@CommissionPayroll.Label(m)</option> }
+                    </select>
+                </form>
+            </div>
+            @if (!chk.Payroll.Ok)
+            {
+                <div class="card notice warn"><p>@chk.Payroll.Problem</p></div>
+            }
+            else
+            {
+                <p class="muted small">"Commission" paycheck lines posted in QuickBooks in @cmLabel (@string.Join(", ", chk.Payroll.Accounts)), gross, matched to salespeople by QuickBooks employee id, then name, and compared with the commission payments recorded here dated in @cmLabel (tolerance $1). Owed now is today's balance on all their jobs.
+                    @if (Model.QbAsOf is { } asOf) { <span>QuickBooks as of @asOf.ToLocalTime().ToString("MMM d h:mm tt") · <a asp-page="/Sales/Index" asp-route-month="@cmKey" asp-route-show="@Model.Show" asp-route-qbRefresh="true" asp-fragment="checks">Refresh</a></span> }</p>
+                <details class="acct-list small" style="margin-bottom:8px">
+                    <summary>How "Record from payroll" and locking work</summary>
+                    <p class="muted small"><b>Record from payroll</b> records what payroll paid beyond what's recorded here, dated on the check: it pays off the person's owed jobs oldest first (lowest JobTread job number), and anything left over (payroll paid more than their jobs owe, e.g. an advance) is kept as one <b>unallocated</b> payment that lowers their owed total. Delete it under Recent payments if it was a mistake.</p>
+                    <p class="muted small"><b>Paid &amp; locked</b> saves a snapshot of the person's month (each job's commission earned and what was paid in @cmLabel, the check and gross). Payments dated in a locked month can't be added or deleted. If a job's commission changes later (JobTread contract, collected or profit), the change shows in the next open month as an adjustment; it's already counted in owed now. Unlocking needs a reason and is change-logged.</p>
+                </details>
+                @if (InlineFor("checks")) { <p class="notice-inline good">@Model.Message</p> }
+                <div class="card table-wrap">
+                    <table class="data stack-phone">
+                        <thead><tr><th>Salesperson</th><th class="num">Owed now</th><th class="num">Recorded in @cm.ToString("MMM")</th><th class="num">Payroll (gross)</th><th>Checks</th><th>Status</th><th></th></tr></thead>
+                        <tbody>
+                            @if (chk.Rows.Count == 0) { <tr><td colspan="7" class="muted">No commission owed, recorded or paid through payroll in @cmLabel.</td></tr> }
+                            @foreach (var c in chk.Rows)
+                            {
+                                var slug = IndexModel.Slug(c.Name);
+                                <tr id="chk-@slug">
+                                    <td>@c.Name</td>
+                                    <td class="num" data-label="Owed now">@Cents(c.OwedNow)</td>
+                                    <td class="num" data-label="Recorded in @cm.ToString("MMM")">@Cents(c.Recorded)</td>
+                                    <td class="num" data-label="Payroll (gross)">@Cents(c.Payroll)</td>
+                                    <td class="small" data-label="Checks">@foreach (var ch in c.Checks) { <div>#@(ch.Num ?? "—") · @Format.Date(ch.Date) · @Cents(ch.Amount)</div> }@if (c.Checks.Count == 0) { <span class="muted">—</span> }</td>
+                                    <td>
+                                        <span class="chip @c.Chip">@(c.Lock is not null ? "🔒 " : "")@c.Status</span>
+                                        @if (c.Detail is { } d) { <div class="muted small">@d</div> }
+                                        @if (c.Lock is { } lk) { <div class="muted small">by @lk.LockedBy @Format.Date(DateOnly.FromDateTime(lk.LockedAt.ToLocalTime())): paid @Cents(lk.Net)@(lk.Gross is { } g ? $", gross {Cents(g)}" : "")@(lk.CheckNum is { } cn ? $", check {cn}" : "")</div> }
+                                        @if (c.Adjustment is { } adj) { <div class="small @(adj.Amount < 0 ? "neg" : "")">Adjustment for @CommissionPayroll.Label(adj.LockedMonth): @(adj.Amount > 0 ? "+" : "")@Cents(adj.Amount) (@string.Join(", ", adj.Jobs) changed after it was locked; in owed now)</div> }
+                                    </td>
+                                    <td class="actions">
+                                        @if (Model.CanEditCommissions && c.Unrecorded > 0 && c.Lock is null)
+                                        {
+                                            <form method="post" asp-page-handler="PayFromPayroll" asp-route-month="@cmKey" asp-route-show="@Model.Show"><input type="hidden" name="person" value="@c.Name"><button class="button secondary" type="submit" title="Record @Cents(c.Unrecorded) from the payroll check">Record from payroll</button></form>
+                                        }
+                                        @if (Model.CanEditCommissions && c.CanLock)
+                                        {
+                                            <form method="post" asp-page-handler="Lock" asp-route-month="@cmKey" asp-route-show="@Model.Show" onsubmit="@(c.Unrecorded > 0 ? "return confirm(" + System.Text.Json.JsonSerializer.Serialize($"Record {Cents(c.Unrecorded)} from payroll and lock {c.Name} for {cmLabel}?") + ")" : null)"><input type="hidden" name="person" value="@c.Name"><button class="link-button" type="submit">Lock</button></form>
+                                        }
+                                        @if (Model.CanEditCommissions && c.Lock is not null)
+                                        {
+                                            <details class="unlock"><summary class="link-button">Unlock</summary>
+                                                <form method="post" asp-page-handler="Unlock" asp-route-month="@cmKey" asp-route-show="@Model.Show" class="inline-form"><input type="hidden" name="person" value="@c.Name"><input name="reason" placeholder="Reason (required)" aria-label="Reason for unlocking" required><button class="button secondary" type="submit">Unlock</button></form>
+                                            </details>
+                                        }
+                                    </td>
+                                </tr>
+                                @if (c.Payments.Count > 0)
+                                {
+                                    <tr><td colspan="7" class="small muted" style="font-weight:400">Recorded: @string.Join(" · ", c.Payments.Select(p => $"{Format.Date(p.PaidOn)} {Cents(p.Amount)} {(p.JobId == CommissionPayroll.Unallocated ? "unallocated" : p.JobName)}"))</td></tr>
+                                }
+                                @if (InlineFor("chk-" + slug)) { <tr><td colspan="7"><p class="notice-inline good">@Model.Message</p></td></tr> }
+                            }
+                        </tbody>
+                        <tfoot><tr><td>Total</td><td class="num" data-label="Owed now">@Cents(chk.Rows.Sum(x => x.OwedNow))</td><td class="num" data-label="Recorded in @cm.ToString("MMM")">@Cents(chk.Rows.Sum(x => x.Recorded))</td><td class="num" data-label="Payroll (gross)">@Cents(chk.Rows.Sum(x => x.Payroll))</td><td colspan="3"></td></tr></tfoot>
+                    </table>
+                </div>
+                @if (Model.CanEditCommissions && chk.Rows.Any(x => x.ReadyToLock))
+                {
+                    <form method="post" asp-page-handler="Lock" asp-route-month="@cmKey" asp-route-show="@Model.Show" class="form-actions" style="margin-top:10px" onsubmit="return confirm('Lock everyone whose payroll check matches what is recorded for @cmLabel?')">
+                        <button class="button" type="submit">Lock @cmLabel</button>
+                        <span class="muted small">Locks everyone whose check matches. Others stay open (Record from payroll first, or Lock them one by one).</span>
+                    </form>
+                }
+            }
+        </section>
+    }
 
     @if (Model.Payments.Count > 0)
     {
@@ -141,7 +230,7 @@
                         {
                             <tr>
                                 <td>@Format.Date(p.PaidOn)</td><td>@p.Person</td><td>@p.JobName</td><td class="num">@Format.Money(p.Amount)</td><td class="muted">@p.Note</td>
-                                <td>@if (Model.CanEditCommissions) { <form method="post" asp-page-handler="DeletePayment" asp-route-show="@Model.Show" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@p.Id"><button class="link-button" type="submit">Delete</button></form> }</td>
+                                <td>@if (Model.IsLocked(p.Person, p.PaidOn)) { <span class="muted small" title="Paid & locked month">🔒</span> } else if (Model.CanEditCommissions) { <form method="post" asp-page-handler="DeletePayment" asp-route-show="@Model.Show" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@p.Id"><button class="link-button" type="submit">Delete</button></form> }</td>
                             </tr>
                         }
                     </tbody>
