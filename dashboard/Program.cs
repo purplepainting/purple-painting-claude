@@ -55,6 +55,7 @@ builder.Services.AddHttpClient<PurpleDashboard.Integrations.QuickBooks.QuickBook
 
 // Modules
 builder.Services.AddScoped<ChangeLogWriter>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Changes.ChangeLogReader>();
 builder.Services.AddScoped<JobTreadUserKeys>();
 builder.Services.AddHostedService<JobTreadChangeWatcher>();
 builder.Services.AddHttpClient<JobTreadOAuth>(c => c.Timeout = TimeSpan.FromSeconds(30));

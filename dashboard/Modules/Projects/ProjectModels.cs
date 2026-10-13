@@ -7,6 +7,8 @@ public sealed record ProjectSummary
     public required string Number { get; init; }
     public required string Name { get; init; }
     public string? Customer { get; init; }
+    /// <summary>The JobTread customer account id (the job location's account). Reviews are tracked per customer by this id.</summary>
+    public string? CustomerId { get; init; }
     public string? Address { get; init; }
     /// <summary>The customer's "Left Review" field in JobTread: true = "Left a Review", false = "No Review", null = blank.</summary>
     public bool? CustomerLeftReview { get; init; }
