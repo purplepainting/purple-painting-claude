@@ -10,7 +10,7 @@ using PurpleDashboard.Modules.Sales;
 
 namespace PurpleDashboard.Pages.Sales;
 
-public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsService metaAds, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsService metaAds, JobTreadLeadsService jtLeads, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"commissions" (default), "doors", "ads".</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
@@ -36,6 +36,8 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
     /// <summary>Refresh link in the Facebook/Instagram section: drop cached Meta data.</summary>
     [BindProperty(SupportsGet = true)] public bool MetaRefresh { get; set; }
     public List<LeadSource> Sources { get; private set; } = [];
+    /// <summary>New JobTread customer accounts in the period by Lead Source (ads tab).</summary>
+    public JobTreadLeads? JtLeads { get; private set; }
     /// <summary>Spend counted for the period: Google Ads and Facebook/Instagram from their APIs when connected, everything else as entered.</summary>
     public List<SpendLine> CountedSpend { get; private set; } = [];
     /// <summary>Hand-entered rows not counted because an API (Google Ads, Meta) has that channel and month, by AdSpend id.</summary>
@@ -96,7 +98,9 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
                 CountedSpend = merged.Lines;
                 ReplacedSpend = merged.Replaced.ToDictionary(r => r.Row.Id);
                 var jobs = (await sales.SoldJobsAsync(refresh, ct)).Where(j => j.ApprovedContract > 0).ToList();
-                Sources = SalesService.LeadSources(jobs, CountedSpend);
+                // New JobTread customer accounts by Lead Source, over the same whole months as the spend.
+                JtLeads = await jtLeads.GetAsync(new DateOnly(From.Year, From.Month, 1), To, refresh, ct);
+                Sources = SalesService.LeadSources(jobs, CountedSpend, googleAds.Channel, JtLeads);
             }
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)

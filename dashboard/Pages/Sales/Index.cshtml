@@ -223,6 +223,10 @@ else if (Model.CurrentTab == "ads")
             <div class="card kpi"><span class="kpi-label">Ad spend</span><span class="kpi-value num">@Format.Money(totalSpend)</span><span class="kpi-sub">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy")@(Model.ApiChannels.Count > 0 ? $" · {apiNames} from the API" : "")</span></div>
             <div class="card kpi"><span class="kpi-label">Jobs sold (open + last year)</span><span class="kpi-value num">@Model.Sources.Sum(s => s.Jobs)</span></div>
             <div class="card kpi"><span class="kpi-label">Contract value</span><span class="kpi-value num">@Format.Money(totalContract)</span></div>
+            @if (Model.JtLeads is { } jl)
+            {
+                <div class="card kpi"><span class="kpi-label">New leads (JobTread)</span><span class="kpi-value num">@jl.Total.ToString("#,0")</span><span class="kpi-sub">new customer accounts · @jl.Tagged.ToString("#,0") with a lead source</span></div>
+            }
         </div>
     }
 
@@ -297,7 +301,11 @@ else if (Model.CurrentTab == "ads")
     {
     <section class="card fin-section">
         <h2 class="section-title">Ads → revenue by lead source</h2>
-        <p class="muted small">Jobs by JobTread's "How bid came in", next to spend and leads for a channel with the same name. @(Model.ApiChannels.Count > 0 ? $"{string.Join("; ", Model.ApiChannels.Select(a => $"{a.Channel} from the {(a.Api == "Meta" ? "Meta Marketing" : a.Api)} API"))}; other channels are entered by hand. " : "")Which ad produced which lead isn't tracked yet (to decide), so this is side by side, not attribution.</p>
+        <p class="muted small">Jobs sold (open + last year) by the customer's <b>Lead Source</b> in JobTread. The website form sets it from the ad click (Google Ad, Meta, NextDoor), otherwise it's set by hand. Google Ad and Google count as Google Ads, Meta as Facebook/Instagram. Spend: @(Model.ApiChannels.Count > 0 ? $"{string.Join("; ", Model.ApiChannels.Select(a => $"{a.Channel} from the {(a.Api == "Meta" ? "Meta Marketing" : a.Api)} API"))}; other channels are entered by hand." : "entered by hand.") Platform leads are what the ad platform reports. <b>JT leads</b> are new JobTread customer accounts created @Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy") with that Lead Source. <b>Close rate</b> is how many of those new accounts already have a sold job.</p>
+        @if (Model.JtLeads is { Untagged: > 0 } untagged)
+        {
+            <p class="muted small">@untagged.Untagged.ToString("#,0") of @untagged.Total.ToString("#,0") new customer accounts in this period have no Lead Source in JobTread, so they aren't in any row. Sold jobs whose customer has no Lead Source are listed at the bottom by "How bid came in".</p>
+        }
         @if (Model.ReplacedSpend.Count > 0)
         {
             var rs = Model.ReplacedSpend.Values.ToList();
@@ -305,11 +313,11 @@ else if (Model.CurrentTab == "ads")
         }
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>Source</th><th class="num">Jobs</th><th class="num">Contract</th><th class="num">Spend</th><th class="num">Leads</th><th class="num">Contract per $1 spent</th></tr></thead>
+                <thead><tr><th>Lead source</th><th class="num">Jobs</th><th class="num">Contract</th><th class="num">Spend</th><th class="num" title="Leads reported by the ad platform">Platform leads</th><th class="num" title="New JobTread customer accounts in the period with this Lead Source">JT leads</th><th class="num">Cost / JT lead</th><th class="num" title="New accounts in the period that have a sold job ÷ JT leads">Close rate</th><th class="num" title="Contract per $1 spent">Contract / $1</th></tr></thead>
                 <tbody>
                     @foreach (var s in Model.Sources)
                     {
-                        <tr><td>@s.Source@if (s.FromApi) { <span class="chip good api-chip" title="Spend and leads from the @s.ApiSource API">API</span> }</td><td class="num">@s.Jobs</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Leads is { } l ? Format.Number(l) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
+                        <tr class="@(s.NoLeadSource ? "muted" : "")"><td>@s.Source@if (s.FromApi) { <span class="chip good api-chip" title="Spend and leads from the @s.ApiSource API">API</span> }</td><td class="num">@s.Jobs</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Leads is { } l ? Format.Number(l) : "—")</td><td class="num">@(s.JtLeads?.ToString("#,0") ?? "—")</td><td class="num">@(s.CostPerJtLead is { } cpl ? Format.Money(cpl) : "—")</td><td class="num" title="@(s.CloseRate is not null ? $"{s.WonLeads} of {s.JtLeads} new accounts have a sold job" : "")">@(s.CloseRate is { } cr ? Format.Percent(100m * cr) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
                     }
                 </tbody>
             </table>
@@ -323,12 +331,12 @@ else if (Model.CurrentTab == "ads")
             <form method="post" asp-page-handler="Spend" asp-route-period="@Model.Period" class="inline-form wrap">
                 <label class="field"><span>Month</span><input type="month" name="month" value="@LocalClock.Today.ToString("yyyy-MM")" required></label>
                 <label class="field"><span>Channel</span><input name="channel" list="channels" required placeholder="e.g. Facebook"></label>
-                <datalist id="channels">@foreach (var s in Model.Sources) { <option value="@s.Source"></option> }</datalist>
+                <datalist id="channels">@foreach (var s in Model.Sources.Where(s => !s.NoLeadSource)) { <option value="@s.Source"></option> }</datalist>
                 <label class="field"><span>Amount</span><input name="amount" inputmode="decimal" required style="width:120px"></label>
                 <label class="field"><span>Leads (optional)</span><input type="number" name="leads" min="0" style="width:110px"></label>
                 <button class="button" type="submit">Save</button>
             </form>
-            <p class="muted small">Use the same channel names as JobTread's "How bid came in" so they line up. Saving the same month and channel again replaces it.@(Model.ApiChannels.Count > 0 ? $" {apiNames} {(Model.ApiChannels.Count == 1 ? "comes" : "come")} from the API for the last 12 months; no need to enter {(Model.ApiChannels.Count == 1 ? "it" : "them")}. Nextdoor and other channels without an API stay manual." : "")</p>
+            <p class="muted small">Use the channel names in the table above (JobTread's Lead Source; "Nextdoor", "Google Ads", "Facebook/Instagram" and their usual spellings line up automatically). Saving the same month and channel again replaces it.@(Model.ApiChannels.Count > 0 ? $" {apiNames} {(Model.ApiChannels.Count == 1 ? "comes" : "come")} from the API for the last 12 months; no need to enter {(Model.ApiChannels.Count == 1 ? "it" : "them")}. Nextdoor and other channels without an API stay manual." : "")</p>
         </section>
     }
 
