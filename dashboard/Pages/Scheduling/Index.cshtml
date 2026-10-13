@@ -47,7 +47,7 @@ else
 {
     <div id="schedule-view">
         <p class="list-meta muted">
-            @Model.Tasks.Select(t => t.JobId).Distinct().Count() jobs · @Model.Tasks.SelectMany(t => t.People).Distinct().Count() people · from JobTread at @Model.LoadedAt.ToString("h:mm tt") ·
+            @Model.SummaryTasks.Select(t => t.JobId).Distinct().Count() jobs · @Model.SummaryTasks.SelectMany(t => t.People).Distinct().Count() people · from JobTread at @Model.LoadedAt.ToString("h:mm tt") ·
             <a class="refresh-button" asp-page="/Scheduling/Index" asp-all-route-data="Model.Route()" asp-route-refresh="true">↻ Refresh</a>
         </p>
 

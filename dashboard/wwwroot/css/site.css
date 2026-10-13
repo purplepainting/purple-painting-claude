@@ -78,8 +78,8 @@ h2 { font-size: 17px; font-weight: 700; }
 /* Phones and small tablets: the menu slides in from the left. */
 @media (max-width: 900px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
-  .sidebar { position: fixed; z-index: 30; left: 0; top: 0; bottom: 0; width: min(86vw, 300px); height: auto; transform: translateX(-100%); transition: transform .2s ease; box-shadow: 0 0 40px rgba(0,0,0,.25); }
-  .nav-toggle:checked ~ .shell .sidebar { transform: none; }
+  .sidebar { position: fixed; z-index: 30; left: 0; top: 0; bottom: 0; width: min(86vw, 300px); height: auto; transform: translateX(-100%); transition: transform .2s ease, box-shadow .2s ease; box-shadow: none; }
+  .nav-toggle:checked ~ .shell .sidebar { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.25); }
   .nav-toggle:checked ~ .shell .scrim { display: block; position: fixed; inset: 0; z-index: 20; background: rgba(28,23,38,.45); }
   .menu-button { display: inline-flex; }
   .topbar { background: var(--purple-900); color: #fff; border-bottom: 0; }
