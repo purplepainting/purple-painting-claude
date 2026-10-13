@@ -153,7 +153,12 @@ public class IndexModel(QuickBooksClient quickBooks, GoogleClient google,IJobTre
         if (!google.IsConfigured) return;
         if (refresh) GoogleClient.ClearAll();
         try { Google = await google.GetConnectionAsync(ct); }
-        catch (GoogleException e) { LocationsProblem = AdsProblem = e.Message; return; }
+        catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            logger.LogError(e, "Reading the Google connection failed");
+            LocationsProblem = AdsProblem = e is GoogleException ? e.Message : $"The saved Google connection couldn't be read ({e.GetType().Name}). Disconnect and connect again.";
+            return;
+        }
         if (Google is null) return;
         GoogleMissingScopes = GoogleClient.MissingScopes(Google);
 
@@ -166,10 +171,15 @@ public class IndexModel(QuickBooksClient quickBooks, GoogleClient google,IJobTre
                 (AdsAccounts, AdsNotes) = await google.ListAdsAccountsAsync(ct);
                 if (AdsAccounts.Count(a => !a.IsManager) == 0) AdsProblem = "Google says this login can't read any Google Ads account." + (AdsNotes.Count > 0 ? " " + string.Join(" ", AdsNotes) : "");
             }
-            catch (Exception e) when (e is GoogleException or HttpRequestException or TaskCanceledException)
+            catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
             {
                 logger.LogWarning(e, "Listing Google Ads accounts failed");
-                AdsProblem = e is GoogleException ? e.Message : "Couldn't reach Google Ads. Try again in a minute.";
+                AdsProblem = e switch
+                {
+                    GoogleException g => g.Message,
+                    HttpRequestException or TaskCanceledException => "Couldn't reach Google Ads. Try again in a minute.",
+                    _ => $"Google Ads answered in a way the dashboard didn't expect ({e.GetType().Name}: {Trim(e.Message)}).",
+                };
             }
         }
 
@@ -181,13 +191,20 @@ public class IndexModel(QuickBooksClient quickBooks, GoogleClient google,IJobTre
                 Locations = await google.ListLocationsAsync(ct);
                 if (Locations.Count == 0) LocationsProblem = "Google says this login doesn't manage any Business Profile location.";
             }
-            catch (Exception e) when (e is GoogleException or HttpRequestException or TaskCanceledException)
+            catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
             {
                 logger.LogWarning(e, "Listing Business Profile locations failed");
-                LocationsProblem = e is GoogleException ? e.Message : "Couldn't reach Google. Try again in a minute.";
+                LocationsProblem = e switch
+                {
+                    GoogleException g => g.Message,
+                    HttpRequestException or TaskCanceledException => "Couldn't reach Google. Try again in a minute.",
+                    _ => $"Google Business Profile answered in a way the dashboard didn't expect ({e.GetType().Name}: {Trim(e.Message)}).",
+                };
             }
         }
     }
+
+    private static string Trim(string s) => s.Length <= 200 ? s : s[..200] + "…";
 
     /// <summary>"Connect Google": send the person to Google's consent page (with fixtures, connect straight away as the sample account).</summary>
     public async Task<IActionResult> OnGetGoogleConnectAsync(CancellationToken ct)
