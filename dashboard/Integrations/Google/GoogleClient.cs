@@ -494,7 +494,7 @@ public sealed class GoogleClient(
         if (Options.UseFixtures)
         {
             var node = await FixtureAsync(fixture, ct);
-            if (node is JsonObject o && o["error"] is JsonObject err)
+            if (ErrorObject(node) is { } err)
                 throw Error(api, (int)Long(err["code"]), node.ToJsonString());
             return node;
         }
@@ -577,11 +577,15 @@ public sealed class GoogleClient(
         return JsonNode.Parse(text)!;
     }
 
+    /// <summary>Google's {"error": {...}}; searchStream wraps it in an array: [{"error": {...}}].</summary>
+    private static JsonObject? ErrorObject(JsonNode? node) =>
+        (node is JsonArray a ? a.FirstOrDefault() : node) is JsonObject o ? o["error"] as JsonObject : null;
+
     /// <summary>Turns a Google error response into a message that says what to do about it.</summary>
     public static GoogleException Error(string api, int status, string text)
     {
         string? message = null;
-        try { message = JsonNode.Parse(text)?["error"]?["message"]?.GetValue<string>(); } catch (JsonException) { }
+        try { message = ErrorObject(JsonNode.Parse(text))?["message"]?.GetValue<string>(); } catch (JsonException) { }
         message ??= Trim(text);
         bool Has(string s) => text.Contains(s, StringComparison.Ordinal);
         var label = api switch { "ads" => "Google Ads API", "reviews" => "Google My Business API (reviews)", _ => "My Business Account Management / Business Information API" };
