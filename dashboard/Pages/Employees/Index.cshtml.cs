@@ -14,17 +14,21 @@ namespace PurpleDashboard.Pages.Employees;
 /// Everyone in JobTread with their crew level and PM color. Levels and colors set here are what the
 /// schedule and projects pages use; anyone not set falls back to appsettings.
 /// </summary>
-public partial class IndexModel(TeamDirectory directory, LaborCostService laborCosts, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public partial class IndexModel(TeamDirectory directory, LaborCostService laborCosts, QbEmployeeStatus qbStatus, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"crew", "supervisors" or empty for everyone.</summary>
     [BindProperty(SupportsGet = true)] public string? Show { get; set; }
     [BindProperty(SupportsGet = true)] public string? Q { get; set; }
     /// <summary>Membership id of the row to open (after saving).</summary>
     [BindProperty(SupportsGet = true)] public string? Open { get; set; }
+    /// <summary>Also show people QuickBooks has as inactive (left the company but still in JobTread).</summary>
+    [BindProperty(SupportsGet = true)] public bool Former { get; set; }
 
     public IReadOnlyList<TeamMember> Crew { get; private set; } = [];
     public IReadOnlyList<TeamMember> Supervisors { get; private set; } = [];
     public int Total { get; private set; }
+    /// <summary>Membership ids of people QuickBooks has as inactive.</summary>
+    public HashSet<string> FormerIds { get; private set; } = [];
     public Dictionary<string, decimal> HoursThisWeek { get; } = [];
     public string? Error { get; private set; }
     public bool CanEdit => directory.CanEdit;
@@ -58,8 +62,10 @@ public partial class IndexModel(TeamDirectory directory, LaborCostService laborC
             logger.LogWarning(e, "Loading hours this week failed; list shows without hours");
         }
 
-        Total = team.Members.Count;
-        var shown = team.Members.Where(Matches).ToList();
+        var active = await qbStatus.ActiveByIdAsync(ct);
+        FormerIds = team.Members.Where(m => !QbEmployeeStatus.IsCurrent(m.Staff, active)).Select(m => m.Staff.MembershipId).ToHashSet();
+        Total = team.Members.Count - FormerIds.Count;
+        var shown = team.Members.Where(m => Former || !FormerIds.Contains(m.Staff.MembershipId)).Where(Matches).ToList();
         Crew = Show == "supervisors" ? [] : shown.Where(m => !m.IsSupervisor)
             .OrderBy(m => Levels.Rank(m.Level)).ThenBy(m => m.Staff.Name, StringComparer.OrdinalIgnoreCase).ToList();
         Supervisors = Show == "crew" ? [] : shown.Where(m => m.IsSupervisor)
@@ -99,7 +105,7 @@ public partial class IndexModel(TeamDirectory directory, LaborCostService laborC
     public static string Initials(string name) =>
         string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0])));
 
-    public Dictionary<string, string?> RouteFor(string? show) => new() { ["show"] = show, ["q"] = Q };
+    public Dictionary<string, string?> RouteFor(string? show) => new() { ["show"] = show, ["q"] = Q, ["former"] = Former ? "true" : null };
 
     [GeneratedRegex("^#[0-9A-Fa-f]{6}$")]
     private static partial Regex HexColor();
