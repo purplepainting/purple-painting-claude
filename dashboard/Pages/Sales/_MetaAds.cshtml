@@ -1,0 +1,117 @@
+@model PurpleDashboard.Modules.Sales.MetaAdsView?
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Integrations.Meta
+@using PurpleDashboard.Modules.Sales
+@* Facebook & Instagram ads (Meta Marketing API) on the Ads & lead sources tab. *@
+@{
+    var m = Model;
+    var period = Context.Request.Query["period"].ToString();
+    string Cpl(decimal? v) => v is { } d ? d.ToString("$#,0.00") : "—";
+    string N(long v) => v.ToString("#,0");
+}
+@if (m is not null && m.State != MetaAdsState.NotSetUp)
+{
+    <section class="card fin-section meta-ads" id="meta-ads">
+        <div class="meta-head">
+            <h2 class="section-title">Facebook &amp; Instagram ads</h2>
+            @if (m.State == MetaAdsState.Ready || m.State == MetaAdsState.Error)
+            {
+                <span class="muted small">
+                    From Meta (read only)@(m.Report?.AdAccountName is { } acct ? $" · {acct}" : "") ·
+                    <a class="refresh-button" href="/sales?tab=ads@(string.IsNullOrEmpty(period) ? "" : "&period=" + Uri.EscapeDataString(period))&metaRefresh=true#meta-ads">↻ Refresh</a>
+                    @if (MetaClient.DataAsOf is { } asOf) { <span>· as of @Format.QbAsOf(asOf)</span> }
+                </span>
+            }
+        </div>
+
+        @if (m.ExpiresSoon && m.State != MetaAdsState.NotConnected)
+        {
+            <p class="notice-inline warn">The Facebook connection @(m.ExpiresAt <= DateTime.UtcNow ? "has expired" : $"expires {Format.Date(DateOnly.FromDateTime(m.ExpiresAt!.Value.ToLocalTime()))}"). <a href="/connections#meta">Reconnect on Connections</a> to keep this updating.</p>
+        }
+
+        @if (m.State == MetaAdsState.NotConnected)
+        {
+            <p class="muted">Not connected. <a href="/connections#meta">Connect Facebook on Connections</a> to see spend, clicks and leads from Facebook and Instagram ads here.</p>
+        }
+        else if (m.State == MetaAdsState.NoAdAccount)
+        {
+            <p class="muted">Facebook is connected but no ad account is picked yet. <a href="/connections#meta">Pick it on Connections</a>.</p>
+        }
+        else if (m.State == MetaAdsState.Error)
+        {
+            <p class="notice-inline warn">Couldn't load Facebook/Instagram ads: @m.Error @if (m.NeedsReconnect) { <a href="/connections#meta">Reconnect</a> }</p>
+        }
+        else if (m.Report is { } r)
+        {
+            var inPeriod = MetaStats.Sum(m.MonthsInPeriod.Select(x => x.Stats));
+            var campaigns = m.CampaignsInPeriod;
+            var platforms = m.PlatformsInPeriod;
+            var periodLabel = m.FromMonth == m.ToMonth ? DateOnly.ParseExact(m.FromMonth + "-01", "yyyy-MM-dd").ToString("MMM yyyy")
+                : $"{DateOnly.ParseExact(m.FromMonth + "-01", "yyyy-MM-dd"):MMM yyyy} – {DateOnly.ParseExact(m.ToMonth + "-01", "yyyy-MM-dd"):MMM yyyy}";
+
+            <div class="kpis meta-kpis">
+                <div class="card kpi"><span class="kpi-label">Spend</span><span class="kpi-value num">@Format.Money(inPeriod.Spend)</span><span class="kpi-sub">@periodLabel</span></div>
+                <div class="card kpi"><span class="kpi-label">Link clicks</span><span class="kpi-value num">@N(inPeriod.LinkClicks)</span><span class="kpi-sub num">@Cpl(inPeriod.CostPerLinkClick) each</span></div>
+                <div class="card kpi"><span class="kpi-label">Leads</span><span class="kpi-value num">@inPeriod.Leads</span><span class="kpi-sub">Meta-reported</span></div>
+                <div class="card kpi"><span class="kpi-label">Cost per lead</span><span class="kpi-value num">@Cpl(inPeriod.CostPerLead)</span></div>
+            </div>
+
+            <h3 class="sub-title">By campaign <span class="muted small">@periodLabel</span></h3>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Campaign</th><th class="num">Spend</th><th class="num">Impressions</th><th class="num">Link clicks</th><th class="num">Link CTR</th><th class="num">Leads</th><th class="num">Cost / lead</th></tr></thead>
+                    <tbody>
+                        @foreach (var (name, s) in campaigns)
+                        {
+                            <tr><td>@name</td><td class="num">@Format.Money(s.Spend)</td><td class="num">@N(s.Impressions)</td><td class="num">@N(s.LinkClicks)</td><td class="num">@(s.LinkCtr is { } ctr ? ctr.ToString("0.00") + "%" : "—")</td><td class="num">@s.Leads</td><td class="num">@Cpl(s.CostPerLead)</td></tr>
+                        }
+                        @if (campaigns.Count == 0) { <tr><td colspan="7" class="muted">No campaign spend in this period.</td></tr> }
+                        else
+                        {
+                            var t = MetaStats.Sum(campaigns.Select(c => c.Stats));
+                            <tr class="total"><td>Total</td><td class="num">@Format.Money(t.Spend)</td><td class="num">@N(t.Impressions)</td><td class="num">@N(t.LinkClicks)</td><td class="num">@(t.LinkCtr is { } tc ? tc.ToString("0.00") + "%" : "—")</td><td class="num">@t.Leads</td><td class="num">@Cpl(t.CostPerLead)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (platforms.Count > 0)
+            {
+                <h3 class="sub-title">Facebook vs Instagram <span class="muted small">@periodLabel</span></h3>
+                <div class="table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Platform</th><th class="num">Spend</th><th class="num">Share</th><th class="num">Impressions</th><th class="num">Link clicks</th><th class="num">Leads</th><th class="num">Cost / lead</th></tr></thead>
+                        <tbody>
+                            @{ var pTotal = platforms.Sum(p => p.Stats.Spend); }
+                            @foreach (var (name, s) in platforms)
+                            {
+                                <tr><td>@name</td><td class="num">@Format.Money(s.Spend)</td><td class="num">@(pTotal > 0 ? Format.Percent(100m * s.Spend / pTotal) : "—")</td><td class="num">@N(s.Impressions)</td><td class="num">@N(s.LinkClicks)</td><td class="num">@s.Leads</td><td class="num">@Cpl(s.CostPerLead)</td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            <h3 class="sub-title">By month <span class="muted small">last 12 months</span></h3>
+            <div class="table-wrap">
+                <table class="data">
+                    <thead><tr><th>Month</th><th class="num">Spend</th><th class="num">Impressions</th><th class="num">Reach</th><th class="num">Clicks</th><th class="num">Link clicks</th><th class="num">Leads</th><th class="num">Cost / lead</th></tr></thead>
+                    <tbody>
+                        @foreach (var x in r.Months)
+                        {
+                            var s = x.Stats;
+                            <tr><td class="month">@DateOnly.ParseExact(x.Month + "-01", "yyyy-MM-dd").ToString("MMM yyyy")</td><td class="num">@Format.Money(s.Spend)</td><td class="num">@N(s.Impressions)</td><td class="num">@N(s.Reach)</td><td class="num">@N(s.Clicks)</td><td class="num">@N(s.LinkClicks)</td><td class="num">@s.Leads</td><td class="num">@Cpl(s.CostPerLead)</td></tr>
+                        }
+                        @if (r.Months.Count == 0) { <tr><td colspan="8" class="muted">No ad spend in the last 12 months.</td></tr> }
+                        else
+                        {
+                            var t = MetaStats.Sum(r.Months.Select(x => x.Stats));
+                            <tr class="total"><td class="month">12 months</td><td class="num">@Format.Money(t.Spend)</td><td class="num">@N(t.Impressions)</td><td class="num muted" title="Reach is unique people per month, so months can't be added up">—</td><td class="num">@N(t.Clicks)</td><td class="num">@N(t.LinkClicks)</td><td class="num">@t.Leads</td><td class="num">@Cpl(t.CostPerLead)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="muted small">Leads are what Meta counts (instant forms and website leads), not JobTread jobs. Months follow the ad account's time zone. Reach is unique people within each month.</p>
+        }
+    </section>
+}

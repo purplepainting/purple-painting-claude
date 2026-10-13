@@ -195,10 +195,11 @@ else if (Model.CurrentTab == "ads")
     var totalSpend = Model.CountedSpend.Sum(s => s.Amount);
     var totalContract = Model.Sources.Sum(s => s.Contract);
     var g = Model.Google;
+    var apiNames = string.Join(" and ", Model.ApiChannels.Select(a => a.Channel));
     if (Model.Error is null)
     {
         <div class="kpis">
-            <div class="card kpi"><span class="kpi-label">Ad spend</span><span class="kpi-value num">@Format.Money(totalSpend)</span><span class="kpi-sub">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy")@(g?.Ready == true ? " · Google Ads from the API" : "")</span></div>
+            <div class="card kpi"><span class="kpi-label">Ad spend</span><span class="kpi-value num">@Format.Money(totalSpend)</span><span class="kpi-sub">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy")@(Model.ApiChannels.Count > 0 ? $" · {apiNames} from the API" : "")</span></div>
             <div class="card kpi"><span class="kpi-label">Jobs sold (open + last year)</span><span class="kpi-value num">@Model.Sources.Sum(s => s.Jobs)</span></div>
             <div class="card kpi"><span class="kpi-label">Contract value</span><span class="kpi-value num">@Format.Money(totalContract)</span></div>
         </div>
@@ -269,14 +270,17 @@ else if (Model.CurrentTab == "ads")
         }
     </section>
 
+    <partial name="_MetaAds" model="Model.Meta" />
+
     @if (Model.Error is null)
     {
     <section class="card fin-section">
         <h2 class="section-title">Ads → revenue by lead source</h2>
-        <p class="muted small">Jobs by JobTread's "How bid came in", next to spend and leads for a channel with the same name. @(g?.Ready == true ? $"{Model.GoogleChannel} spend and leads come from the Google Ads API; other channels are entered by hand. " : "")Which ad produced which lead isn't tracked yet (to decide), so this is side by side, not attribution.</p>
-        @if (Model.ReplacedSpendIds.Count > 0)
+        <p class="muted small">Jobs by JobTread's "How bid came in", next to spend and leads for a channel with the same name. @(Model.ApiChannels.Count > 0 ? $"{string.Join("; ", Model.ApiChannels.Select(a => $"{a.Channel} from the {(a.Api == "Meta" ? "Meta Marketing" : a.Api)} API"))}; other channels are entered by hand. " : "")Which ad produced which lead isn't tracked yet (to decide), so this is side by side, not attribution.</p>
+        @if (Model.ReplacedSpend.Count > 0)
         {
-            <p class="notice-inline warn small">@Model.ReplacedSpendIds.Count hand-entered Google Ads @(Model.ReplacedSpendIds.Count == 1 ? "month isn't" : "months aren't") counted: the Google Ads API has @(Model.ReplacedSpendIds.Count == 1 ? "that month" : "those months"), so the API figure is used instead (see "Spend entered").</p>
+            var rs = Model.ReplacedSpend.Values.ToList();
+            <p class="notice-inline warn small">@rs.Count hand-entered @(rs.Count == 1 ? "row isn't" : "rows aren't") counted (@string.Join(", ", rs.OrderBy(r => r.Row.Month).Select(r => $"{r.Row.Channel} {r.Row.Month}"))): the API has that channel and month, so the API figure is used instead, never both (see "Spend entered").</p>
         }
         <div class="table-wrap">
             <table class="data">
@@ -284,7 +288,7 @@ else if (Model.CurrentTab == "ads")
                 <tbody>
                     @foreach (var s in Model.Sources)
                     {
-                        <tr><td>@s.Source@if (s.FromApi) { <span class="chip good api-chip" title="Spend and leads from the Google Ads API">API</span> }</td><td class="num">@s.Jobs</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Leads is { } l ? Format.Number(l) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
+                        <tr><td>@s.Source@if (s.FromApi) { <span class="chip good api-chip" title="Spend and leads from the @s.ApiSource API">API</span> }</td><td class="num">@s.Jobs</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Leads is { } l ? Format.Number(l) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
                     }
                 </tbody>
             </table>
@@ -303,7 +307,7 @@ else if (Model.CurrentTab == "ads")
                 <label class="field"><span>Leads (optional)</span><input type="number" name="leads" min="0" style="width:110px"></label>
                 <button class="button" type="submit">Save</button>
             </form>
-            <p class="muted small">Use the same channel names as JobTread's "How bid came in" so they line up. Saving the same month and channel again replaces it.@(g?.Ready == true ? $" {Model.GoogleChannel} comes from the API for the last 12 months; no need to enter it." : "")</p>
+            <p class="muted small">Use the same channel names as JobTread's "How bid came in" so they line up. Saving the same month and channel again replaces it.@(Model.ApiChannels.Count > 0 ? $" {apiNames} {(Model.ApiChannels.Count == 1 ? "comes" : "come")} from the API for the last 12 months; no need to enter {(Model.ApiChannels.Count == 1 ? "it" : "them")}. Nextdoor and other channels without an API stay manual." : "")</p>
         </section>
     }
 
@@ -317,9 +321,8 @@ else if (Model.CurrentTab == "ads")
                     <tbody>
                         @foreach (var s in Model.Spend)
                         {
-                            var replaced = Model.ReplacedSpendIds.Contains(s.Id);
-                            var api = replaced ? Model.GoogleMonths.FirstOrDefault(m => m.Month == s.Month) : null;
-                            <tr class="@(replaced ? "replaced" : "")"><td>@s.Month</td><td>@s.Channel@if (replaced) { <span class="chip warn api-chip" title="Google Ads API for @s.Month: @Format.Money(api?.Cost)">Not counted · API: @Format.Money(api?.Cost)</span> }</td><td class="num">@Format.Money(s.Amount)</td><td class="num">@(s.Leads?.ToString() ?? "—")</td>
+                            var r = Model.ReplacedSpend.GetValueOrDefault(s.Id);
+                            <tr class="@(r is not null ? "replaced" : "")"><td>@s.Month</td><td>@s.Channel@if (r is not null) { <span class="chip warn api-chip" title="@r.ApiName API for @s.Month: @Format.Money(r.ApiAmount)">Not counted · API: @Format.Money(r.ApiAmount)</span> }</td><td class="num">@Format.Money(s.Amount)</td><td class="num">@(s.Leads?.ToString() ?? "—")</td>
                                 <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeleteSpend" asp-route-period="@Model.Period" onsubmit="return confirm('Delete?')"><input type="hidden" name="id" value="@s.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
                         }
                     </tbody>

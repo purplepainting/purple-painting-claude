@@ -19,14 +19,29 @@ public sealed record PersonCommissions(string Person, CommissionRule? Rule, int 
     public decimal Owed => Math.Max(0, Earned - Paid);
 }
 
-/// <summary>A lead source: jobs sold by JobTread's "How bid came in", spend and leads for the channel with the same name. FromApi = spend came from the Google Ads API.</summary>
-public sealed record LeadSource(string Source, int Jobs, decimal Contract, decimal Spend, decimal? Leads = null, bool FromApi = false);
+/// <summary>A lead source: jobs sold by JobTread's "How bid came in", spend and leads for the channel with the same name. ApiSource = the API the spend came from ("Google Ads", "Meta"), null when entered by hand.</summary>
+public sealed record LeadSource(string Source, int Jobs, decimal Contract, decimal Spend, decimal? Leads = null, string? ApiSource = null)
+{
+    public bool FromApi => ApiSource is not null;
+}
 
-/// <summary>One month of spend for a channel: entered by hand (AdSpends) or from the Google Ads API.</summary>
-public sealed record SpendLine(string Month, string Channel, decimal Amount, decimal? Leads, bool FromApi);
+/// <summary>One month of spend for a channel: entered by hand (AdSpends) or from an ad platform API (ApiSource: "Google Ads", "Meta").</summary>
+public sealed record SpendLine(string Month, string Channel, decimal Amount, decimal? Leads, string? ApiSource = null)
+{
+    public bool FromApi => ApiSource is not null;
+}
 
-/// <summary>Spend for a period with Google Ads from the API. Replaced = hand-entered Google rows not counted because the API has that month.</summary>
-public sealed record MergedSpend(List<SpendLine> Lines, List<AdSpend> Replaced);
+/// <summary>
+/// One ad platform API feeding the ads view: its name and channel, which hand-entered channel names mean the same thing,
+/// which months it covers, and its monthly spend/leads (SpendLines with ApiSource set).
+/// </summary>
+public sealed record ApiSpendSource(string ApiName, string Channel, Func<string, bool> IsSameChannel, Func<string, bool> Covers, IReadOnlyList<SpendLine> Months);
+
+/// <summary>A hand-entered row not counted because an API covers that channel and month; ApiAmount = the API's figure for it.</summary>
+public sealed record ReplacedSpend(AdSpend Row, string ApiName, decimal ApiAmount);
+
+/// <summary>Spend for a period with API channels merged in. Replaced = hand-entered rows not counted because an API covers them.</summary>
+public sealed record MergedSpend(List<SpendLine> Lines, List<ReplacedSpend> Replaced);
 
 /// <summary>
 /// Sales &amp; Marketing: commissions per salesperson (rules and payments in the dashboard database, jobs and
@@ -159,22 +174,34 @@ public sealed class SalesService(ProjectsService projects, IServiceProvider serv
     }
 
     /// <summary>
-    /// Spend for months from..to: Google Ads from the API (as <paramref name="adsChannel"/>), every other channel as entered.
-    /// A hand-entered Google Ads row for a month the API covers isn't counted (no double counting); it's returned in Replaced.
-    /// Without API data (<paramref name="google"/> null) everything entered counts.
+    /// Google Ads (API) as an <see cref="ApiSpendSource"/>: covers the months the API returned; hand-entered rows named like
+    /// Google Ads (<see cref="IsGoogleAdsChannel"/>) for those months are replaced. Meta's is MetaAdsService.SpendSource.
     /// </summary>
-    public static MergedSpend MergeGoogleSpend(IEnumerable<AdSpend> manual, IReadOnlyList<AdsMonth>? google, string fromMonth, string toMonth, string adsChannel)
+    public static ApiSpendSource GoogleSpendSource(IReadOnlyList<AdsMonth> google, string adsChannel)
     {
-        var apiMonths = (google ?? []).Where(m => string.CompareOrdinal(m.Month, fromMonth) >= 0 && string.CompareOrdinal(m.Month, toMonth) <= 0).ToList();
-        var covered = apiMonths.Select(m => m.Month).ToHashSet();
+        var months = google.Select(m => m.Month).ToHashSet();
+        return new ApiSpendSource("Google Ads", adsChannel, c => IsGoogleAdsChannel(c, adsChannel), months.Contains,
+            google.Where(m => m.Cost > 0 || m.Conversions > 0).Select(m => new SpendLine(m.Month, adsChannel, Math.Round(m.Cost, 2), m.Conversions, "Google Ads")).ToList());
+    }
+
+    /// <summary>
+    /// Spend for months from..to: each API channel (Google Ads, Facebook/Instagram) from its API, every other channel as
+    /// entered. A hand-entered row for a channel and month an API covers isn't counted (never both, so nothing is double
+    /// counted); it's returned in Replaced with the API's figure. Without API sources everything entered counts.
+    /// </summary>
+    public static MergedSpend MergeApiSpend(IEnumerable<AdSpend> manual, IEnumerable<ApiSpendSource> apis, string fromMonth, string toMonth)
+    {
+        bool InRange(string month) => string.CompareOrdinal(month, fromMonth) >= 0 && string.CompareOrdinal(month, toMonth) <= 0;
+        var sources = apis.ToList();
         var lines = new List<SpendLine>();
-        var replaced = new List<AdSpend>();
+        var replaced = new List<ReplacedSpend>();
         foreach (var s in manual)
         {
-            if (covered.Contains(s.Month) && IsGoogleAdsChannel(s.Channel, adsChannel)) replaced.Add(s);
-            else lines.Add(new SpendLine(s.Month, s.Channel.Trim(), s.Amount, s.Leads, false));
+            var api = sources.FirstOrDefault(a => a.Covers(s.Month) && a.IsSameChannel(s.Channel.Trim()));
+            if (api is null) lines.Add(new SpendLine(s.Month, s.Channel.Trim(), s.Amount, s.Leads));
+            else replaced.Add(new ReplacedSpend(s, api.ApiName, api.Months.Where(m => m.Month == s.Month).Sum(m => m.Amount)));
         }
-        lines.AddRange(apiMonths.Where(m => m.Cost > 0 || m.Conversions > 0).Select(m => new SpendLine(m.Month, adsChannel, Math.Round(m.Cost, 2), m.Conversions, true)));
+        lines.AddRange(sources.SelectMany(a => a.Months).Where(m => InRange(m.Month)));
         return new MergedSpend(lines, replaced);
     }
 
@@ -187,7 +214,7 @@ public sealed class SalesService(ProjectsService projects, IServiceProvider serv
         var bySource = jobs.GroupBy(j => string.IsNullOrWhiteSpace(j.HowBidCameIn) ? "Not set" : j.HowBidCameIn!.Trim(), StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => (Jobs: g.Count(), Contract: g.Sum(j => j.Contract ?? 0)), StringComparer.OrdinalIgnoreCase);
         var spendBy = spend.GroupBy(s => s.Channel.Trim(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key,
-            g => (Amount: g.Sum(s => s.Amount), Leads: g.Any(s => s.Leads is not null) ? g.Sum(s => s.Leads ?? 0) : (decimal?)null, Api: g.Any(s => s.FromApi)),
+            g => (Amount: g.Sum(s => s.Amount), Leads: g.Any(s => s.Leads is not null) ? g.Sum(s => s.Leads ?? 0) : (decimal?)null, Api: g.Select(s => s.ApiSource).FirstOrDefault(a => a is not null)),
             StringComparer.OrdinalIgnoreCase);
         return bySource.Keys.Union(spendBy.Keys, StringComparer.OrdinalIgnoreCase)
             .Select(k =>

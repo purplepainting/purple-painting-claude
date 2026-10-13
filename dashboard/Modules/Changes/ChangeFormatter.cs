@@ -355,6 +355,8 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
         "connect" when target == "Google" => Str(Get(d, "email")) is { } email ? Done(used, "email", $"Connected Google ({email})") : "Connected Google",
         "google-ads-account" => $"Picked Google Ads account {target}",
         "google-location" => $"Picked Business Profile location {target}",
+        "connect" when target == "Facebook/Instagram ads" => Str(Get(d, "facebookUser")) is { } fbUser ? Done(used, "facebookUser", $"Connected Facebook/Instagram ads (as {fbUser})") : "Connected Facebook/Instagram ads",
+        "meta-ad-account" => $"Picked Facebook ad account {target}",
         "connect" => Str(Get(d, "CompanyName")) is { } company ? Done(used, "CompanyName", $"Connected QuickBooks ({company})") : "Connected QuickBooks",
         "disconnect" => $"Disconnected {target ?? "QuickBooks"}",
         "link-jobtread" => target is null ? "Linked a JobTread key" : $"Linked a JobTread key (as {target})",

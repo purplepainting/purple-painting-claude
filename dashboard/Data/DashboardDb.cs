@@ -33,6 +33,8 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<InterviewBooking> InterviewBookings => Set<InterviewBooking>();
     public DbSet<CandidateDocument> CandidateDocuments => Set<CandidateDocument>();
     public DbSet<CustomerReview> CustomerReviews => Set<CustomerReview>();
+    /// <summary>Facebook/Instagram ads (Meta Marketing API) connection. Entity in Data/MetaConnection.cs.</summary>
+    public DbSet<MetaConnection> MetaConnections => Set<MetaConnection>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {

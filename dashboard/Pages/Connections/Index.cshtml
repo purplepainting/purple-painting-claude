@@ -194,4 +194,5 @@
             <p class="muted small">Read only: the dashboard never creates or changes ads, the Business Profile or review replies.@(Model.GoogleLoginCustomerIdSetting is { } mcc ? $" Ads calls go through manager account {PurpleDashboard.Integrations.Google.AdsAccount.FormatId(mcc)} (GOOGLE_ADS_LOGIN_CUSTOMER_ID)." : "")</p>
         }
     </section>
+    @await Component.InvokeAsync("MetaConnection")
 </div>

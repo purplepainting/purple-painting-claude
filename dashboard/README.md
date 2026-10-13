@@ -22,6 +22,7 @@ per query (`financials-months`, `projects-list`, `projects-activity`, `projects-
 **QuickBooks locally:** `QuickBooks__FixtureDirectory=/path` serves saved reports (`ProfitAndLoss.json`, `query-{Entity}.json`) instead of calling Intuit.
 
 **Google locally:** `Google__FixtureDirectory=/path` serves saved Google Ads / Business Profile responses (file list in `docs/GOOGLE.md`), and Connect Google connects straight away as the sample account (needs the local database below).
+**Meta (Facebook/Instagram ads) locally:** `Meta__FixtureDirectory=/path` serves saved Graph responses (`adaccounts.json`, `insights-account.json`, `insights-campaign.json`, `insights-platform.json`) instead of calling Meta. See `docs/META.md`.
 
 **Database locally:** without a connection string the app runs with no database (Employees is read only).
 For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboard.db" dotnet run`. It's created on first run.
@@ -40,8 +41,9 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Data/Migrations/` | Schema history. Add one with `dotnet ef migrations add <Name> -o Data/Migrations` |
 | `Integrations/QuickBooks/` | QuickBooks Online connection (read only). Setup: `docs/QUICKBOOKS.md` |
 | `Integrations/Google/` | Google connection (read only): one company Google account for Google Ads (`googleAds:searchStream`) and Business Profile reviews. Setup: `docs/GOOGLE.md` |
-| `Modules/Sales/GoogleAdsService.cs` | Google Ads by month and campaign for Sales & Marketing; `SalesService.MergeGoogleSpend` puts it in Ads → revenue without double counting |
+| `Modules/Sales/GoogleAdsService.cs` | Google Ads by month and campaign for Sales & Marketing; `SalesService.MergeApiSpend` puts it (and Meta, via `MetaAdsService.SpendSource`) in Ads → revenue without double counting |
 | `Modules/Customers/GoogleReviewsService.cs`, `ReviewMatcher.cs` | Google reviews for Customers, matched to customers by name (display only) |
+| `Integrations/Meta/` | Facebook/Instagram ads via the Meta Marketing API (read only; API version constant in `MetaOptions`). Setup: `docs/META.md`. Connections card: `ViewComponents/MetaConnectionViewComponent.cs`; Sales section: `Modules/Sales/MetaAdsService.cs`, `Pages/Sales/_MetaAds.cshtml` |
 | `Modules/Financials/` | Financials: QuickBooks report parsing, account rules (which account counts as wages, burden, job cost, overhead), JobTread vs QuickBooks by month |
 | `Pages/Connections/` | Connections page: JobTread status, your own JobTread key (for pushes), connect QuickBooks, connect Google (pick the Ads account and Business Profile location) |
 | `Modules/Changes/` | Change log page data: `ChangeLogReader` (filters, paging), `ChangeFormatter` (one summary formatter per area; add one when a new area starts logging), `PersonNames` (email → name) |
