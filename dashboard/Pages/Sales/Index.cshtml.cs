@@ -12,8 +12,12 @@ namespace PurpleDashboard.Pages.Sales;
 
 public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,GoogleAdsService googleAds, MetaAdsService metaAds, QuickBooksAdSpendService qbAds, JobTreadLeadsService jtLeads, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, Permissions permissions, ILogger<IndexModel> logger) : PageModel
 {
-    /// <summary>"commissions" (default), "doors", "ads".</summary>
+    /// <summary>"ads" (default), "commissions", "doors".</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
+    /// <summary>Ads tab channel pill: "facebook", "google", "other"; anything else (or none) = All.</summary>
+    [BindProperty(SupportsGet = true)] public string? Channel { get; set; }
+    /// <summary>The ads channel pill shown (<see cref="AdChannels"/> key), null = All.</summary>
+    public string? CurrentChannel => AdChannels.Parse(Channel);
     /// <summary>Commissions filter: "owed" (default), "all".</summary>
     [BindProperty(SupportsGet = true)] public string? Show { get; set; }
     /// <summary>Door-to-door and ads period: "30" days, "90" (default), "ytd", "12" (last 12 months, ads only).</summary>
@@ -21,16 +25,16 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
 
     /// <summary>The tabs this person may see, in order: key, label, view permission.</summary>
     public IReadOnlyList<(string Key, string Label)> Tabs =>
-        new[] { ("commissions", "Commissions", Perm.CommissionsView), ("doors", "Door-to-door", Perm.SalesView), ("ads", "Ads & lead sources", Perm.AdsView) }
+        new[] { ("ads", "Ads & lead sources", Perm.AdsView), ("commissions", "Commissions", Perm.CommissionsView), ("doors", "Door-to-door", Perm.SalesView) }
             .Where(t => permissions.Can(t.Item3)).Select(t => (t.Item1, t.Item2)).ToList();
 
-    /// <summary>The tab asked for when allowed, else the first allowed one.</summary>
+    /// <summary>The tab asked for when allowed, else the first allowed one (Ads &amp; lead sources when there's no ?tab).</summary>
     public string CurrentTab
     {
         get
         {
-            var asked = Tab is "doors" or "ads" ? Tab : "commissions";
-            return Tabs.Any(t => t.Key == asked) ? asked : Tabs.FirstOrDefault().Key ?? "commissions";
+            var asked = Tab is "commissions" or "doors" ? Tab : "ads";
+            return Tabs.Any(t => t.Key == asked) ? asked : Tabs.FirstOrDefault().Key ?? "ads";
         }
     }
     /// <summary>The database is up (saving possible at all).</summary>
@@ -86,6 +90,30 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
     public List<AdsMonth> GoogleMonths { get; private set; } = [];
     public List<AdsCampaign> GoogleCampaigns { get; private set; } = [];
     public string GoogleChannel => googleAds.Channel;
+    /// <summary>"By channel" rows (Facebook, Google, Other, No lead source, Total) for the All pill; the pill's own row on the others.</summary>
+    public List<ChannelSummary> Channels { get; private set; } = [];
+    /// <summary>Totals for the channel pill shown (Facebook, Google or Other); the Total row on All.</summary>
+    public ChannelSummary? ChannelTotals => Channels.FirstOrDefault(c => c.Key == (CurrentChannel ?? AdChannels.Total));
+    /// <summary>Lead source rows in the pill shown (all rows on All).</summary>
+    public List<LeadSource> SourcesShown => CurrentChannel is { } ch ? AdChannels.SourcesIn(Sources, ch, googleAds.Channel).ToList() : Sources;
+    /// <summary>Counted spend in the pill shown (everything on All).</summary>
+    public List<SpendLine> SpendShown => CurrentChannel is { } ch ? AdChannels.SpendIn(CountedSpend, ch, googleAds.Channel).ToList() : CountedSpend;
+    /// <summary>Whether a spend channel (hand-entered or QuickBooks) belongs in the pill shown.</summary>
+    public bool InChannel(string channel) => CurrentChannel is not { } ch || AdChannels.GroupOf(channel, googleAds.Channel) == ch;
+    /// <summary>Google Ads clicks in the period when the API is connected (null otherwise).</summary>
+    public long? GoogleClicks { get; private set; }
+    /// <summary>Meta link clicks in the period when Meta is connected (null otherwise).</summary>
+    public long? MetaClicks { get; private set; }
+    /// <summary>Route values that keep the ads pill and period (for links and form actions on the Ads tab).</summary>
+    public Dictionary<string, string> AdsRoute(string? channel = "", string? period = "")
+    {
+        var route = new Dictionary<string, string>();
+        var ch = channel == "" ? CurrentChannel : channel;
+        var pe = period == "" ? Period : period;
+        if (ch is not null) route["channel"] = ch;
+        if (!string.IsNullOrEmpty(pe)) route["period"] = pe;
+        return route;
+    }
     public DateOnly From { get; private set; }
     public DateOnly To { get; private set; }
 
@@ -99,7 +127,7 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
         {
             "30" => today.AddDays(-30),
             "ytd" => new DateOnly(today.Year, 1, 1),
-            "12" when Tab == "ads" => new DateOnly(today.Year, today.Month, 1).AddMonths(-11),
+            "12" when CurrentTab == "ads" => new DateOnly(today.Year, today.Month, 1).AddMonths(-11),
             _ => today.AddDays(-90),
         };
 
@@ -119,40 +147,7 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
             }
             else
             {
-                string fromMonth = From.ToString("yyyy-MM"), toMonth = To.ToString("yyyy-MM");
-                Google = await googleAds.GetAsync(refresh, ct);
-                if (Google.Report is { } report)
-                {
-                    GoogleMonths = GoogleAdsService.Months(report);
-                    GoogleCampaigns = GoogleAdsService.Campaigns(report, fromMonth, toMonth);
-                }
-                Meta = await metaAds.LoadAsync(From, To, refresh || MetaRefresh, ct);
-                Spend = await sales.SpendAsync(fromMonth, toMonth, ct);
-
-                if (QbRefresh) PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.ClearCache();
-                Booked = await qbAds.GetAsync(googleAds.Channel, ct);
-
-                // One source per channel and month: platform API, else QuickBooks booked, else entered by hand (never two).
-                var apis = new List<ApiSpendSource>();
-                if (Google.Ready) apis.Add(SalesService.GoogleSpendSource(GoogleMonths, googleAds.Channel));
-                if (Meta.Report is { } metaReport) apis.Add(MetaAdsService.SpendSource(metaReport));
-                ApiChannels = apis.Select(a => (a.Channel, a.ApiName)).ToList();
-                var bookedMonths = Booked.Ready ? Booked.Months : null;
-                var sources = bookedMonths is null ? apis : [.. apis, .. QuickBooksAdSpendService.SpendSources(Booked, googleAds.Channel)];
-                var merged = SalesService.MergeApiSpend(Spend, sources, fromMonth, toMonth);
-                // Marketing that isn't ad spend (Sales:NonAdChannels, default Website SEO, Printing) stays out of the totals and lead sources.
-                var nonAd = qbAds.NonAdChannels;
-                bool IsNonAd(string channel) => nonAd.Contains(SalesService.ChannelFor(channel, googleAds.Channel));
-                NonAdSpend = merged.Lines.Where(l => IsNonAd(l.Channel)).ToList();
-                CountedSpend = merged.Lines.Where(l => !IsNonAd(l.Channel)).ToList();
-                ReplacedSpend = merged.Replaced.ToDictionary(r => r.Row.Id);
-                ReplacedBooked = merged.ReplacedLines;
-                Reconcile = SalesService.Reconcile(apis, bookedMonths, merged.Lines, fromMonth, toMonth, googleAds.Channel)
-                    .Select(r => IsNonAd(r.Channel) ? r with { NotAdSpend = true } : r).ToList();
-                var jobs = (await sales.SoldJobsAsync(refresh, ct)).Where(j => j.ApprovedContract > 0).ToList();
-                // New JobTread customer accounts by Lead Source, over the same whole months as the spend.
-                JtLeads = await jtLeads.GetAsync(new DateOnly(From.Year, From.Month, 1), To, refresh, ct);
-                Sources = SalesService.LeadSources(jobs, CountedSpend, googleAds.Channel, JtLeads);
+                await LoadAdsAsync(refresh, ct);
             }
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
@@ -160,6 +155,58 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
             logger.LogError(e, "Loading sales failed");
             Error = e is JobTreadException ? e.Message : "Couldn't reach JobTread. Try again in a minute.";
         }
+    }
+
+    /// <summary>
+    /// Ads &amp; lead sources. Spend, JobTread leads and sold jobs are loaded for every pill (lead-source attribution needs
+    /// them); the Google Ads API only on All and Google, Meta only on All and Facebook.
+    /// </summary>
+    private async Task LoadAdsAsync(bool refresh, CancellationToken ct)
+    {
+        string fromMonth = From.ToString("yyyy-MM"), toMonth = To.ToString("yyyy-MM");
+        var channel = CurrentChannel;
+        if (channel is null or AdChannels.Google)
+        {
+            Google = await googleAds.GetAsync(refresh, ct);
+            if (Google.Report is { } report)
+            {
+                GoogleMonths = GoogleAdsService.Months(report);
+                GoogleCampaigns = GoogleAdsService.Campaigns(report, fromMonth, toMonth);
+                GoogleClicks = GoogleMonths.Where(m => string.CompareOrdinal(m.Month, fromMonth) >= 0 && string.CompareOrdinal(m.Month, toMonth) <= 0).Sum(m => m.Clicks);
+            }
+        }
+        if (channel is null or AdChannels.Facebook)
+        {
+            Meta = await metaAds.LoadAsync(From, To, refresh || MetaRefresh, ct);
+            if (Meta.Report is not null) MetaClicks = Meta.MonthsInPeriod.Sum(m => m.Stats.LinkClicks);
+        }
+        Spend = await sales.SpendAsync(fromMonth, toMonth, ct);
+
+        if (QbRefresh) PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.ClearCache();
+        Booked = await qbAds.GetAsync(googleAds.Channel, ct);
+
+        // One source per channel and month: platform API, else QuickBooks booked, else entered by hand (never two).
+        var apis = new List<ApiSpendSource>();
+        if (Google?.Ready == true) apis.Add(SalesService.GoogleSpendSource(GoogleMonths, googleAds.Channel));
+        if (Meta?.Report is { } metaReport) apis.Add(MetaAdsService.SpendSource(metaReport));
+        ApiChannels = apis.Select(a => (a.Channel, a.ApiName)).ToList();
+        var bookedMonths = Booked.Ready ? Booked.Months : null;
+        var sources = bookedMonths is null ? apis : [.. apis, .. QuickBooksAdSpendService.SpendSources(Booked, googleAds.Channel)];
+        var merged = SalesService.MergeApiSpend(Spend, sources, fromMonth, toMonth);
+        // Marketing that isn't ad spend (Sales:NonAdChannels, default Website SEO, Printing) stays out of the totals and lead sources.
+        var nonAd = qbAds.NonAdChannels;
+        bool IsNonAd(string ch) => nonAd.Contains(SalesService.ChannelFor(ch, googleAds.Channel));
+        NonAdSpend = merged.Lines.Where(l => IsNonAd(l.Channel)).ToList();
+        CountedSpend = merged.Lines.Where(l => !IsNonAd(l.Channel)).ToList();
+        ReplacedSpend = merged.Replaced.ToDictionary(r => r.Row.Id);
+        ReplacedBooked = merged.ReplacedLines;
+        Reconcile = SalesService.Reconcile(apis, bookedMonths, merged.Lines, fromMonth, toMonth, googleAds.Channel)
+            .Select(r => IsNonAd(r.Channel) ? r with { NotAdSpend = true } : r).ToList();
+        var jobs = (await sales.SoldJobsAsync(refresh, ct)).Where(j => j.ApprovedContract > 0).ToList();
+        // New JobTread customer accounts by Lead Source, over the same whole months as the spend.
+        JtLeads = await jtLeads.GetAsync(new DateOnly(From.Year, From.Month, 1), To, refresh, ct);
+        Sources = SalesService.LeadSources(jobs, CountedSpend, googleAds.Channel, JtLeads);
+        Channels = AdChannels.Compare(Sources, CountedSpend, googleAds.Channel, GoogleClicks, MetaClicks, JtLeads);
     }
 
     private async Task LoadCommissionsAsync(bool refresh, CancellationToken ct)
@@ -174,34 +221,34 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
 
     public async Task<IActionResult> OnPostRuleAsync(string person, string? percent, string? basis, string? notes, CancellationToken ct)
     {
-        if (!CanEditCommissions || string.IsNullOrWhiteSpace(person)) return RedirectToPage(new { tab = Tab });
+        if (!CanEditCommissions || string.IsNullOrWhiteSpace(person)) return RedirectToPage(new { tab = "commissions" });
         if (!decimal.TryParse(percent, NumberStyles.Number, CultureInfo.InvariantCulture, out var p) || p < 0 || p > 100)
         {
-            Message = "Commission % should be a number from 0 to 100."; return RedirectToPage(new { tab = Tab });
+            Message = "Commission % should be a number from 0 to 100."; return RedirectToPage(new { tab = "commissions" });
         }
         await sales.SaveRuleAsync(person.Trim(), p, basis ?? "collected", string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(), User(), ct);
         await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "commissions", "rule", person, new { percent = p, basis, notes }, "Done")], ct);
         Message = $"Saved {person}'s commission: {p}% {SalesService.BasisLabel(basis ?? "collected")}.";
-        return RedirectToPage(new { tab = Tab, show = Show });
+        return RedirectToPage(new { tab = "commissions", show = Show });
     }
 
     public async Task<IActionResult> OnPostPayAsync(string jobId, string? jobName, string person, string? amount, DateOnly? paidOn, string? note, CancellationToken ct)
     {
-        if (!CanEditCommissions) return RedirectToPage(new { tab = Tab });
+        if (!CanEditCommissions) return RedirectToPage(new { tab = "commissions" });
         if (!decimal.TryParse(amount?.Replace("$", "").Replace(",", ""), NumberStyles.Number, CultureInfo.InvariantCulture, out var a) || a == 0)
         {
-            Message = "Enter the amount paid."; return RedirectToPage(new { tab = Tab, show = Show });
+            Message = "Enter the amount paid."; return RedirectToPage(new { tab = "commissions", show = Show });
         }
         var on = paidOn ?? LocalClock.Today;
         if (await commissionPayroll.IsLockedAsync(person, on, ct))
         {
             Message = $"{person}'s {CommissionPayroll.Label(CommissionPayroll.MonthOf(on))} commissions are paid & locked, so a payment can't be dated then. Date it in an open month, or unlock that month (Payroll checks).";
-            return RedirectToPage(null, null, new { tab = Tab, show = Show, open = jobId }, "comm-" + jobId);
+            return RedirectToPage(null, null, new { tab = "commissions", show = Show, open = jobId }, "comm-" + jobId);
         }
         await sales.AddPaymentAsync(jobId, jobName, person, Math.Round(a, 2), on, note, User(), ct);
         await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "commissions", "pay", $"{person} · {jobName}", new { jobId, amount = a, paidOn, note }, "Done")], ct);
         Message = $"Recorded {Format.Money(a)} paid to {person} for {jobName}.";
-        return RedirectToPage(null, null, new { tab = Tab, show = Show, open = jobId }, "comm-" + jobId);
+        return RedirectToPage(null, null, new { tab = "commissions", show = Show, open = jobId }, "comm-" + jobId);
     }
 
     public async Task<IActionResult> OnPostDeletePaymentAsync(int id, string? jobId, CancellationToken ct)
@@ -219,8 +266,8 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
         }
         if (Open?.StartsWith("chk-") == true) return BackToChecks(Open);
         return string.IsNullOrEmpty(jobId)
-            ? RedirectToPage(new { tab = Tab, show = Show })
-            : RedirectToPage(null, null, new { tab = Tab, show = Show, open = jobId }, "comm-" + jobId);
+            ? RedirectToPage(new { tab = "commissions", show = Show })
+            : RedirectToPage(null, null, new { tab = "commissions", show = Show, open = jobId }, "comm-" + jobId);
     }
 
     public async Task<IActionResult> OnPostActivityAsync(DateOnly? date, string? rep, int doors, int leads, int sold, string? soldAmount, string? notes, CancellationToken ct)
@@ -243,23 +290,24 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
         return RedirectToPage(new { tab = "doors", period = Period });
     }
 
-    public async Task<IActionResult> OnPostSpendAsync(string? month, string? channel, string? amount, int? leads, CancellationToken ct)
+    /// <summary>Saves a hand-entered spend row. The form field is "spendChannel" because "channel" is the ads pill (kept in the redirect).</summary>
+    public async Task<IActionResult> OnPostSpendAsync(string? month, string? spendChannel, string? amount, int? leads, CancellationToken ct)
     {
-        if (!CanEditAds) return RedirectToPage(new { tab = "ads" });
-        if (string.IsNullOrWhiteSpace(month) || month.Length != 7 || string.IsNullOrWhiteSpace(channel)
+        if (!CanEditAds) return RedirectToPage(AdsRoute());
+        if (string.IsNullOrWhiteSpace(month) || month.Length != 7 || string.IsNullOrWhiteSpace(spendChannel)
             || !decimal.TryParse(amount?.Replace("$", "").Replace(",", ""), NumberStyles.Number, CultureInfo.InvariantCulture, out var a))
         {
-            Message = "Enter a month, a channel and an amount."; return RedirectToPage(new { tab = "ads", period = Period });
+            Message = "Enter a month, a channel and an amount."; return RedirectToPage(AdsRoute());
         }
-        await sales.SaveSpendAsync(month, channel.Trim(), Math.Round(a, 2), leads, User(), ct);
-        Message = $"Saved {channel} spend for {month}.";
-        return RedirectToPage(new { tab = "ads", period = Period });
+        await sales.SaveSpendAsync(month, spendChannel.Trim(), Math.Round(a, 2), leads, User(), ct);
+        Message = $"Saved {spendChannel} spend for {month}.";
+        return RedirectToPage(AdsRoute());
     }
 
     public async Task<IActionResult> OnPostDeleteSpendAsync(int id, CancellationToken ct)
     {
         if (CanEditAds) await sales.DeleteSpendAsync(id, ct);
-        return RedirectToPage(new { tab = "ads", period = Period });
+        return RedirectToPage(AdsRoute());
     }
 
     // ---- Payroll checks (commission paychecks from QuickBooks) and Paid & locked ----
@@ -267,7 +315,7 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
     public static string Slug(string name) => new(name.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
 
     private IActionResult BackToChecks(string? open) =>
-        RedirectToPage(null, null, new { show = Show, month = CommissionPayroll.Key(CheckMonth), open }, open ?? "checks");
+        RedirectToPage(null, null, new { tab = "commissions", show = Show, month = CommissionPayroll.Key(CheckMonth), open }, open ?? "checks");
 
     /// <summary>Loads the month's rows fresh (for the payroll handlers).</summary>
     private async Task<CommissionPayrollView> ReloadChecksAsync(CancellationToken ct)

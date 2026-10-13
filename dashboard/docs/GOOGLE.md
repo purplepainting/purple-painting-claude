@@ -3,7 +3,9 @@
 The dashboard reads two things from the company's Google account, with **one** "Connect Google":
 
 - **Google Ads**: spend, impressions, clicks, conversions (leads) and calls per campaign per month, on
-  **Sales & Marketing > Ads & lead sources**. Google Ads spend also feeds the "Ads → revenue" table.
+  **Sales & Marketing > Ads & lead sources**, **Google** pill (`/sales?channel=google`), next to Google's JobTread
+  leads, jobs sold and cost per lead. Google Ads spend and clicks also feed the All pill (total and "By channel") and the
+  "Ads → revenue" table. Until Google Ads is connected, the Google pill shows QuickBooks 6420 as the counted spend.
 - **Google Business Profile**: star rating, review count and every review, on **Customers** (the "Google reviews" pill),
   with reviewers matched to customers by name.
 
