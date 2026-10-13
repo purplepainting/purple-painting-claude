@@ -75,9 +75,10 @@ public sealed class GoogleClient(
     private static void Reset(ref CancellationTokenSource source, ConcurrentDictionary<string, DateTime>? loaded)
     {
         loaded?.Clear();
+        // Cancel only, never Dispose: another request may still be reading the old source's Token
+        // (disposing it made that request throw ObjectDisposedException).
         var old = Interlocked.Exchange(ref source, new CancellationTokenSource());
-        old.Cancel();
-        old.Dispose();
+        try { old.Cancel(); } catch (AggregateException) { }
     }
 
     /// <summary>When the Google Ads data shown was pulled (local time), or null.</summary>
