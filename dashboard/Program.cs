@@ -94,6 +94,8 @@ builder.Services.AddScoped<PurpleDashboard.Modules.Sales.SalesService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Sales.GoogleAdsService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Customers.GoogleReviewsService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Equipment.EquipmentService>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Hiring.HiringService>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Hiring.PastApplicantsImport>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Vendors.PayablesService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Customers.CustomersService>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Customers.CustomersOwingMetric>();

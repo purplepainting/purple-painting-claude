@@ -111,13 +111,18 @@ public class IndexModel(EquipmentService equipment, ProjectsService projects, Ch
     {
         if (!CanEdit || counted is null) return Back("sundries");
         await equipment.CountAsync(itemId, Dec(counted), User(), ct);
+        await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "sundries", "count", itemId.ToString(), new { counted = Dec(counted) }, "Done")], ct);
         Message = "Count saved.";
         return Back("sundries");
     }
 
     public async Task<IActionResult> OnPostArchiveItemAsync(int id, CancellationToken ct)
     {
-        if (CanEdit) await equipment.ArchiveItemAsync(id, ct);
+        if (CanEdit)
+        {
+            await equipment.ArchiveItemAsync(id, ct);
+            await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "sundries", "remove-item", id.ToString(), null, "Done")], ct);
+        }
         return Back("sundries");
     }
 
@@ -136,6 +141,7 @@ public class IndexModel(EquipmentService equipment, ProjectsService projects, Ch
             Value = Dec(value) is var v && v > 0 ? v : null, Condition = EquipmentService.Conditions.Contains(condition) ? condition! : "Good",
             Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim(),
         }, User(), ct);
+        await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "equipment", id == 0 ? "add" : "edit", name.Trim(), null, "Done")], ct);
         Message = id == 0 ? $"Added {name}." : $"Saved {name}.";
         return Back("equipment");
     }
@@ -145,6 +151,8 @@ public class IndexModel(EquipmentService equipment, ProjectsService projects, Ch
         if (!CanEdit) return Back("equipment");
         await LoadJobsAsync(ct);
         await equipment.MoveAsync(id, jobId, JobName(jobId), assignedTo, User(), ct);
+        await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "equipment", "move", await GearNameAsync(id, ct),
+            new { to = string.IsNullOrEmpty(jobId) ? "Shop" : JobName(jobId), with = string.IsNullOrWhiteSpace(assignedTo) ? null : assignedTo.Trim() }, "Done")], ct);
         Message = "Moved.";
         return Back("equipment");
     }
@@ -153,6 +161,8 @@ public class IndexModel(EquipmentService equipment, ProjectsService projects, Ch
     {
         if (!CanEdit) return Back("equipment");
         await equipment.SetConditionAsync(id, condition, note, serviced, User(), ct);
+        await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "equipment", serviced ? "service" : "condition", await GearNameAsync(id, ct),
+            new { condition, note = string.IsNullOrWhiteSpace(note) ? null : note.Trim() }, "Done")], ct);
         Message = "Saved.";
         return Back("equipment");
     }
@@ -180,9 +190,17 @@ public class IndexModel(EquipmentService equipment, ProjectsService projects, Ch
 
     public async Task<IActionResult> OnPostRetireAsync(int id, CancellationToken ct)
     {
-        if (CanEdit) await equipment.RetireAsync(id, User(), ct);
+        if (CanEdit)
+        {
+            var name = await GearNameAsync(id, ct);
+            await equipment.RetireAsync(id, User(), ct);
+            await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "equipment", "retire", name, null, "Done")], ct);
+        }
         return Back("equipment");
     }
+
+    private async Task<string> GearNameAsync(int id, CancellationToken ct) =>
+        (await equipment.EquipmentAsync(ct)).FirstOrDefault(g => g.Id == id)?.Name ?? $"equipment #{id}";
 
     public static string Qty(decimal q) => q.ToString("#,0.##", CultureInfo.InvariantCulture);
     public static string Cost(decimal c) => c.ToString(c < 10 ? "$0.00" : "$#,0.00", CultureInfo.InvariantCulture);

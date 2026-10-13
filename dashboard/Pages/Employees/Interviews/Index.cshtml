@@ -1,0 +1,153 @@
+@page "/employees/interviews"
+@model PurpleDashboard.Pages.Employees.Interviews.IndexModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Modules.Hiring
+
+<div class="module-head">
+    <partial name="_HiringNav" model="@(Model.DaysTab ? "days" : "candidates")" />
+    @if (!Model.DaysTab)
+    {
+        <form class="filters" method="get">
+            @if (Model.Stage is not null) { <input type="hidden" name="stage" value="@Model.Stage"> }
+            @if (Model.Day is not null) { <input type="hidden" name="day" value="@Model.Day"> }
+            <input type="search" name="q" value="@Model.Q" placeholder="Name, phone, position, language, stage or date" aria-label="Search applicants">
+            <button class="button secondary" type="submit">Search</button>
+            @if (!string.IsNullOrWhiteSpace(Model.Q) || Model.Day is not null) { <a class="link-button" href="/employees/interviews@(Model.Stage is null ? "" : "?stage=" + Model.Stage)">Clear</a> }
+        </form>
+    }
+</div>
+
+@if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
+@if (!Model.CanEdit) { <div class="card notice warn"><p>The dashboard database isn't available, so applicants can't be shown or saved right now.</p></div> }
+
+@if (!Model.DaysTab)
+{
+    <div class="pills hire-stages" aria-label="Stage">
+        @foreach (var (key, label) in new[] { ((string?)null, "In progress") }.Concat(HiringStages.All.Select(s => ((string?)s.Key, s.Label))).Append(("all", "All")))
+        {
+            var active = Model.Stage == key || (key is null && string.IsNullOrEmpty(Model.Stage));
+            <a class="pill@(active ? " active" : "")" asp-page="/Employees/Interviews/Index" asp-all-route-data="Model.RouteFor(key)">@label <span class="pill-count">@Model.CountFor(key)</span></a>
+        }
+    </div>
+
+    @if (Model.DayFilter is { } df)
+    {
+        <p class="list-meta muted">Showing people booked on <a href="/employees/interviews/day/@df.Id">@Format.Day(df.Date)</a>.</p>
+    }
+
+    @if (Model.CanEdit)
+    {
+        <details class="card hire-add" open="@(Model.All.Count == 0)">
+            <summary class="hire-add-summary"><span class="hire-plus" aria-hidden="true">+</span> Add someone who texted back</summary>
+            <form method="post" asp-page-handler="Add" class="inline-form wrap hire-add-form">
+                <label class="field grow"><span>Name</span><input name="name" required autocomplete="off"></label>
+                <label class="field"><span>Phone</span><input name="phone" type="tel" inputmode="tel" autocomplete="off" placeholder="(805) 555-1234"></label>
+                <label class="field"><span>Position</span><select name="position">@foreach (var p in HiringLists.Positions) { <option value="@p.Key" selected="@(p.Key == "painter")">@p.Label</option> }</select></label>
+                <label class="field"><span>Language</span><select name="language">@foreach (var l in HiringLists.Languages) { <option value="@l.Key">@l.Label</option> }</select></label>
+                <label class="field"><span>Source</span><select name="source"><option value="">—</option>@foreach (var s in HiringLists.Sources) { <option>@s</option> }</select></label>
+                <label class="field grow"><span>Experience</span><input name="experience" placeholder="e.g. 5 yrs residential, sprays"></label>
+                <button class="button" type="submit">Add</button>
+            </form>
+        </details>
+    }
+
+    <div class="job-list hire-list">
+        @foreach (var c in Model.Shown)
+        {
+            var stage = HiringStages.Get(c.Stage);
+            var booking = Model.BookingOf(c.Id);
+            <a class="card hire-row" href="/employees/interviews/candidate/@c.Id">
+                <span class="avatar hire-avatar lang-@c.Language" aria-hidden="true">@IndexModel.Initials(c.Name)</span>
+                <span class="job-main">
+                    <span class="job-title">@c.Name</span>
+                    <span class="job-sub muted">
+                        @HiringLists.Position(c.Position).Label · @HiringLists.LanguageLabel(c.Language)@(c.Phone is null ? "" : " · " + c.Phone)@(c.Source is null ? "" : " · " + c.Source)
+                    </span>
+                    @if (c.Experience is not null) { <span class="job-sub muted hire-exp">@c.Experience</span> }
+                </span>
+                <span class="hire-row-right">
+                    <span class="chip @stage.Css">@stage.Label</span>
+                    <span class="hire-when muted small">
+                        @if (booking is { } b) { <text>@Format.Day(b.Day.Date) · @HiringService.SlotLabel(b.Booking.Time)</text> }
+                        else if (c.InterviewedOn is { } io) { <text>Interviewed @Format.Day(io)</text> }
+                    </span>
+                    @if (c.Rating is not null) { <span class="hire-stars" title="@c.Rating out of 5">@IndexModel.Stars(c.Rating)</span> }
+                    @if (Model.DocCounts.GetValueOrDefault(c.Id) is var n && n > 0) { <span class="muted small">@n file@(n == 1 ? "" : "s")</span> }
+                </span>
+            </a>
+        }
+        @if (Model.Shown.Count == 0 && Model.CanEdit)
+        {
+            <div class="card empty-state">
+                <p class="muted">@(Model.All.Count == 0 ? "Nobody yet. Add people as they text back from the Craigslist or Indeed ad." : "Nobody matches. Try another stage or search, or tap All.")</p>
+            </div>
+        }
+    </div>
+}
+else
+{
+    var today = LocalClock.Today;
+    var upcoming = Model.Days.Where(d => d.Date >= today).OrderBy(d => d.Date).ToList();
+    var past = Model.Days.Where(d => d.Date < today).ToList();
+
+    @if (Model.CanEdit)
+    {
+        <details class="card hire-add" open="@(upcoming.Count == 0)">
+            <summary class="hire-add-summary"><span class="hire-plus" aria-hidden="true">+</span> New interview day</summary>
+            <form method="post" asp-page-handler="Day" class="inline-form wrap hire-add-form">
+                <label class="field"><span>Date</span><input type="date" name="date" value="@Model.DefaultDate.ToString("yyyy-MM-dd")" required></label>
+                <label class="field"><span>From</span><input type="time" name="start" value="@HiringLists.DefaultStart.ToString("HH:mm")" step="300"></label>
+                <label class="field"><span>To</span><input type="time" name="end" value="@HiringLists.DefaultEnd.ToString("HH:mm")" step="300"></label>
+                <label class="field"><span>Slot (min)</span><input type="number" name="slotMinutes" value="@HiringLists.DefaultSlotMinutes" min="5" max="120" step="5" style="width:90px"></label>
+                <label class="field grow"><span>Location</span><input name="location" value="@HiringLists.DefaultLocation"></label>
+                <button class="button" type="submit">Create day</button>
+            </form>
+        </details>
+    }
+
+    @foreach (var (title, days) in new[] { ("Upcoming", upcoming), ("Past", past) })
+    {
+        if (days.Count == 0) continue;
+        <h2 class="section-title">@title <span class="muted">@days.Count</span></h2>
+        <div class="job-list">
+            @foreach (var d in days)
+            {
+                var bookings = Model.Bookings.Where(b => b.DayId == d.Id).ToList();
+                var slots = HiringService.Slots(d).Count;
+                <a class="card hire-row hire-day-row" href="/employees/interviews/day/@d.Id">
+                    <span class="hire-date-badge@(d.Date == today ? " today" : "")"><span>@d.Date.ToString("MMM")</span><b>@d.Date.Day</b></span>
+                    <span class="job-main">
+                        <span class="job-title">@d.Date.ToString("dddd, MMMM d")@(d.Date == today ? " · today" : "")</span>
+                        <span class="job-sub muted">@HiringService.SlotLabel(d.Start)–@HiringService.SlotLabel(d.End) · @d.SlotMinutes min · @d.Location</span>
+                    </span>
+                    <span class="hire-row-right">
+                        <span class="chip">@bookings.Count / @slots booked</span>
+                        @if (bookings.Count > 0) { <span class="muted small">@bookings.Count(b => b.ConfirmedAt is not null) confirmed</span> }
+                    </span>
+                </a>
+            }
+        </div>
+    }
+    @if (Model.Days.Count == 0 && Model.CanEdit)
+    {
+        <div class="card empty-state"><p class="muted">No interview days yet. Create one above: it defaults to next Wednesday at Topa Topa, 11:00 to 2:00 in 15-minute slots.</p></div>
+    }
+}
+
+@if (Model.ShowPastImport && !Model.DaysTab)
+{
+    <section class="card import-past">
+        <h2>Import past applicants</h2>
+        <p class="muted small">One time: adds everyone from the old Interviews spreadsheets (2023 to 2025) as "Past applicant", with each interview in their history and the old interview days. Upload the past-applicants.json file; running it again adds nothing.</p>
+        <form method="post" asp-page-handler="ImportPast" enctype="multipart/form-data" class="inline-form">
+            <input type="file" name="file" accept=".json,application/json" required>
+            <button class="button secondary" type="submit">Import</button>
+        </form>
+    </section>
+}
+
+<partial name="_DocsBox" />
+
+@section Scripts {
+    <script src="~/js/hiring.js" asp-append-version="true"></script>
+}

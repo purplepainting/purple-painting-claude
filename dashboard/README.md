@@ -54,6 +54,9 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Modules/Projects/` | Projects data: models, preset views, `ProjectsService` (JobTread queries) |
 | `Modules/Scheduling/` | Schedule: `ScheduleService` (read tasks), `SchedulePushService` (write changes to JobTread), `LaborCostService` (actual and estimated labor), job colors and crew levels |
 | `Modules/People/` | `PeopleService` (staff and roles from JobTread), PM colors |
+| `Modules/Hiring/` | Hiring (Employees → Hiring): `HiringService` (candidates, interview days, bookings, files), `TextTemplates` (English/Spanish texts), `InterviewSheet` (sheet answers), `HiringLists` (stages, positions, tools, checklists, SharePoint links) |
+| `Pages/Employees/Interviews/` | Hiring pages: candidates and days (`Index`), one day (`Day`), one candidate (`Candidate`), interview sheet (`Sheet`) |
+| `wwwroot/js/hiring.js` | Hiring: copy buttons, checkboxes that save in place |
 | `Modules/Search/` | `SearchService`: global search across the module services' cached data. Page and JSON at `Pages/Search/` (`/search?q=`, `/search?handler=suggest&q=`), top bar box in `_Layout` + `wwwroot/js/search.js` |
 | `wwwroot/js/schedule-editor.js` | The schedule editor (draft, drag/tap, review & push) |
 | `Infrastructure/` | Shared helpers: `LocalClock` (Pacific time), `Format` (money, %, dates) |
