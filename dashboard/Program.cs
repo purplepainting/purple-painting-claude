@@ -1,5 +1,6 @@
 using PurpleDashboard.Auth;
 using PurpleDashboard.Data;
+using PurpleDashboard.Infrastructure;
 using PurpleDashboard.Integrations.JobTread;
 using PurpleDashboard.Modules;
 using PurpleDashboard.Modules.Projects;
@@ -111,6 +112,7 @@ app.MapGet("/health", (DatabaseStatus db) => Results.Ok(new
     databaseProblem = db.Available ? null : db.Problem,
     jobTreadLiveUpdates = JobTreadChangeWatcher.Enabled ? "on" : "off",
     lastJobTreadChange = JobTreadChangeWatcher.LastChangeAt,
+    jobTreadCache = JobTreadFreshness.Describe(),
 }));
 
 app.MapRazorPages().WithStaticAssets();

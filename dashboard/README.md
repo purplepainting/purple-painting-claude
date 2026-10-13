@@ -87,10 +87,14 @@ straight away with a "Coming soon" page.
 
 The function app's `JobTreadWebhook` writes every JobTread event to a `DashboardEvents` table; the `DashboardChanges`
 function returns new ones. The dashboard (`Integrations/JobTread/JobTreadChangeWatcher.cs`) polls it every 20 seconds
-and drops the cached data that changed (`Infrastructure/CacheSignals.cs`). Setting: `JOBTREAD_CHANGES_URL` = the
-DashboardChanges function URL with its `?code=` key. Without it, pages refresh on their 2-minute cache. `/health`
-shows `jobTreadLiveUpdates` and the last change seen. Only event types JobTread's webhook is subscribed to arrive
-(tasks for the schedule, time entries, jobs, documents).
+and drops only the cached data a change touches (`Apply` there maps event kinds to areas; `Infrastructure/CacheSignals.cs`).
+Setting: `JOBTREAD_CHANGES_URL` = the DashboardChanges function URL with its `?code=` key.
+
+How long JobTread data is kept (`Infrastructure/JobTreadFreshness.cs`): 30 minutes per area while the feed is answering
+**and** every event kind that area depends on has come through in the last 7 days (projects: job, task, timeEntry,
+document; schedule: task, job; labor: timeEntry). Otherwise 2 minutes, so an event type the webhook isn't subscribed to
+never leaves stale data. Without the setting, everything is 2 minutes. `/health` shows `jobTreadCache`: the event kinds
+seen and the current minutes per area. QuickBooks data isn't signalled and keeps its own 10-minute cache.
 
 ## Settings and secrets
 

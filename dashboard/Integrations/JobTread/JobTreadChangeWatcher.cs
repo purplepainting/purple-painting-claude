@@ -6,9 +6,9 @@ namespace PurpleDashboard.Integrations.JobTread;
 
 /// <summary>
 /// Near-instant updates: polls the function app's change feed (DashboardChanges, fed by the JobTread
-/// webhook) every 20 seconds and drops cached data for whatever changed, so the next page load is fresh.
-/// Setting JOBTREAD_CHANGES_URL = the DashboardChanges function URL including its ?code= key. Without it,
-/// pages refresh on their normal 2-minute cache.
+/// webhook) every 20 seconds and drops only the cached data a change touches, so the next page load is fresh
+/// and everything else stays cached (see JobTreadFreshness for how long). Setting JOBTREAD_CHANGES_URL = the
+/// DashboardChanges function URL including its ?code= key. Without it, JobTread data is cached 2 minutes.
 /// </summary>
 public sealed class JobTreadChangeWatcher(IHttpClientFactory httpFactory, IConfiguration config, ILogger<JobTreadChangeWatcher> logger) : BackgroundService
 {
@@ -26,16 +26,28 @@ public sealed class JobTreadChangeWatcher(IHttpClientFactory httpFactory, IConfi
         var http = httpFactory.CreateClient();
         http.Timeout = TimeSpan.FromSeconds(10);
         var since = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var sep = url.Contains('?') ? "&" : "?";
+        var lastSeenCheck = DateTime.MinValue;
 
         while (!stoppingToken.IsCancellationRequested)
         {
             try { await Task.Delay(Every, stoppingToken); } catch (OperationCanceledException) { return; }
             try
             {
-                var sep = url.Contains('?') ? "&" : "?";
+                // Hourly: which kinds of events JobTread has sent this week (decides how long data can be cached).
+                if (DateTime.UtcNow - lastSeenCheck > TimeSpan.FromHours(1))
+                {
+                    var seen = JsonNode.Parse(await http.GetStringAsync($"{url}{sep}seen=1", stoppingToken))?["seen"] as JsonObject;
+                    if (seen is not null)
+                        JobTreadFreshness.Saw(seen.Select(p => (p.Key, DateTimeOffset.FromUnixTimeMilliseconds(p.Value?.GetValue<long>() ?? 0).UtcDateTime)));
+                    lastSeenCheck = DateTime.UtcNow;
+                }
+
                 var body = JsonNode.Parse(await http.GetStringAsync($"{url}{sep}since={since}", stoppingToken));
+                JobTreadFreshness.PollSucceeded();
                 var events = body?["events"] as JsonArray ?? [];
                 if (events.Count == 0) continue;
+                JobTreadFreshness.Saw(events.Select(e => (e?["type"]?.GetValue<string>() ?? "", DateTimeOffset.FromUnixTimeMilliseconds(e?["at"]?.GetValue<long>() ?? 0).UtcDateTime)));
 
                 var newest = events.Max(e => e?["at"]?.GetValue<long>() ?? 0);
                 if (newest > since) since = newest;
@@ -51,16 +63,28 @@ public sealed class JobTreadChangeWatcher(IHttpClientFactory httpFactory, IConfi
         }
     }
 
-    /// <summary>Which caches each kind of JobTread event touches.</summary>
+    /// <summary>Which caches each kind of JobTread event touches; anything not listed drops everything, to be safe.</summary>
     public static void Apply(IEnumerable<string> types)
     {
         bool schedule = false, projects = false, labor = false, financials = false;
         foreach (var t in types)
         {
-            if (t.StartsWith("file", StringComparison.OrdinalIgnoreCase)) continue;
-            if (t.StartsWith("task", StringComparison.OrdinalIgnoreCase)) { schedule = true; projects = true; }
-            else if (t.StartsWith("timeEntry", StringComparison.OrdinalIgnoreCase)) { labor = true; projects = true; financials = true; schedule = true; }
-            else { projects = true; financials = true; }
+            switch (JobTreadFreshness.Kind(t))
+            {
+                // Nothing the dashboard shows.
+                case "file" or "comment" or "dailyLog" or "message" or "notification" or "event": break;
+                // Schedule, plus the start / end / next-day dates on the project list.
+                case "task": schedule = true; projects = true; break;
+                // Hours and labor cost: schedule actuals, job costs, burden.
+                case "timeEntry": labor = true; projects = true; financials = true; schedule = true; break;
+                // Invoices, bills, orders and their lines: job money and JobTread-vs-QuickBooks.
+                case "document" or "documentCostItem" or "costItem" or "payment": projects = true; financials = true; break;
+                // Job name, stage, PM, customer: shown on projects, schedule and reconciliation.
+                case "job" or "customFieldValue" or "location" or "account" or "contact": projects = true; schedule = true; financials = true; break;
+                // People and pay rates.
+                case "membership" or "user" or "timeEntryType": labor = true; break;
+                default: projects = true; financials = true; schedule = true; labor = true; break;
+            }
         }
         if (schedule) ScheduleService.ClearCache();
         if (projects) CacheSignals.Reset(CacheSignals.Projects);
