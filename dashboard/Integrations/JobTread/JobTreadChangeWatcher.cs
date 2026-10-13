@@ -72,17 +72,17 @@ public sealed class JobTreadChangeWatcher(IHttpClientFactory httpFactory, IConfi
             switch (JobTreadFreshness.Kind(t))
             {
                 // Nothing the dashboard shows.
-                case "file" or "comment" or "dailyLog" or "message" or "notification" or "event": break;
+                case "file" or "comment" or "dailyLog" or "formSubmission" or "documentRecipient": break;
                 // Schedule, plus the start / end / next-day dates on the project list.
                 case "task": schedule = true; projects = true; break;
                 // Hours and labor cost: schedule actuals, job costs, burden.
                 case "timeEntry": labor = true; projects = true; financials = true; schedule = true; break;
-                // Invoices, bills, orders and their lines: job money and JobTread-vs-QuickBooks.
-                case "document" or "documentCostItem" or "costItem" or "payment": projects = true; financials = true; break;
-                // Job name, stage, PM, customer: shown on projects, schedule and reconciliation.
-                case "job" or "customFieldValue" or "location" or "account" or "contact": projects = true; schedule = true; financials = true; break;
-                // People and pay rates.
-                case "membership" or "user" or "timeEntryType": labor = true; break;
+                // Invoices, bills, orders, payments: job money and JobTread-vs-QuickBooks.
+                case "document" or "documentSent" or "documentPayment" or "payment": projects = true; financials = true; break;
+                // Job name, stage, PM: shown on projects, schedule and reconciliation.
+                case "job": projects = true; schedule = true; financials = true; break;
+                // Customer name, address, "Left Review": projects and customers (both read the job list).
+                case "account" or "location" or "contact": projects = true; break;
                 default: projects = true; financials = true; schedule = true; labor = true; break;
             }
         }
