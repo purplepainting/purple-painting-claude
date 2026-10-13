@@ -57,7 +57,7 @@ Kareem wants to make changes in the dashboard and have them land in JobTread and
 
 ### 4b. Users & access (built)
 
-Settings → **Users & access** (`/settings/access`, admins only). Everyone who opens the dashboard is recorded on their first request (table `UserAccess`: email, name, role, overrides, first/last seen; last seen is written at most every 5 minutes) and starts as **View only**. An admin picks each person's role and can tick or untick single permissions on top of it (per-person overrides). Every change is in the change log (area "access", e.g. "Changed Sam's role Office → Supervisor").
+Settings → **Users & access** (`/settings/access`, admins only). Everyone who opens the dashboard is recorded on their first request (table `UserAccess`: email, name, role, overrides, first/last seen; last seen is written at most every 5 minutes) and starts as **View only**, which shows nothing sensitive (no financials, pay, bonuses, commissions, sales, vendors, company connections or change log). An admin picks each person's role and can tick or untick single permissions on top of it (per-person overrides). Every change is in the change log (area "access", e.g. "Changed Sam's role Office → Supervisor").
 
 Roles (owner-approved, Oct 2026; the table is `Auth/AccessRoles.cs`):
 
@@ -65,19 +65,19 @@ Roles (owner-approved, Oct 2026; the table is `Auth/AccessRoles.cs`):
 |---|---|---|---|---|
 | projects | view, edit | view, edit | view | view |
 | scheduling (edit = push to JobTread) | view, edit | view, edit | view, edit | view |
-| financials (Financials pages incl. job by job and overhead) | view, edit | view | view | view |
-| bonuses (view = everyone's bonuses; edit = approve/pay; rate = effort ratings) | all | view | rate only | view |
-| commissions | view, edit | view | — | view |
-| sales (door-to-door) | view, edit | view | — | view |
-| sales.ads (ads & lead sources, ad spend) | view, edit | view | — | view |
+| financials (Financials pages incl. job by job and overhead) | view, edit | view | view | — |
+| bonuses (view = everyone's bonuses; edit = approve/pay; rate = effort ratings) | all | view | rate only | — |
+| commissions | view, edit | view | — | — |
+| sales (door-to-door) | view, edit | view | — | — |
+| sales.ads (ads & lead sources, ad spend) | view, edit | view | — | — |
 | customers | view, edit | view, edit | view | view |
-| vendors | view, edit | view, edit | — | view |
+| vendors | view, edit | view, edit | — | — |
 | employees (list, levels, colors, notes) | view, edit | view, edit | view | view |
-| employees.pay (QB base pay, JobTread rates, per-person labor cost) | view, edit | view | — | view |
+| employees.pay (QB base pay, JobTread rates, per-person labor cost) | view, edit | view | — | — |
 | hiring | view, edit | view, edit | view, edit | view |
 | equipment | view, edit | view, edit | view, edit | view |
-| changelog | view | view | — | view |
-| connections (company QuickBooks/Google/Facebook) | view, edit | view | — | view |
+| changelog | view | view | — | — |
+| connections (company QuickBooks/Google/Facebook) | view, edit | view | — | — |
 | settings, settings.bonuses (bonus rules), access | all | — | — | — |
 
 Keys are `area.view` / `area.edit` (`employees.pay.view`, `bonuses.rate`, `settings.bonuses` …); an edit key brings its view key with it. Everyone can open Settings, search, and Connections for their **own** JobTread sign-in (needed to push the schedule).

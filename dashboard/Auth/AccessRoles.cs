@@ -125,7 +125,7 @@ public static class AccessRoles
         Admin => "Everything, including Settings, connections and who has access.",
         Office => "Runs the schedule, customers, hiring, equipment, vendors and projects. Sees financials, sales and pay but can't change pay, bonuses, commissions, ad spend or settings.",
         Supervisor => "Edits the schedule, hiring and equipment, rates effort for bonuses. Sees projects, customers, the team list and financials (read only). No pay rates, other people's bonuses, commissions, sales or vendors.",
-        ViewOnly => "Sees what Office sees and changes nothing.",
+        ViewOnly => "The default for new people. Sees projects, the schedule, customers, equipment, hiring and the team list (no pay); changes nothing. No financials, bonuses, commissions, sales, vendors or change log.",
         _ => "",
     };
 
@@ -152,7 +152,12 @@ public static class AccessRoles
             Perm.ProjectsView, Perm.SchedulingEdit, Perm.FinancialsView, Perm.BonusesRate, Perm.CustomersView,
             Perm.EmployeesView, Perm.HiringEdit, Perm.EquipmentEdit,
         },
-        [ViewOnly] = new HashSet<string>(OfficeViews),
+        // The default for new people: nothing sensitive (no financials, pay, bonuses, commissions, sales, vendors,
+        // company connections or change log).
+        [ViewOnly] = new HashSet<string>
+        {
+            Perm.ProjectsView, Perm.SchedulingView, Perm.CustomersView, Perm.EquipmentView, Perm.HiringView, Perm.EmployeesView,
+        },
     };
 
     public static IReadOnlySet<string> Defaults(string? role) =>

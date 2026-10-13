@@ -32,7 +32,7 @@
 
 @if (Model.CurrentTab == "commissions" && Model.Error is null)
 {
-    <p class="list-meta muted">Salesperson comes from each job in JobTread. Set each person's rate below; "collected" pays as the customer pays (invoices minus unpaid, before retention).</p>
+    <p class="list-meta muted">Salesperson comes from each job in JobTread. @(Model.CanEditCommissions ? "Set each person's rate below; " : "")"collected" pays as the customer pays (invoices minus unpaid, before retention).</p>
 
     <section class="card fin-section">
         <h2 class="section-title">Salespeople</h2>
