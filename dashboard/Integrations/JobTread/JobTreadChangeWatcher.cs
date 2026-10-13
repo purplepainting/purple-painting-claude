@@ -52,6 +52,8 @@ public sealed class JobTreadChangeWatcher(IHttpClientFactory httpFactory, IConfi
                 var newest = events.Max(e => e?["at"]?.GetValue<long>() ?? 0);
                 if (newest > since) since = newest;
                 var types = events.Select(e => e?["type"]?.GetValue<string>() ?? "").ToHashSet();
+                // The feed returns at most 200 (newest first); in a bigger burst older kinds may be cut off, so refresh everything.
+                if (events.Count >= 200) types.Add("burst");
                 Apply(types);
                 LastChangeAt = DateTime.UtcNow;
                 logger.LogInformation("JobTread changes: {Types}", string.Join(", ", types));
