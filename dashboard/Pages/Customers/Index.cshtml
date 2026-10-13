@@ -72,7 +72,14 @@ else
                             {
                                 <form method="post" asp-page-handler="Review" asp-route-show="@Model.Show" asp-route-q="@Model.Q" class="inline-form">
                                     <input type="hidden" name="jobId" value="@j.Id"><input type="hidden" name="jobName" value="@j.Name">
-                                    <span class="chip @(r?.Status == "received" ? "good" : r is null ? "warn" : "")">@IndexModel.ReviewLabel(r)</span>
+                                    @if (r is null && j.CustomerLeftReview == true)
+                                    {
+                                        <span class="chip good" title="JobTread customer field &quot;Left Review&quot;">Left a review (JobTread)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="chip @(r?.Status == "received" ? "good" : r is null ? "warn" : "")">@IndexModel.ReviewLabel(r)</span>
+                                    }
                                     <select name="status" aria-label="Review status">
                                         <option value="requested" selected="@(r?.Status is null or "requested")">Requested</option>
                                         <option value="received" selected="@(r?.Status == "received")">Received</option>
