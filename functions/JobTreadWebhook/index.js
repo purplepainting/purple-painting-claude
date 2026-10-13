@@ -340,6 +340,12 @@ module.exports = async function (context, req) {
   // Tell the dashboard something changed (it polls DashboardChanges). Never blocks or breaks the sync below.
   await recordDashboardEvent(context, eventType, jobId);
 
+  // Only job and file events drive the SharePoint sync; anything else (tasks, time entries, documents) is just for the dashboard.
+  if (!/^(job|file)/.test(String(eventType || ''))) {
+    context.res = { status: 200, body: 'Recorded for dashboard' };
+    return;
+  }
+
   try {
     const token = await getAccessToken();
     const siteId = await getSiteId(token);
