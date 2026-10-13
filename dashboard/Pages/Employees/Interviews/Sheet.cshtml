@@ -1,0 +1,140 @@
+@page "/employees/interviews/candidate/{id:int}/sheet"
+@model PurpleDashboard.Pages.Employees.Interviews.SheetModel
+@using PurpleDashboard.Modules.Hiring
+@{
+    var f = Model.Form;
+    var c = Model.C;
+    var sales = (f.Position ?? c.Position) == "sales";
+
+    void YesNo(string name, string label, bool? value)
+    {
+        <fieldset class="sheet-q">
+            <legend>@label</legend>
+            <div class="choice">
+                <label><input type="radio" name="Form.@name" value="true" checked="@(value == true)"><span>Yes</span></label>
+                <label><input type="radio" name="Form.@name" value="false" checked="@(value == false)"><span>No</span></label>
+            </div>
+        </fieldset>
+    }
+}
+
+<div class="module-head">
+    <partial name="_HiringNav" model="@("")" />
+</div>
+
+@if (!Model.CanEdit) { <div class="card notice warn"><p>The dashboard database isn't available, so the sheet can't be saved right now.</p></div> }
+
+<form method="post" class="sheet card">
+    <div class="sheet-head">
+        <h1 class="hire-h1">Interview sheet</h1>
+        <a class="link-button" href="/employees/interviews/candidate/@c.Id">← @c.Name</a>
+    </div>
+
+    <div class="sheet-grid">
+        <label class="field"><span>Date</span><input type="date" name="Form.Date" value="@f.Date?.ToString("yyyy-MM-dd")"></label>
+        <label class="field"><span>Name</span><input name="Form.Name" value="@f.Name" autocomplete="off"></label>
+        <label class="field"><span>Phone</span><input name="Form.Phone" value="@f.Phone" type="tel" inputmode="tel" autocomplete="off"></label>
+        <label class="field"><span>Location (city)</span><input name="Form.Location" value="@f.Location" autocomplete="off" placeholder="e.g. Goleta"></label>
+    </div>
+
+    <fieldset class="sheet-q">
+        <legend>Position applying for</legend>
+        <div class="choice">
+            @foreach (var p in HiringLists.Positions)
+            {
+                <label><input type="radio" name="Form.Position" value="@p.Key" checked="@((f.Position ?? c.Position) == p.Key)" data-sales="@(p.Key == "sales" ? "1" : "0")"><span>@p.Label</span></label>
+            }
+        </div>
+    </fieldset>
+
+    @{ YesNo("Bilingual", "Bilingual?", f.Bilingual); }
+
+    <div class="sheet-grid">
+        <label class="field"><span>Desired pay rate</span><input name="Form.DesiredPay" value="@f.DesiredPay" inputmode="decimal" autocomplete="off" placeholder="$/hr"></label>
+        <label class="field"><span>Rate they'll start at for 90 days</span><input name="Form.StartRate" value="@f.StartRate" inputmode="decimal" autocomplete="off" placeholder="$/hr"></label>
+    </div>
+
+    <fieldset class="sheet-q">
+        <legend>Years of painting experience</legend>
+        <div class="choice years">
+            @foreach (var y in InterviewSheet.YearsOptions)
+            {
+                <label><input type="radio" name="Form.Years" value="@y" checked="@(f.Years == y)"><span>@y</span></label>
+            }
+        </div>
+    </fieldset>
+
+    <label class="field sheet-wide"><span>Painting companies worked for</span><textarea name="Form.Companies" rows="2">@f.Companies</textarea></label>
+
+    <fieldset class="sheet-q">
+        <legend>Skills</legend>
+        <div class="choice">
+            @foreach (var s in InterviewSheet.SkillOptions)
+            {
+                <label><input type="checkbox" name="Form.Skills" value="@s" checked="@f.Skills.Contains(s)"><span>@s</span></label>
+            }
+        </div>
+    </fieldset>
+
+    <fieldset class="sheet-q">
+        <legend>Reliable transportation</legend>
+        <div class="choice">
+            @foreach (var t in InterviewSheet.TransportOptions)
+            {
+                <label><input type="radio" name="Form.Transportation" value="@t" checked="@(f.Transportation == t)"><span>@t</span></label>
+            }
+        </div>
+    </fieldset>
+
+    <div class="sheet-yn">
+        @{ YesNo("BasicTools", "Has basic painter's tools", f.BasicTools); }
+        @{ YesNo("PayrollOk", "OK being on payroll (payroll only)", f.PayrollOk); }
+        @{ YesNo("Felony", "Felony convictions", f.Felony); }
+        @{ YesNo("PartTimeOk", "OK with part-time and/or weekend work", f.PartTimeOk); }
+    </div>
+
+    <label class="field sheet-wide"><span>Hobbies, what they do for fun</span><textarea name="Form.Hobbies" rows="2">@f.Hobbies</textarea></label>
+
+    @{ YesNo("EverFired", "Ever been fired?", f.EverFired); }
+    <label class="field sheet-wide"><span>If yes, why</span><input name="Form.FiredWhy" value="@f.FiredWhy" autocomplete="off"></label>
+
+    <h2 class="section-title sheet-ours">Filled in by us</h2>
+
+    <fieldset class="sheet-q points" data-points="painter" hidden="@sales">
+        <legend>Points covered</legend>
+        @foreach (var (key, label) in HiringLists.PainterPoints)
+        {
+            <label class="hire-check big"><input type="checkbox" name="Form.Points" value="@key" checked="@f.Points.Contains(key)" disabled="@sales"> @label</label>
+        }
+    </fieldset>
+    <fieldset class="sheet-q points" data-points="sales" hidden="@(!sales)">
+        <legend>Sales Development Rep talking points</legend>
+        @foreach (var (key, label) in HiringLists.SalesPoints)
+        {
+            <label class="hire-check big"><input type="checkbox" name="Form.Points" value="@key" checked="@f.Points.Contains(key)" disabled="@(!sales)"> @label</label>
+        }
+    </fieldset>
+
+    <div class="sheet-grid">
+        <label class="field"><span>Interviewer</span><input name="Form.Interviewer" value="@f.Interviewer" autocomplete="off"></label>
+        <fieldset class="sheet-q">
+            <legend>Rating</legend>
+            <div class="stars-input">
+                @for (var i = 5; i >= 1; i--)
+                {
+                    <input type="radio" id="star-@i" name="Form.Rating" value="@i" checked="@(f.Rating == i)"><label for="star-@i" title="@i of 5">★</label>
+                }
+            </div>
+        </fieldset>
+    </div>
+    <label class="field sheet-wide"><span>Notes</span><textarea name="Form.Notes" rows="3">@f.Notes</textarea></label>
+
+    <div class="sheet-actions">
+        <button class="button" type="submit" disabled="@(!Model.CanEdit)">Save @(Model.IsNew ? "· moves to Interviewed" : "sheet")</button>
+        <a class="link-button" href="/employees/interviews/candidate/@c.Id">Cancel</a>
+    </div>
+</form>
+
+@section Scripts {
+    <script src="~/js/hiring.js" asp-append-version="true"></script>
+}
