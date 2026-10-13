@@ -21,6 +21,7 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<BonusClawback> BonusClawbacks => Set<BonusClawback>();
     public DbSet<EffortRating> EffortRatings => Set<EffortRating>();
     public DbSet<BonusExclusion> BonusExclusions => Set<BonusExclusion>();
+    public DbSet<BonusJobExclusion> BonusJobExclusions => Set<BonusJobExclusion>();
     public DbSet<BonusRetentionRelease> BonusRetentionReleases => Set<BonusRetentionRelease>();
     public DbSet<DashboardSetting> DashboardSettings => Set<DashboardSetting>();
     public DbSet<BonusAdjustment> BonusAdjustments => Set<BonusAdjustment>();
@@ -118,6 +119,19 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.Person).HasMaxLength(200);
             e.Property(x => x.Reason).HasMaxLength(500);
             e.Property(x => x.CreatedBy).HasMaxLength(200);
+        });
+        b.Entity<BonusJobExclusion>(e =>
+        {
+            e.HasIndex(x => x.JobId).IsUnique();
+            e.Property(x => x.JobId).HasMaxLength(50);
+            e.Property(x => x.JobName).HasMaxLength(300);
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+            // Kareem, Oct 2026: both were paid out in the last spreadsheet bonus round, and QuickBooks costs and old
+            // billing were loaded onto them in August to catch JobTread up, so they'd count as huge August swings.
+            e.HasData(
+                new BonusJobExclusion { Id = 1, JobId = "22PX9MaHxFt8", JobName = "Goleta Valley Cottage Hospital", Reason = "Paid out in the spreadsheet bonus round; QuickBooks catch-up costs and old billing were added in August", CreatedAt = new DateTime(2026, 10, 13, 0, 0, 0, DateTimeKind.Utc), CreatedBy = "kareem@purplepainting.net" },
+                new BonusJobExclusion { Id = 2, JobId = "22PXjg7k8Eu3", JobName = "1509 Shoreline Dr", Reason = "Paid out in the spreadsheet bonus round; QuickBooks catch-up costs were added in August", CreatedAt = new DateTime(2026, 10, 13, 0, 0, 0, DateTimeKind.Utc), CreatedBy = "kareem@purplepainting.net" });
         });
         b.Entity<BonusRetentionRelease>(e =>
         {
@@ -566,6 +580,17 @@ public sealed class BonusExclusion
     public required string Month { get; set; }
     /// <summary>JobTread name (bonus lines are by name).</summary>
     public required string Person { get; set; }
+    public required string Reason { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>A job left out of bonuses entirely (every month, both pools, its clawbacks), e.g. one already paid out before monthly bonuses.</summary>
+public sealed class BonusJobExclusion
+{
+    public int Id { get; set; }
+    public required string JobId { get; set; }
+    public string? JobName { get; set; }
     public required string Reason { get; set; }
     public DateTime CreatedAt { get; set; }
     public string? CreatedBy { get; set; }

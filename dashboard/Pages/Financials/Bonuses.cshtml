@@ -471,31 +471,90 @@ else if (Model.Ledger is { } ledger)
                                 </form>
                             </details>
                         }
+                        @if (Model.CanEdit)
+                        {
+                            <details class="clawback">
+                                <summary class="link-button">Leave this job out of bonuses</summary>
+                                <p class="muted small">Every month of it comes out of both pools, clawbacks included (for a job already paid out some other way). Paid &amp; locked months keep their figures; the difference goes into each person's next open month.</p>
+                                <form method="post" asp-page-handler="LeaveOutJob" asp-route-month="@key" class="inline-form">
+                                    <input type="hidden" name="jobId" value="@j.JobId"><input type="hidden" name="jobName" value="@j.Name">
+                                    <input name="reason" placeholder="Reason (required)" required aria-label="Reason">
+                                    <button class="button secondary" type="submit">Leave out</button>
+                                </form>
+                            </details>
+                        }
                         <div class="form-actions"><a class="link-button" href="@JobTreadIds.JobUrl(j.JobId)" target="_blank" rel="noopener">JobTread ↗</a></div>
                     </div>
                 </details>
             }
         </div>
+
+        <section class="fin-section-plain" id="left-out">
+            <h2 class="section-title">Left out of bonuses</h2>
+            @if (InlineFor("left-out")) { <p class="notice-inline good">@Model.Message</p> }
+            @if (ledger.LeftOutJobs.Count == 0) { <p class="muted small">None. Open a job above to leave it out (for example, one already paid out in the spreadsheet round).</p> }
+            else
+            {
+                <div class="card table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Job</th><th>Why</th><th>By</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var x in ledger.LeftOutJobs)
+                            {
+                                <tr id="job-@x.JobId">
+                                    <td><a href="@JobTreadIds.JobUrl(x.JobId)" target="_blank" rel="noopener">@(x.JobName ?? x.JobId)</a></td>
+                                    <td>@x.Reason</td>
+                                    <td class="muted small">@x.CreatedBy · @Format.Date(DateOnly.FromDateTime(x.CreatedAt.ToLocalTime()))</td>
+                                    <td>
+                                        @if (InlineFor("job-" + x.JobId)) { <span class="notice-inline good">@Model.Message</span> }
+                                        @if (Model.CanEdit)
+                                        {
+                                            <form method="post" asp-page-handler="LeaveOutJob" asp-route-month="@key"><input type="hidden" name="jobId" value="@x.JobId"><input type="hidden" name="jobName" value="@x.JobName"><input type="hidden" name="include" value="true"><button class="link-button" type="submit">Count it again</button></form>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
     }
     else
     {
         var toRate = ledger.ToRate(sel).OrderBy(s => s.Name).ToList();
         var locked = ledger.AnyLocked(sel);
         var canRate = Model.CanRate && !locked;
+        var mineSaved = ledger.Ratings.Where(x => x.Month == key && x.RatedBy == Model.RaterKey).ToList();
+        var showOthers = Model.CanView;
         <section class="fin-section-plain" id="rate">
             <h2 class="section-title">Effort ratings · @label</h2>
+            <div class="pills" role="tablist" aria-label="Month to rate" style="margin-bottom:8px">
+                @foreach (var m in Model.Months.Reverse())
+                {
+                    var mk = BonusesModel.Key(m);
+                    var due = ledger.ToRate(m).Count();
+                    var done = ledger.Ratings.Count(x => x.Month == mk && x.RatedBy == Model.RaterKey);
+                    var status = ledger.AnyLocked(m) ? "locked" : Model.CanRate ? (done == 0 ? "not rated" : done >= due ? "rated" : $"{done} of {due}") : "";
+                    <a class="pill@(m == sel ? " active" : "")" asp-route-month="@mk" asp-route-tab="effort">@BonusesModel.Label(m)@(status == "" ? "" : " · " + status)</a>
+                }
+            </div>
             <p class="muted small">
                 Every rater scores every field employee @r.EffortScaleMin–@r.EffortScaleMax (whole numbers) for the month; the person's score is the plain average of the scores given (blanks skipped).
                 It drives the @r.EffortShare% effort part of the field pool. Raters: supervisors (and admins).
                 @(locked ? $"{label} has paid & locked bonuses, so its ratings are read-only." : canRate ? $"You're rating as {Model.RaterName}." : "You can see the averages; only supervisors can rate.")
             </p>
+            @if (canRate && mineSaved.Count > 0)
+            {
+                <p class="notice-inline">You saved @mineSaved.Count score@(mineSaved.Count == 1 ? "" : "s") for @label (last @Format.Date(DateOnly.FromDateTime(mineSaved.Max(x => x.RatedAt).ToLocalTime()))). They're filled in below: change any and press Save my ratings again.</p>
+            }
             @if (InlineFor("rate")) { <p class="notice-inline good">@Model.Message</p> }
             <form method="post" asp-page-handler="Rate" asp-route-month="@key">
                 <div class="card table-wrap">
                     <table class="data">
-                        <thead><tr><th>Field employee</th>@if (canRate) { <th>Your score</th><th>Your notes</th> }<th class="num">Average</th><th class="num">Raters</th><th></th></tr></thead>
+                        <thead><tr><th>Field employee</th>@if (canRate) { <th>Your score</th><th>Your notes</th> }<th class="num">Average</th><th class="num">Raters</th>@if (showOthers) { <th>Each rater</th> }<th></th></tr></thead>
                         <tbody>
-                            @if (toRate.Count == 0) { <tr><td colspan="6" class="muted">No eligible field employees for @label.</td></tr> }
+                            @if (toRate.Count == 0) { <tr><td colspan="7" class="muted">No eligible field employees for @label.</td></tr> }
                             @foreach (var s in toRate)
                             {
                                 var score = ledger.EffortFor(s, sel);
@@ -512,12 +571,17 @@ else if (Model.Ledger is { } ledger)
                                                 <option value="">—</option>
                                                 @for (var i = r.EffortScaleMin; i <= r.EffortScaleMax; i++) { <option value="@i" selected="@(preset == i)">@i</option> }
                                             </select>
-                                            @if (suggestion is { } sug) { <div class="muted small">from @sug.Source: @sug.Score.ToString("0.0#")</div> }
+                                            @if (suggestion is { } sug) { <div class="muted small">suggested from @sug.Source: @sug.Score.ToString("0.0#")</div> }
+                                            else if (mine is not null) { <div class="muted small">saved</div> }
                                         </td>
                                         <td><input name="notes" value="@mine?.Notes" aria-label="Notes for @s.Name" style="width:100%;min-width:140px"></td>
                                     }
                                     <td class="num">@(score.Average is { } avg ? avg.ToString("0.0#") : "—")</td>
                                     <td class="num">@score.Ratings.Count</td>
+                                    @if (showOthers)
+                                    {
+                                        <td class="small">@foreach (var x in score.Ratings.OrderBy(x => Model.RaterNames.Name(x.RatedBy))) { <span class="chip" title="@(x.Notes ?? "No notes")">@Model.RaterNames.Name(x.RatedBy).Split(' ')[0] @x.Score.ToString("0")</span> }</td>
+                                    }
                                     <td>@if (score.Ratings.Count == 0) { <span class="chip warn">Not rated</span> } else if (score.Spread >= r.EffortSpreadFlag) { <span class="chip warn" title="Raters' scores are @score.Spread apart">Spread @score.Spread.ToString("0")</span> }</td>
                                 </tr>
                             }

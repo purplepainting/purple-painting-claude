@@ -66,14 +66,16 @@ public sealed class BonusService(
         var qbByName = new Dictionary<string, QbEmployee>(StringComparer.OrdinalIgnoreCase);
         foreach (var s in staff)
             if (s.QboEmployeeId is { } q && qb.TryGetValue(q, out var e)) qbByName[s.Name] = e;
-        var eligibility = new Eligibility(qbByName, stored.Exclusions, Rules.ProbationDays);
+        var eligibility = new Eligibility(qbByName, stored.Exclusions, Rules.ProbationDays,
+            qb.Values.Where(q => !qbByName.Values.Contains(q)).ToList()); // name matches only among records nobody is linked to
 
         var byMembership = staff.ToDictionary(s => s.MembershipId, s => s.Name);
         var scores = stored.Ratings.GroupBy(r => (r.Month, Name: byMembership.GetValueOrDefault(r.MembershipId) ?? r.Person))
             .ToDictionary(g => g.Key, g => g.Average(r => r.Score));
 
+        var leftOut = stored.JobExclusions.Select(x => x.JobId).ToHashSet();
         var jobIds = data.Values.SelectMany(d => d.Keys).Concat(stored.Clawbacks.Select(c => c.JobId)).Distinct()
-            .Where(id => id != "none" && !(info.TryGetValue(id, out var j) && j.IsInternal));
+            .Where(id => id != "none" && !leftOut.Contains(id) && !(info.TryGetValue(id, out var j) && j.IsInternal));
         var jobs = new List<JobBonusView>();
         foreach (var id in jobIds)
         {
@@ -113,6 +115,7 @@ public sealed class BonusService(
             Ratings = stored.Ratings,
             FieldStaff = staff.Where(s => s.IsField && !(qbByName.TryGetValue(s.Name, out var q) && !q.Active && q.ReleasedDate is null)).ToList(),
             LastRound = LastRoundRatings.Value,
+            LeftOutJobs = stored.JobExclusions.OrderBy(x => x.JobName).ToList(),
         };
     }
 
@@ -361,11 +364,12 @@ public sealed class BonusService(
     // ---- Stored data ----
 
     private sealed record Stored(List<BonusClawback> Clawbacks, List<BonusPayment> Payments, List<BonusPayout> Unpaid, List<EffortRating> Ratings,
-        List<BonusExclusion> Exclusions, List<BonusRetentionRelease> Releases, List<BonusAdjustment> Adjustments, List<PayLock> Locks);
+        List<BonusExclusion> Exclusions, List<BonusRetentionRelease> Releases, List<BonusAdjustment> Adjustments, List<PayLock> Locks,
+        List<BonusJobExclusion> JobExclusions);
 
     private async Task<Stored> StoredAsync(CancellationToken ct)
     {
-        if (!database.Available) return new([], [], [], [], [], [], [], []);
+        if (!database.Available) return new([], [], [], [], [], [], [], [], []);
         var db = services.GetRequiredService<DashboardDb>();
         return new(await db.BonusClawbacks.AsNoTracking().ToListAsync(ct),
             await db.BonusPayments.AsNoTracking().ToListAsync(ct),
@@ -374,7 +378,8 @@ public sealed class BonusService(
             await db.BonusExclusions.AsNoTracking().ToListAsync(ct),
             await db.BonusRetentionReleases.AsNoTracking().ToListAsync(ct),
             await db.BonusAdjustments.AsNoTracking().ToListAsync(ct),
-            await db.PayLocks.AsNoTracking().Where(l => l.Kind == "bonus").ToListAsync(ct));
+            await db.PayLocks.AsNoTracking().Where(l => l.Kind == "bonus").ToListAsync(ct),
+            await db.BonusJobExclusions.AsNoTracking().ToListAsync(ct));
     }
 
     /// <summary>
@@ -545,6 +550,29 @@ public sealed class BonusService(
         row.Reason = reason.Trim(); row.CreatedAt = DateTime.UtcNow; row.CreatedBy = user;
         await db.SaveChangesAsync(ct);
         await changeLog.WriteAsync([ChangeLogWriter.Entry(user, "bonuses", "exclude", person, new { month = key, reason = row.Reason }, "Done")], ct);
+    }
+
+    /// <summary>
+    /// Leaves a job out of bonuses entirely, or counts it again when reason is null. Months already paid &amp; locked
+    /// keep their figures; the difference goes into each person's next open month as an automatic adjustment.
+    /// </summary>
+    public async Task SetJobExclusionAsync(string jobId, string? jobName, string? reason, string user, CancellationToken ct)
+    {
+        var db = services.GetRequiredService<DashboardDb>();
+        var row = await db.BonusJobExclusions.FirstOrDefaultAsync(x => x.JobId == jobId, ct);
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            if (row is null) return;
+            db.BonusJobExclusions.Remove(row);
+            await db.SaveChangesAsync(ct);
+            await changeLog.WriteAsync([ChangeLogWriter.Entry(user, "bonuses", "job-include", row.JobName ?? jobId, new { jobId, reason = row.Reason }, "Done")], ct);
+            return;
+        }
+        if (row is null) { row = new BonusJobExclusion { JobId = jobId, Reason = reason.Trim() }; db.BonusJobExclusions.Add(row); }
+        row.JobName = Clean(jobName) ?? row.JobName;
+        row.Reason = reason.Trim(); row.CreatedAt = DateTime.UtcNow; row.CreatedBy = user;
+        await db.SaveChangesAsync(ct);
+        await changeLog.WriteAsync([ChangeLogWriter.Entry(user, "bonuses", "job-exclude", row.JobName ?? jobId, new { jobId, reason = row.Reason }, "Done")], ct);
     }
 
     /// <summary>Saves one rater's effort scores for a month (one row per month, person and rater; saving again replaces it). A blank score removes that rater's score.</summary>

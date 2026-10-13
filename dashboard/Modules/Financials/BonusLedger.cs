@@ -113,12 +113,37 @@ public sealed record EffortScore(IReadOnlyList<EffortRating> Ratings)
 /// QuickBooks), left (QuickBooks release date on or before the month's end, or inactive with no release date),
 /// or excluded by hand for that month (write-up, more than 2 weeks off, ...). No hire date = eligible.
 /// </summary>
-public sealed class Eligibility(IReadOnlyDictionary<string, QbEmployee> byName, IReadOnlyList<BonusExclusion> exclusions, int probationDays)
+public sealed class Eligibility(IReadOnlyDictionary<string, QbEmployee> byName, IReadOnlyList<BonusExclusion> exclusions, int probationDays, IReadOnlyCollection<QbEmployee>? allQb = null)
 {
-    public IReadOnlyList<BonusExclusion> Exclusions => exclusions;
-    public bool HasQuickBooks => byName.Count > 0;
+    private readonly Dictionary<string, QbEmployee?> matched = new(StringComparer.OrdinalIgnoreCase);
 
-    public QbEmployee? Qb(string name) => byName.GetValueOrDefault(name);
+    public IReadOnlyList<BonusExclusion> Exclusions => exclusions;
+    public bool HasQuickBooks => byName.Count > 0 || allQb?.Count > 0;
+
+    /// <summary>
+    /// The person's QuickBooks record: by the QuickBooks id on their JobTread membership, else by name (same name, or
+    /// every word of the JobTread name in exactly one QuickBooks name: "Edem Mejia" → "Edem Mejia Leon").
+    /// Without this, someone whose JobTread profile isn't linked has no hire or release date and counts as eligible.
+    /// </summary>
+    public QbEmployee? Qb(string name)
+    {
+        if (byName.TryGetValue(name, out var linked)) return linked;
+        if (matched.TryGetValue(name, out var known)) return known;
+        return matched[name] = MatchByName(name);
+    }
+
+    private QbEmployee? MatchByName(string name)
+    {
+        if (allQb is null || allQb.Count == 0) return null;
+        var key = PayrollPayments.Normalize(name);
+        var withNames = allQb.Where(q => !string.IsNullOrWhiteSpace(q.Name)).Select(q => (Q: q, Key: PayrollPayments.Normalize(q.Name!))).ToList();
+        var same = withNames.Where(x => x.Key == key).ToList();
+        if (same.Count == 1) return same[0].Q;
+        var words = key.Split(' ');
+        if (words.Length < 2) return null;
+        var fits = withNames.Where(x => words.All(w => x.Key.Split(' ').Contains(w))).ToList();
+        return fits.Count == 1 ? fits[0].Q : null;
+    }
     public DateOnly? ProbationUntil(string name) => Qb(name)?.HiredDate is { } h ? h.AddDays(probationDays) : null;
     public bool HireDateKnown(string name) => Qb(name)?.HiredDate is not null;
     public BonusExclusion? Manual(string name, DateOnly month) =>
@@ -161,6 +186,8 @@ public sealed class BonusLedger
     public IReadOnlyList<StaffMember> FieldStaff { get; init; } = [];
     /// <summary>Last spreadsheet round's average rating by normalized name (pre-fill for the first month).</summary>
     public IReadOnlyDictionary<string, decimal> LastRound { get; init; } = new Dictionary<string, decimal>();
+    /// <summary>Jobs left out of bonuses entirely (Jobs tab).</summary>
+    public IReadOnlyList<BonusJobExclusion> LeftOutJobs { get; init; } = [];
     public DateOnly StartMonth => Months[0];
 
     public string RoleOf(string name) => Roles.TryGetValue(name, out var r) ? r : BonusPools.Field;
