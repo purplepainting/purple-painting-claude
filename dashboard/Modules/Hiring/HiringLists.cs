@@ -10,7 +10,8 @@ public sealed record HiringStage(string Key, string Label, string Css, bool Open
 public static class HiringStages
 {
     public const string Texted = "texted", Booked = "booked", Confirmed = "confirmed", Interviewed = "interviewed",
-        Trial = "trial", Hired = "hired", NotHired = "not_hired", NoShow = "no_show", Withdrew = "withdrew";
+        Trial = "trial", Hired = "hired", NotHired = "not_hired", NoShow = "no_show", Withdrew = "withdrew",
+        Past = "past";
 
     public static readonly HiringStage[] All =
     [
@@ -23,6 +24,8 @@ public static class HiringStages
         new(NotHired, "Not hired", "bad", false),
         new(NoShow, "No-show", "bad", false),
         new(Withdrew, "Withdrew", "bad", false),
+        // Imported from the old Interviews spreadsheets (2023 to 2025): we don't know how each one ended.
+        new(Past, "Past applicant", "", false),
     ];
 
     public static HiringStage Get(string? key) => All.FirstOrDefault(s => s.Key == key) ?? All[0];

@@ -12,7 +12,7 @@ namespace PurpleDashboard.Pages.Employees.Interviews;
 /// Hiring: everyone who has applied (the pipeline and the list of past applicants) and the interview days.
 /// Replaces the Interviews spreadsheets. Dashboard-owned data only.
 /// </summary>
-public class IndexModel(HiringService hiring, CurrentUser me) : PageModel
+public class IndexModel(HiringService hiring, PastApplicantsImport pastImport, CurrentUser me, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"days" for interview days; otherwise candidates.</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
@@ -33,6 +33,8 @@ public class IndexModel(HiringService hiring, CurrentUser me) : PageModel
     public Dictionary<int, int> DocCounts { get; private set; } = [];
     public InterviewDay? DayFilter { get; private set; }
     public DateOnly DefaultDate { get; private set; }
+    /// <summary>Show the one-time "Import past applicants" box (until the old spreadsheets have been imported).</summary>
+    public bool ShowPastImport { get; private set; }
 
     public async Task OnGetAsync(CancellationToken ct)
     {
@@ -45,6 +47,7 @@ public class IndexModel(HiringService hiring, CurrentUser me) : PageModel
         DocCounts = await hiring.DocumentCountsAsync(ct);
         DefaultDate = HiringService.DefaultDate(Days);
         DayFilter = Day is { } d ? Days.FirstOrDefault(x => x.Id == d) : null;
+        ShowPastImport = CanEdit && !await pastImport.AlreadyImportedAsync(ct);
 
         IEnumerable<HiringCandidate> list = All;
         if (DayFilter is { } df) list = list.Where(c => Bookings.Any(b => b.DayId == df.Id && b.CandidateId == c.Id));
@@ -135,6 +138,29 @@ public class IndexModel(HiringService hiring, CurrentUser me) : PageModel
             start ?? HiringLists.DefaultStart, end ?? HiringLists.DefaultEnd, slotMinutes ?? HiringLists.DefaultSlotMinutes, notes, Who(), ct);
         Message = $"Interview day set for {Format.Day(day.Date)}.";
         return RedirectToPage("/Employees/Interviews/Day", new { id = day.Id });
+    }
+
+    /// <summary>One-time import of the old Interviews spreadsheets (past-applicants.json, read from SharePoint).</summary>
+    public async Task<IActionResult> OnPostImportPastAsync(IFormFile? file, CancellationToken ct)
+    {
+        if (!CanEdit || file is null || file.Length == 0) { Message = "Choose the past-applicants.json file first."; return RedirectToPage(); }
+        if (file.Length > 5_000_000) { Message = "That file is too big to be the past applicants list."; return RedirectToPage(); }
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            var rows = PastApplicantsImport.Parse(stream);
+            var r = await pastImport.ImportAsync(rows, Who(), ct);
+            Message = r.Candidates == 0
+                ? "Past applicants were already imported, so nothing was added."
+                : $"Imported {r.Candidates} past applicants ({r.Interviews} interviews on {r.Days} interview days). They're under \"Past applicant\".";
+            return RedirectToPage(new { stage = HiringStages.Past });
+        }
+        catch (System.Text.Json.JsonException e)
+        {
+            logger.LogWarning(e, "Past applicants file couldn't be read");
+            Message = "That file couldn't be read. It should be the past-applicants.json file.";
+            return RedirectToPage();
+        }
     }
 
     public static string Pick(string? value, IEnumerable<string> allowed, string fallback) => value is not null && allowed.Contains(value) ? value : fallback;
