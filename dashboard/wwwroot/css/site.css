@@ -839,6 +839,21 @@ table.data tr.in-period td:first-child { box-shadow: inset 3px 0 0 var(--purple-
 table.data tr.replaced td { color: var(--muted); }
 table.data tr.replaced td.num { text-decoration: line-through; }
 .api-chip { margin-left: 6px; font-size: 11px; padding: 1px 7px; vertical-align: 1px; }
+/* Sales → Ads: platform vs QuickBooks reconcile */
+table.data.reconcile td:first-child, table.data.reconcile td:nth-child(2) { white-space: nowrap; }
+table.data.reconcile tr.flagged td:first-child { box-shadow: inset 3px 0 0 var(--warn-text); }
+.recon-src { display: block; font-family: var(--font-ui); font-size: 11px; white-space: nowrap; }
+.recon-more { margin-top: 10px; }
+.recon-more > summary { cursor: pointer; display: inline-flex; align-items: center; min-height: var(--touch); font-weight: 600; color: var(--purple-700); }
+.recon-more ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.spend-add { margin-top: 0; }
+.spend-add > summary { font-size: 15px; }
+@media (max-width: 520px) {
+  table.data.reconcile { font-size: 13px; }
+  table.data.reconcile th, table.data.reconcile td { padding-left: 6px; padding-right: 6px; }
+  table.data.reconcile th { white-space: normal; }
+  table.data.reconcile td:nth-child(2) { white-space: normal; min-width: 90px; }
+}
 a.kpi-link { color: inherit; text-decoration: none; }
 @media (hover: hover) { a.kpi-link:hover { border-color: var(--purple-600); } }
 .stars { color: #B45309; letter-spacing: 1px; white-space: nowrap; }
