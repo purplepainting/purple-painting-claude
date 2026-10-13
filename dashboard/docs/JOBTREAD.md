@@ -57,6 +57,12 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 | `22PYNFyRMxqa` | OneDrive Folder Link | URL of the job's **SharePoint** folder (name is historical) |
 | `22PdhDrXpi9P` | Claude Chat Link | URL |
 
+### Customer custom fields
+
+| Id | Name | Notes |
+|---|---|---|
+| `22PXCpKpiwSy` | Left Review | "Left a Review" / "No Review" (blank on many older accounts). Per customer, not per job, no date. Customers marked "Left a Review" are left out of "Review to request" on /customers. |
+
 ## Money on a job
 
 | Number | How it's read |

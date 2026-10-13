@@ -86,9 +86,12 @@ public sealed class CustomersService(ProjectsService projects, QuickBooksClient 
         await db.SaveChangesAsync(ct);
     }
 
-    /// <summary>Completed jobs with no review requested yet (and not marked "later" or "skip").</summary>
+    /// <summary>
+    /// Completed jobs with no review requested yet (and not marked "later" or "skip"), skipping customers
+    /// JobTread already marks "Left a Review" (that field is per customer, not per job).
+    /// </summary>
     public static bool NeedsReview(ProjectSummary j, IReadOnlyDictionary<string, JobReview> reviews) =>
-        j.IsCompleted && !reviews.ContainsKey(j.Id);
+        j.IsCompleted && !reviews.ContainsKey(j.Id) && j.CustomerLeftReview != true;
 
     private static string Key(string name) => new string(name.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 

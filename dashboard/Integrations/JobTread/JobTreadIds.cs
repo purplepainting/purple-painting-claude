@@ -19,5 +19,10 @@ public static class JobTreadIds
         public const string DigitalBidStage = "22PWNYKhXZxr";
     }
 
+    public static class CustomerFields
+    {
+        public const string LeftReview = "22PXCpKpiwSy";       // "Left Review": "Left a Review" / "No Review"
+    }
+
     public static string JobUrl(string jobId) => $"https://app.jobtread.com/jobs/{jobId}";
 }
