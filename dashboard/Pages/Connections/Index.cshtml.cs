@@ -56,7 +56,12 @@ public class IndexModel(QuickBooksClient quickBooks, GoogleClient google,IJobTre
         Connection = await quickBooks.GetConnectionAsync(ct);
         MyJobTread = await userKeys.FindAsync(me.ObjectId, ct);
         if (!CanViewCompany) return;
-        await LoadGoogleAsync(refreshGoogle, ct);
+        try { await LoadGoogleAsync(refreshGoogle, ct); }
+        catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            logger.LogError(e, "Loading the Google card failed");
+            LocationsProblem = AdsProblem = $"Google couldn't be checked ({e.GetType().Name}: {Trim(e.Message)}).";
+        }
 
         if (check && Connection is not null)
         {
