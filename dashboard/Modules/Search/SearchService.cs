@@ -1,3 +1,4 @@
+using PurpleDashboard.Auth;
 using PurpleDashboard.Infrastructure;
 using PurpleDashboard.Integrations.JobTread;
 using PurpleDashboard.Modules.Customers;
@@ -28,7 +29,7 @@ public sealed record SearchResults(string Query, IReadOnlyList<SearchGroup> Grou
 /// </summary>
 public sealed class SearchService(
     ProjectsService projects, PeopleService people, EquipmentService equipment,
-    CustomersService customers, PayablesService payables, ILogger<SearchService> logger)
+    CustomersService customers, PayablesService payables, Permissions permissions, ILogger<SearchService> logger)
 {
     public const int MinLength = 2;
 
@@ -38,16 +39,17 @@ public sealed class SearchService(
         if (q.Length < MinLength) return SearchResults.Empty with { Query = q };
         var terms = q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
+        // Only the groups this person may open (Auth/AccessMap.cs); the others aren't searched at all.
+        var canJobs = permissions.CanAny(Perm.SchedulingView, Perm.ProjectsView);
+        var canCustomers = permissions.Can(Perm.CustomersView);
         // Jobs feed both the Jobs and Customers groups, so load them once.
-        var jobs = JobsAsync(ct);
-        var sources = new[]
-        {
-            Run("Jobs", Then(jobs, list => FindJobs(list, terms, q, perGroup)), timeLimit),
-            Run("Customers", Then(jobs, list => FindCustomers(list, terms, q, perGroup)), timeLimit),
-            Run("People", FindPeopleAsync(terms, q, perGroup, ct), timeLimit),
-            Run("Equipment", FindEquipmentAsync(terms, q, perGroup, ct), timeLimit),
-            Run("Vendors", Task.Run(() => FindVendors(terms, q, perGroup), ct), timeLimit),
-        };
+        var jobs = canJobs || canCustomers ? JobsAsync(ct) : Task.FromResult(new List<ProjectSummary>());
+        var sources = new List<Task<Outcome>>();
+        if (canJobs) sources.Add(Run("Jobs", Then(jobs, list => FindJobs(list, terms, q, perGroup, permissions.Can(Perm.SchedulingView))), timeLimit));
+        if (canCustomers) sources.Add(Run("Customers", Then(jobs, list => FindCustomers(list, terms, q, perGroup)), timeLimit));
+        if (permissions.Can(Perm.EmployeesView)) sources.Add(Run("People", FindPeopleAsync(terms, q, perGroup, ct), timeLimit));
+        if (permissions.Can(Perm.EquipmentView)) sources.Add(Run("Equipment", FindEquipmentAsync(terms, q, perGroup, ct), timeLimit));
+        if (permissions.Can(Perm.VendorsView)) sources.Add(Run("Vendors", Task.Run(() => FindVendors(terms, q, perGroup), ct), timeLimit));
         var results = await Task.WhenAll(sources);
         return new SearchResults(q,
             results.Where(r => r.Value is { Total: > 0 }).Select(r => r.Value!).ToList(),
@@ -63,7 +65,7 @@ public sealed class SearchService(
         return open.Concat(closed).GroupBy(j => j.Id).Select(g => g.First()).ToList();
     }
 
-    private static SearchGroup FindJobs(List<ProjectSummary> jobs, string[] terms, string q, int take)
+    private static SearchGroup FindJobs(List<ProjectSummary> jobs, string[] terms, string q, int take, bool timeline)
     {
         var hits = jobs
             .Select(j => (Job: j, Score: Score(terms, q, [j.Number, j.Name], [j.Customer, j.Address])))
@@ -75,7 +77,8 @@ public sealed class SearchService(
         return new SearchGroup("jobs", "Jobs", hits.Take(take).Select(x => new SearchHit(
             $"#{x.Job.Number} {x.Job.Name}",
             Join(x.Job.Customer, x.Job.Stage ?? x.Job.BidStage ?? "Closed", x.Job.Address),
-            $"/scheduling/job/{Uri.EscapeDataString(x.Job.Id)}",
+            // The job timeline lives under Scheduling; without it, the Projects list filtered to the job.
+            timeline ? $"/scheduling/job/{Uri.EscapeDataString(x.Job.Id)}" : "/projects?q=" + Uri.EscapeDataString(x.Job.Number ?? x.Job.Name),
             JobTreadIds.JobUrl(x.Job.Id))).ToList(), hits.Count, null);
     }
 

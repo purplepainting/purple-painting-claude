@@ -15,12 +15,16 @@ namespace PurpleDashboard.Pages.Connections;
 /// Connect: redirect to Intuit with a random state (also kept in a cookie); Intuit returns to
 /// /quickbooks/callback (Callback page), which checks the state and saves the connection.
 /// </summary>
-public class IndexModel(QuickBooksClient quickBooks, GoogleClient google,IJobTreadClient jobTread, JobTreadUserKeys userKeys, JobTreadOAuth jobTreadOAuth, IDataProtectionProvider protection, DatabaseStatus database, ChangeLogWriter changeLog, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(QuickBooksClient quickBooks, GoogleClient google,IJobTreadClient jobTread, JobTreadUserKeys userKeys, JobTreadOAuth jobTreadOAuth, IDataProtectionProvider protection, DatabaseStatus database, ChangeLogWriter changeLog, CurrentUser me, Permissions permissions, ILogger<IndexModel> logger) : PageModel
 {
     public const string StateCookie = "qbo_state";
     public const string JobTreadCookie = "jt_signin";
     public const string GoogleStateCookie = "google_state";
 
+    /// <summary>See the company connections (QuickBooks, Google, Facebook). Everyone sees their own JobTread sign-in.</summary>
+    public bool CanViewCompany => permissions.Can(Perm.ConnectionsView);
+    /// <summary>Connect, reconnect, disconnect and pick accounts for the company connections.</summary>
+    public bool CanEditConnections => permissions.Can(Perm.ConnectionsEdit);
     public bool JobTreadConfigured => jobTread.IsConfigured;
     public bool QuickBooksConfigured => quickBooks.IsConfigured;
     public DatabaseStatus Database => database;
@@ -51,6 +55,7 @@ public class IndexModel(QuickBooksClient quickBooks, GoogleClient google,IJobTre
         ViewData["ModuleName"] = "Connections";
         Connection = await quickBooks.GetConnectionAsync(ct);
         MyJobTread = await userKeys.FindAsync(me.ObjectId, ct);
+        if (!CanViewCompany) return;
         await LoadGoogleAsync(refreshGoogle, ct);
 
         if (check && Connection is not null)

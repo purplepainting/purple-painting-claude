@@ -108,6 +108,26 @@ public sealed class QuickBooksAdSpendService(QuickBooksClient quickBooks, IConfi
         }
     }
 
+    /// <summary>Default channels that are marketing but not ad spend. Setting Sales:NonAdChannels (comma separated) replaces the list.</summary>
+    public static readonly string[] DefaultNonAdChannels = [SeoChannel, PrintingChannel];
+
+    /// <summary>
+    /// Channels left out of the Ad spend total and the lead-source table (shown in the reconcile as "not ad spend"):
+    /// Sales:NonAdChannels ("Website SEO,Printing" by default; set it to "-" to count everything). Case-insensitive.
+    /// </summary>
+    public IReadOnlySet<string> NonAdChannels
+    {
+        get
+        {
+            var section = config.GetSection("Sales:NonAdChannels");
+            string[] list = section.Value is { } v
+                ? v.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(c => c != "-").ToArray()
+                : section.GetChildren().Any() ? section.GetChildren().Select(c => c.Value?.Trim()).Where(c => !string.IsNullOrEmpty(c)).Select(c => c!).ToArray()
+                : DefaultNonAdChannels;
+            return list.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
     public async Task<BookedAdSpend> GetAsync(string googleChannel, CancellationToken ct)
     {
         var today = LocalClock.Today;

@@ -63,7 +63,7 @@ public sealed record MergedSpend(List<SpendLine> Lines, List<ReplacedSpend> Repl
 /// One channel and month on the reconcile view: what the ad platform reported (null when no platform covers it), what's
 /// booked in QuickBooks (null when QuickBooks isn't read), and what the ads view counts (and from where).
 /// </summary>
-public sealed record ReconcileRow(string Month, string Channel, string? Platform, decimal? PlatformAmount, decimal? Booked, decimal Counted, string CountedFrom)
+public sealed record ReconcileRow(string Month, string Channel, string? Platform, decimal? PlatformAmount, decimal? Booked, decimal Counted, string CountedFrom, bool NotAdSpend = false)
 {
     /// <summary>Platform − QuickBooks, when both are known.</summary>
     public decimal? Difference => PlatformAmount is { } p && Booked is { } b ? p - b : null;

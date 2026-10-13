@@ -178,7 +178,11 @@ else
                                             @if (Model.ByPerson)
                                             {
                                                 var (pa, pe) = Model.PersonWeekCost(row.Title);
-                                                if (pa + pe > 0 || Model.PersonWeekHours(row.Title) > 0)
+                                                if (!Model.ShowPersonPay && Model.PersonWeekHours(row.Title) is > 0 and var onlyHours)
+                                                {
+                                                    <span class="row-cost num" title="Hours this week">Week @Format.Number(Math.Round(onlyHours, 1))h</span>
+                                                }
+                                                else if (Model.ShowPersonPay && (pa + pe > 0 || Model.PersonWeekHours(row.Title) > 0))
                                                 {
                                                     <span class="row-cost num" title="Labor this week: actual @Format.Money(pa)@(pe > 0 ? $", estimated {Format.Money(pe)}" : "")">Week @Format.Money(pa + pe)@if (Model.PersonWeekHours(row.Title) is > 0 and var ph) {<text> · @Format.Number(Math.Round(ph, 1))h</text>}@if (pe > 0) {<span class="muted"> · incl. est.</span>}</span>
                                                 }

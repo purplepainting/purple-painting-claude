@@ -3,11 +3,15 @@ using PurpleDashboard.Auth;
 
 namespace PurpleDashboard.Pages.Settings;
 
-/// <summary>Settings: the places that used to be small links under the signed-in name (connections, change log, sign out).</summary>
-public class IndexModel(CurrentUser me) : PageModel
+/// <summary>Settings: connections, change log, users &amp; access, sign out. Tiles show by permission.</summary>
+public class IndexModel(CurrentUser me, Permissions permissions, UserAccessStore access) : PageModel
 {
     public string? Name => me.DisplayName;
     public string? Email => me.Email;
+    public Permissions Access => permissions;
+    /// <summary>The database is set up but roles couldn't be read: everyone but ADMIN_EMAILS is View only.</summary>
+    public bool Fallback => permissions.Fallback;
+    public bool AccessDatabaseAvailable => access.Available;
 
     public void OnGet()
     {

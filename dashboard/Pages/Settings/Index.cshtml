@@ -1,17 +1,43 @@
 @page "/settings"
 @model PurpleDashboard.Pages.Settings.IndexModel
+@using PurpleDashboard.Auth
 
-<p class="list-meta muted">Signed in as <b>@Model.Name</b>@(Model.Email is { } e ? $" ({e})" : "")</p>
+<p class="list-meta muted">Signed in as <b>@Model.Name</b>@(Model.Email is { } e ? $" ({e})" : "") · Access: <b>@AccessRoles.Label(Model.Access.Role)</b>@(Model.Access.IsBootstrapAdmin ? " (ADMIN_EMAILS)" : "")</p>
+
+@if (Model.Fallback)
+{
+    <div class="card notice warn">
+        <strong>Access is in fallback mode.</strong>
+        <p>The dashboard database isn't available (not set up, still connecting, or can't be reached), so roles can't be read. Until it's back, admins from the ADMIN_EMAILS setting have full access and everyone else is view only (nothing can be saved).</p>
+    </div>
+}
 
 <div class="settings-grid">
     <a class="card settings-tile" href="/connections">
         <span class="tile-icon"><partial name="_Icon" model="@("plug")" /></span>
-        <span><b>Connections</b><span class="muted small">JobTread, QuickBooks, Google and Facebook: what's connected, connect or reconnect, and your own JobTread sign-in.</span></span>
+        @if (Model.Access.Can(Perm.ConnectionsView))
+        {
+            <span><b>Connections</b><span class="muted small">JobTread, QuickBooks, Google and Facebook: what's connected, connect or reconnect, and your own JobTread sign-in.</span></span>
+        }
+        else
+        {
+            <span><b>Connections</b><span class="muted small">Your own JobTread sign-in, used when you push schedule changes.</span></span>
+        }
     </a>
-    <a class="card settings-tile" href="/changes">
-        <span class="tile-icon"><partial name="_Icon" model="@("history")" /></span>
-        <span><b>Change log</b><span class="muted small">Who changed what on the dashboard: schedule pushes, pay, bonuses, equipment, hiring.</span></span>
-    </a>
+    @if (Model.Access.Can(Perm.ChangeLogView))
+    {
+        <a class="card settings-tile" href="/changes">
+            <span class="tile-icon"><partial name="_Icon" model="@("history")" /></span>
+            <span><b>Change log</b><span class="muted small">Who changed what on the dashboard: schedule pushes, pay, bonuses, equipment, hiring.</span></span>
+        </a>
+    }
+    @if (Model.Access.Can(Perm.AccessView))
+    {
+        <a class="card settings-tile" href="/settings/access">
+            <span class="tile-icon"><partial name="_Icon" model="@("shield")" /></span>
+            <span><b>Users &amp; access</b><span class="muted small">Everyone who has signed in, their role (Admin, Office, Supervisor, View only) and any extra or removed permissions.</span></span>
+        </a>
+    }
     <a class="card settings-tile danger" href="/.auth/logout?post_logout_redirect_uri=/" data-no-prefetch>
         <span class="tile-icon"><partial name="_Icon" model="@("logout")" /></span>
         <span><b>Sign out</b><span class="muted small">Signs you out of the dashboard (your Microsoft account).</span></span>

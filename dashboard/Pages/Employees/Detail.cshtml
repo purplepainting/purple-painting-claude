@@ -27,7 +27,7 @@ else if (Model.Member is { } m)
                         }
                     </select>
                     <small class="muted">Foreman $29+, Painter $23–28, Helper $16–22 QuickBooks base pay. Management goes on the Management schedule.</small>
-                    @if (m.SuggestedLevel is { } sl) { <small class="notice-inline warn">QuickBooks pay points to @Levels.Label(sl).</small> }
+                    @if (Model.ShowPay && m.SuggestedLevel is { } sl) { <small class="notice-inline warn">QuickBooks pay points to @Levels.Label(sl).</small> }
                 </label>
                 @if (m.IsSupervisor || !string.IsNullOrEmpty(p?.Color))
                 {
@@ -40,6 +40,8 @@ else if (Model.Member is { } m)
                     <small class="muted">Used on the project and schedule PM tags. Uncheck Default to use the color picked.</small>
                 </div>
                 }
+                @if (Model.CanEditPay)
+                {
                 <div class="field">
                     <span>QuickBooks base pay</span>
                     <span class="color-row">
@@ -51,25 +53,35 @@ else if (Model.Member is { } m)
                     </span>
                     <small class="muted">Their regular rate in QuickBooks payroll (not burdened). Will fill in from QuickBooks pay stubs once Intuit allows it.</small>
                 </div>
+                }
+                else if (Model.ShowPay)
+                {
+                <div class="field">
+                    <span>QuickBooks base pay</span>
+                    <span class="num">@IndexModel.Pay(p?.QbBasePay, p?.QbPayType)</span>
+                </div>
+                }
                 <label class="field wide">
                     <span>Notes</span>
                     <textarea name="notes" rows="2" maxlength="2000" placeholder="e.g. Drives the spray rig, Spanish only, prevailing wage certified">@p?.Notes</textarea>
                 </label>
                 <div class="form-actions wide">
-                    <button class="button" type="submit">Save</button>
+                    @if (Model.CanEdit) { <button class="button" type="submit">Save</button> }
                     @if (p is not null) { <span class="muted small">Last changed @Format.Date(DateOnly.FromDateTime(p.UpdatedAt.ToLocalTime())) by @p.UpdatedBy</span> }
                 </div>
             </fieldset>
         </form>
 
         <div class="emp-jobs">
-            <h3 class="detail-title">JobTread burdened rates</h3>
-            @if (m.Staff.Rates.Count == 0)
+            @if (!Model.ShowPay) { }
+            else if (m.Staff.Rates.Count == 0)
             {
+                <h3 class="detail-title">JobTread burdened rates</h3>
                 <p class="muted">No rates set in JobTread.</p>
             }
             else
             {
+                <h3 class="detail-title">JobTread burdened rates</h3>
                 <ul class="crew-list">
                     @foreach (var r in m.Staff.Rates)
                     {

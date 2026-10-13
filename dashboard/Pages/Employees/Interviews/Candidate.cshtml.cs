@@ -13,11 +13,12 @@ namespace PurpleDashboard.Pages.Employees.Interviews;
 /// One applicant: details, stage and history, their texts, files (scanned sheet, resume, timesheet photo),
 /// interview sheet, trial day, hire and onboarding.
 /// </summary>
-public class CandidateModel(HiringService hiring, CurrentUser me) : PageModel
+public class CandidateModel(HiringService hiring, CurrentUser me, Permissions permissions) : PageModel
 {
     [BindProperty(SupportsGet = true)] public int Id { get; set; }
     [TempData] public string? Message { get; set; }
-    public bool CanEdit => hiring.Available;
+    public bool CanEdit => hiring.Available && permissions.Can(Perm.HiringEdit);
+    public bool DbAvailable => hiring.Available;
 
     public HiringCandidate C { get; private set; } = null!;
     public InterviewSheet? Sheet { get; private set; }
@@ -33,7 +34,7 @@ public class CandidateModel(HiringService hiring, CurrentUser me) : PageModel
 
     public async Task<IActionResult> OnGetAsync(CancellationToken ct)
     {
-        if (await hiring.CandidateAsync(Id, ct) is not { } c) return CanEdit ? NotFound() : RedirectToPage("/Employees/Interviews/Index");
+        if (await hiring.CandidateAsync(Id, ct) is not { } c) return DbAvailable ? NotFound() : RedirectToPage("/Employees/Interviews/Index");
         C = c;
         ViewData["Title"] = $"Hiring · {c.Name}";
         ViewData["ModuleName"] = "Hiring";

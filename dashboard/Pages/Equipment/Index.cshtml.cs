@@ -10,7 +10,7 @@ using PurpleDashboard.Modules.Projects;
 
 namespace PurpleDashboard.Pages.Equipment;
 
-public class IndexModel(EquipmentService equipment, ProjectsService projects, ChangeLogWriter changeLog, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(EquipmentService equipment, ProjectsService projects, ChangeLogWriter changeLog, CurrentUser me, Permissions permissions, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"sundries" (default), "equipment", "jobs".</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
@@ -18,7 +18,8 @@ public class IndexModel(EquipmentService equipment, ProjectsService projects, Ch
     [BindProperty(SupportsGet = true)] public string? Period { get; set; }
 
     public string CurrentTab => Tab is "equipment" or "jobs" ? Tab : "sundries";
-    public bool CanEdit => equipment.Available;
+    public bool CanEdit => equipment.Available && permissions.Can(Perm.EquipmentEdit);
+    public bool DbAvailable => equipment.Available;
     [TempData] public string? Message { get; set; }
 
     public List<InventoryItem> Items { get; private set; } = [];

@@ -10,7 +10,7 @@ using PurpleDashboard.Modules.Sales;
 
 namespace PurpleDashboard.Pages.Sales;
 
-public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsService metaAds, QuickBooksAdSpendService qbAds, JobTreadLeadsService jtLeads, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsService metaAds, QuickBooksAdSpendService qbAds, JobTreadLeadsService jtLeads, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, Permissions permissions, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"commissions" (default), "doors", "ads".</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
@@ -19,8 +19,25 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
     /// <summary>Door-to-door and ads period: "30" days, "90" (default), "ytd", "12" (last 12 months, ads only).</summary>
     [BindProperty(SupportsGet = true)] public string? Period { get; set; }
 
-    public string CurrentTab => Tab is "doors" or "ads" ? Tab : "commissions";
+    /// <summary>The tabs this person may see, in order: key, label, view permission.</summary>
+    public IReadOnlyList<(string Key, string Label)> Tabs =>
+        new[] { ("commissions", "Commissions", Perm.CommissionsView), ("doors", "Door-to-door", Perm.SalesView), ("ads", "Ads & lead sources", Perm.AdsView) }
+            .Where(t => permissions.Can(t.Item3)).Select(t => (t.Item1, t.Item2)).ToList();
+
+    /// <summary>The tab asked for when allowed, else the first allowed one.</summary>
+    public string CurrentTab
+    {
+        get
+        {
+            var asked = Tab is "doors" or "ads" ? Tab : "commissions";
+            return Tabs.Any(t => t.Key == asked) ? asked : Tabs.FirstOrDefault().Key ?? "commissions";
+        }
+    }
+    /// <summary>The database is up (saving possible at all).</summary>
     public bool CanEdit => database.Available;
+    public bool CanEditCommissions => database.Available && permissions.Can(Perm.CommissionsEdit);
+    public bool CanEditDoors => database.Available && permissions.Can(Perm.SalesEdit);
+    public bool CanEditAds => database.Available && permissions.Can(Perm.AdsEdit);
     public string? Error { get; private set; }
     [TempData] public string? Message { get; set; }
     /// <summary>Job id of the commission row to keep open (after recording or deleting a payment there).</summary>
@@ -50,6 +67,8 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
     public List<ReconcileRow> Reconcile { get; private set; } = [];
     /// <summary>QuickBooks booked lines not counted because an API covers that channel and month.</summary>
     public List<ReplacedLine> ReplacedBooked { get; private set; } = [];
+    /// <summary>Spend in channels that aren't ad spend (Sales:NonAdChannels): shown in the reconcile only, not in totals or lead sources.</summary>
+    public List<SpendLine> NonAdSpend { get; private set; } = [];
     /// <summary>Refresh link in the reconcile section: drop cached QuickBooks data.</summary>
     [BindProperty(SupportsGet = true)] public bool QbRefresh { get; set; }
     public GoogleAdsView? Google { get; private set; }
@@ -108,10 +127,15 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
                 var bookedMonths = Booked.Ready ? Booked.Months : null;
                 var sources = bookedMonths is null ? apis : [.. apis, .. QuickBooksAdSpendService.SpendSources(Booked, googleAds.Channel)];
                 var merged = SalesService.MergeApiSpend(Spend, sources, fromMonth, toMonth);
-                CountedSpend = merged.Lines;
+                // Marketing that isn't ad spend (Sales:NonAdChannels, default Website SEO, Printing) stays out of the totals and lead sources.
+                var nonAd = qbAds.NonAdChannels;
+                bool IsNonAd(string channel) => nonAd.Contains(SalesService.ChannelFor(channel, googleAds.Channel));
+                NonAdSpend = merged.Lines.Where(l => IsNonAd(l.Channel)).ToList();
+                CountedSpend = merged.Lines.Where(l => !IsNonAd(l.Channel)).ToList();
                 ReplacedSpend = merged.Replaced.ToDictionary(r => r.Row.Id);
                 ReplacedBooked = merged.ReplacedLines;
-                Reconcile = SalesService.Reconcile(apis, bookedMonths, CountedSpend, fromMonth, toMonth, googleAds.Channel);
+                Reconcile = SalesService.Reconcile(apis, bookedMonths, merged.Lines, fromMonth, toMonth, googleAds.Channel)
+                    .Select(r => IsNonAd(r.Channel) ? r with { NotAdSpend = true } : r).ToList();
                 var jobs = (await sales.SoldJobsAsync(refresh, ct)).Where(j => j.ApprovedContract > 0).ToList();
                 // New JobTread customer accounts by Lead Source, over the same whole months as the spend.
                 JtLeads = await jtLeads.GetAsync(new DateOnly(From.Year, From.Month, 1), To, refresh, ct);

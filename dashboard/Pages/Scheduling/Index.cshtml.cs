@@ -19,8 +19,12 @@ public partial class IndexModel(
     TeamDirectory directory,
     ProjectsService projects,
     CurrentUser me,
+    Permissions permissions,
     ILogger<IndexModel> logger) : PageModel
 {
+    /// <summary>Per-person labor cost (by person) reveals pay rates: only shown with employees.pay.view.</summary>
+    public bool ShowPersonPay => permissions.Can(Perm.PayView);
+
     /// <summary>"week" (default), "day" or "month".</summary>
     [BindProperty(SupportsGet = true)] public string? Mode { get; set; }
     /// <summary>"job" (default) or "person".</summary>
@@ -154,7 +158,8 @@ public partial class IndexModel(
         Rows = ByPerson ? RowsByPerson() : RowsByJob();
         await LoadCostsAsync(ct);
 
-        if (!IsDay) EditorJson = await BuildEditorJsonAsync(staff, ct);
+        // The editor (and its Edit schedule button) only for people who may push schedule changes.
+        if (!IsDay && permissions.Can(Perm.SchedulingEdit)) EditorJson = await BuildEditorJsonAsync(staff, ct);
     }
 
     /// <summary>Push the editor's draft to JobTread. Body: { changes: [...] }.</summary>
@@ -258,7 +263,13 @@ public partial class IndexModel(
     {
         try
         {
-            if (ByPerson) { await LoadPersonCostsAsync(ct); return; }
+            if (ByPerson)
+            {
+                await LoadPersonCostsAsync(ct);
+                if (!ShowPersonPay)
+                    foreach (var key in PersonCosts.Keys.ToList()) PersonCosts[key] = PersonCosts[key] with { Amount = 0 };
+                return;
+            }
             var actual = await laborCosts.GetActualAsync(From, To, ct);
             foreach (var jobId in Tasks.Select(t => t.JobId).Distinct())
             {

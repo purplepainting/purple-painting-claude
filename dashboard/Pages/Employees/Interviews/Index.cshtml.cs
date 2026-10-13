@@ -12,7 +12,7 @@ namespace PurpleDashboard.Pages.Employees.Interviews;
 /// Hiring: everyone who has applied (the pipeline and the list of past applicants) and the interview days.
 /// Replaces the Interviews spreadsheets. Dashboard-owned data only.
 /// </summary>
-public class IndexModel(HiringService hiring, CurrentUser me) : PageModel
+public class IndexModel(HiringService hiring, CurrentUser me, Permissions permissions) : PageModel
 {
     /// <summary>"days" for interview days; otherwise candidates.</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
@@ -23,7 +23,8 @@ public class IndexModel(HiringService hiring, CurrentUser me) : PageModel
     [BindProperty(SupportsGet = true)] public int? Day { get; set; }
 
     [TempData] public string? Message { get; set; }
-    public bool CanEdit => hiring.Available;
+    public bool CanEdit => hiring.Available && permissions.Can(Perm.HiringEdit);
+    public bool DbAvailable => hiring.Available;
     public bool DaysTab => Tab == "days";
 
     public List<HiringCandidate> All { get; private set; } = [];

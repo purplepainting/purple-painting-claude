@@ -58,6 +58,16 @@
         }
     </section>
 
+    @if (!Model.CanViewCompany)
+    {
+        <p class="muted small">The company connections (QuickBooks, Google, Facebook) are managed by admins.</p>
+    }
+    else
+    {
+    @if (!Model.CanEditConnections)
+    {
+        <p class="muted small">Only admins can connect, reconnect or disconnect the company connections below.</p>
+    }
     <section class="card connection">
         <div class="connection-head">
             <h2>QuickBooks</h2>
@@ -84,6 +94,8 @@
             {
                 <p class="@(Model.CheckOk ? "" : "notice-inline warn")">@Model.CheckResult</p>
             }
+            @if (Model.CanEditConnections)
+            {
             <div class="form-actions">
                 <a class="button secondary" asp-page="/Connections/Index" asp-route-check="true">Check connection</a>
                 <a class="link-button" asp-page="/Connections/Index" asp-page-handler="Connect">Reconnect</a>
@@ -91,12 +103,13 @@
                     <button class="link-button" type="submit">Disconnect</button>
                 </form>
             </div>
+            }
             <p class="muted small">Read only: the dashboard reads QuickBooks and never changes anything there.</p>
         }
         else
         {
             <p class="muted">One shared connection for everyone (read only). Connect once and the dashboard can read your books (P&amp;L, invoices, bills, balances) for Financials. You'll sign in to Intuit and pick the Purple Painting company.</p>
-            <a class="button" asp-page="/Connections/Index" asp-page-handler="Connect">Connect QuickBooks</a>
+            @if (Model.CanEditConnections) { <a class="button" asp-page="/Connections/Index" asp-page-handler="Connect">Connect QuickBooks</a> }
         }
     </section>
 
@@ -125,7 +138,7 @@
                 <li class="ok">Google sign-in app set up</li>
                 <li class="@(Model.GoogleHasDeveloperToken ? "ok" : "todo")">Google Ads developer token @(Model.GoogleHasDeveloperToken ? "set" : "not set yet (GOOGLE_ADS_DEVELOPER_TOKEN): Ads won't load until it is; reviews still work")</li>
             </ul>
-            <div><a class="button" asp-page="/Connections/Index" asp-page-handler="GoogleConnect">Connect Google</a></div>
+            @if (Model.CanEditConnections) { <div><a class="button" asp-page="/Connections/Index" asp-page-handler="GoogleConnect">Connect Google</a></div> }
             <p class="muted small">Sign in with the Google account that owns the Ads account and the Business Profile, and allow every box on Google's page. You come right back here.</p>
         }
         else
@@ -149,7 +162,7 @@
                 <li class="@(Model.LocationsProblem is null && g.BusinessLocation is not null ? "ok" : "todo")">Reviews: @(Model.LocationsProblem is not null ? "waiting for Business Profile access (above)" : g.BusinessLocation is null ? "pick the location below" : "reading " + g.BusinessLocationTitle)</li>
             </ul>
 
-            @if (Model.AdsAccounts.Any(a => !a.IsManager))
+            @if (Model.CanEditConnections && Model.AdsAccounts.Any(a => !a.IsManager))
             {
                 <form method="post" asp-page-handler="GoogleAds" class="link-form">
                     <label class="field">
@@ -167,7 +180,7 @@
             }
             @if (Model.AdsNotes.Count > 0) { <p class="muted small">Some accounts couldn't be read: @string.Join(" ", Model.AdsNotes)</p> }
 
-            @if (Model.Locations.Count > 0)
+            @if (Model.CanEditConnections && Model.Locations.Count > 0)
             {
                 <form method="post" asp-page-handler="GoogleLocation" class="link-form">
                     <label class="field">
@@ -184,6 +197,8 @@
                 </form>
             }
 
+            @if (Model.CanEditConnections)
+            {
             <div class="form-actions">
                 <a class="button secondary" asp-page="/Connections/Index" asp-route-refreshGoogle="true" asp-fragment="google">Check again</a>
                 <a class="link-button" asp-page="/Connections/Index" asp-page-handler="GoogleConnect">Reconnect</a>
@@ -191,8 +206,10 @@
                     <button class="link-button" type="submit">Disconnect</button>
                 </form>
             </div>
+            }
             <p class="muted small">Read only: the dashboard never creates or changes ads, the Business Profile or review replies.@(Model.GoogleLoginCustomerIdSetting is { } mcc ? $" Ads calls go through manager account {PurpleDashboard.Integrations.Google.AdsAccount.FormatId(mcc)} (GOOGLE_ADS_LOGIN_CUSTOMER_ID)." : "")</p>
         }
     </section>
     @await Component.InvokeAsync("MetaConnection")
+    }
 </div>

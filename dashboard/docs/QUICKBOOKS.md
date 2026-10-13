@@ -64,7 +64,7 @@ one `GeneralLedger` report (`account=` those ids, last 12 months, accrual, colum
 | 6430 Printing Marketing Materials | Printing |
 
 Setting `Sales:AdAccounts` (Azure: `Sales__AdAccounts`, e.g. `6410,6420,6430,6440`, the default) changes which accounts
-are read; sub-accounts of a listed account are included. The vendor list is `VendorRules` in the same file. QuickBooks is
+are read; sub-accounts of a listed account are included. `Sales:NonAdChannels` (default `Website SEO,Printing`) lists channels that are marketing but not ad spend: shown in the reconcile only, not in the Ad spend total or lead sources. The vendor list is `VendorRules` in the same file. QuickBooks is
 used for a channel and month only when no ad platform API (Google Ads, Meta) covers it; the Ads tab's "Platform vs
 QuickBooks" table compares the two.
 

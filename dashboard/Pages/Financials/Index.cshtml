@@ -1,5 +1,6 @@
 @page "/financials"
 @model PurpleDashboard.Pages.Financials.IndexModel
+@inject PurpleDashboard.Auth.Permissions Access
 @using PurpleDashboard.Infrastructure
 @using PurpleDashboard.Modules.Financials
 
@@ -10,7 +11,7 @@
             <a class="pill@(Model.CurrentTab == key ? " active" : "")" asp-page="/Financials/Index" asp-all-route-data="Model.RouteFor(tab: key)">@label</a>
         }
         <a class="pill" href="/financials/jobs">Job by job</a>
-        <a class="pill" href="/financials/bonuses">Bonuses</a>
+        @if (Access.Can(PurpleDashboard.Auth.Perm.BonusesView)) { <a class="pill" href="/financials/bonuses">Bonuses</a> }
     </div>
     <form class="filters" method="get" data-autosubmit>
         @if (Model.CurrentTab != "overview") { <input type="hidden" name="tab" value="@Model.CurrentTab"> }

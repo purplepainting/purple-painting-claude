@@ -902,3 +902,29 @@ table.data.unmatched td { white-space: nowrap; }
 .settings-tile b { display: block; margin-bottom: 2px; }
 @media (hover: hover) { a.settings-tile:hover { border-color: var(--purple-600); } }
 .settings-tile.danger .tile-icon { background: #FBEAEA; color: #B91C1C; }
+
+/* ---------- Settings → Users & access ---------- */
+.access-roles { padding: 12px 16px; margin-bottom: 12px; }
+.access-roles > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.access-roles dl { display: grid; gap: 8px; margin: 10px 0; }
+.access-roles dt { font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.access-roles dd { margin: 2px 0 0 26px; font-size: 13px; }
+.avatar.small { width: 18px; height: 18px; }
+.access-figs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.access-form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 12px; min-width: 0; }
+.access-role { max-width: 260px; }
+.access-table th[scope="row"] { font-weight: 600; white-space: nowrap; }
+.access-check { min-height: 36px; white-space: nowrap; }
+.access-check input { width: 18px; height: 18px; accent-color: var(--purple-600); }
+.access-check.changed span { font-weight: 800; color: var(--purple-700); }
+@media (max-width: 640px) {
+  .access-list .emp-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .access-list .access-figs { grid-column: 2 / 3; justify-content: flex-start; }
+  /* Phones: each area on its own block, its boxes wrapping underneath (no sideways scroll). */
+  .access-table thead { display: none; }
+  .access-table, .access-table tbody, .access-table tr { display: block; width: 100%; }
+  .access-table tr { display: flex; flex-wrap: wrap; gap: 0 16px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  table.data.access-table th[scope="row"], table.data.access-table td { display: block; border: 0; padding: 0; }
+  .access-table th[scope="row"] { flex-basis: 100%; }
+  .access-table td:empty { display: none; }
+}
