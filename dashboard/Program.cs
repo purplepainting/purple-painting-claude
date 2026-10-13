@@ -110,6 +110,7 @@ builder.Services.AddScoped<PurpleDashboard.Modules.Financials.BonusRulesStore>()
 builder.Services.AddScoped<PurpleDashboard.Modules.Financials.PayrollPayments>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Financials.JobReconciliationService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Sales.SalesService>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Sales.CommissionPayroll>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Sales.GoogleAdsService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Sales.QuickBooksAdSpendService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Sales.JobTreadLeadsService>();

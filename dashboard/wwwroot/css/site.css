@@ -944,6 +944,19 @@ table.data tr.row-current td { background: var(--purple-50); }
 table.data.bonus-months td:first-child, table.data.bonus-months th { white-space: nowrap; }
 table.data td.actions { white-space: nowrap; }
 table.data td.actions form { display: inline-block; margin: 2px 6px 2px 0; }
+
+/* Tables that stack into cards on phones (table.data.stack-phone; cells carry data-label). */
+@media (max-width: 640px) {
+  table.data.stack-phone thead { display: none; }
+  table.data.stack-phone, table.data.stack-phone tbody, table.data.stack-phone tfoot, table.data.stack-phone tr, table.data.stack-phone td { display: block; width: 100%; box-sizing: border-box; }
+  table.data.stack-phone tr { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  table.data.stack-phone td { border: 0; padding: 3px 0; text-align: left; }
+  table.data.stack-phone td.num { text-align: left; }
+  table.data.stack-phone td:first-child { font-weight: 600; }
+  table.data.stack-phone td[data-label]::before { content: attr(data-label) " "; color: var(--muted); font-size: 12px; font-family: var(--font-ui); font-weight: 400; margin-right: 4px; }
+  table.data.stack-phone td.actions { white-space: normal; padding-top: 8px; }
+  table.data.stack-phone td.actions:empty { display: none; }
+}
 details.unlock > summary, details.ledger-ytd > summary, details.clawback > summary { cursor: pointer; list-style: none; }
 details.unlock > summary::-webkit-details-marker, details.ledger-ytd > summary::-webkit-details-marker, details.clawback > summary::-webkit-details-marker { display: none; }
 details.clawback { border-top: 1px solid var(--border); padding: 8px 0; font-size: 14px; }

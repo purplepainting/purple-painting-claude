@@ -60,7 +60,11 @@ wage line lands on its expense account. `Modules/Financials/PayrollPayments.cs` 
   check number (Num), employee (Name, with the QuickBooks employee id when the report gives one), gross amount.
 - Pay item **Bonus** → **6114 Management Payroll:Bonus Payroll** (bonuses are paid as separate "Bonus Only" checks, one
   per person, once a month). Set on Settings → Bonus rules (default `6114`). Pay item **Commission** → **6490 Sales
-  Commissions Overhead** (`Sales:CommissionAccounts`, default 6490; for the commissions reconcile, not built yet).
+  Commissions Overhead** (`Sales:CommissionAccounts`, Azure `Sales__CommissionAccounts`, default 6490), used by Sales →
+  Commissions → **Payroll checks** (`Modules/Sales/CommissionPayroll.cs`): that month's Commission paycheck lines per
+  salesperson next to the payments recorded in the dashboard; "Record from payroll" records the difference
+  (oldest owed jobs first, the rest unallocated) and months are Paid & locked like bonuses (`PayLocks.Kind = "commission"`).
+  Memo fallback word: "Commission".
 - If no account matches (or it has no lines) and a memo word is given, Paycheck lines whose memo says "Bonus" are used.
 - People are matched to JobTread staff by QuickBooks employee id (`qboEmployeeId` on the membership), then by name.
 - Hire and release dates for bonus probation come from `select Id, HiredDate, ReleasedDate, Active from Employee`

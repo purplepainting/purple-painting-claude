@@ -10,7 +10,7 @@ using PurpleDashboard.Modules.Sales;
 
 namespace PurpleDashboard.Pages.Sales;
 
-public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsService metaAds, QuickBooksAdSpendService qbAds, JobTreadLeadsService jtLeads, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, Permissions permissions, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,GoogleAdsService googleAds, MetaAdsService metaAds, QuickBooksAdSpendService qbAds, JobTreadLeadsService jtLeads, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, Permissions permissions, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"commissions" (default), "doors", "ads".</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
@@ -43,6 +43,17 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
     /// <summary>Job id of the commission row to keep open (after recording or deleting a payment there).</summary>
     [BindProperty(SupportsGet = true)] public string? Open { get; set; }
 
+    /// <summary>Payroll checks month ("yyyy-MM"); default last month.</summary>
+    [BindProperty(SupportsGet = true)] public string? Month { get; set; }
+    public DateOnly CheckMonth => CommissionPayroll.ParseMonth(Month);
+    /// <summary>Commission paychecks (6490) vs recorded payments for <see cref="CheckMonth"/> (commissions tab).</summary>
+    public CommissionPayrollView? Checks { get; private set; }
+    /// <summary>Paid &amp; locked commission months (all people and months).</summary>
+    public List<PayLock> Locks { get; private set; } = [];
+    /// <summary>A payment dated then for this person sits in a paid &amp; locked month (can't be added or deleted).</summary>
+    public bool IsLocked(string person, DateOnly date) =>
+        Locks.Any(l => l.Month == CommissionPayroll.Key(CommissionPayroll.MonthOf(date)) && l.Person.Equals(person, StringComparison.OrdinalIgnoreCase));
+    public DateTime? QbAsOf => PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.DataAsOf;
     public List<JobCommission> Commissions { get; private set; } = [];
     public List<PersonCommissions> People { get; private set; } = [];
     public List<CommissionPayment> Payments { get; private set; } = [];
@@ -96,9 +107,11 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
         {
             if (CurrentTab == "commissions")
             {
-                Commissions = await sales.CommissionsAsync(refresh, ct);
-                People = SalesService.ByPerson(Commissions);
+                if (QbRefresh) PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.ClearCache();
+                await LoadCommissionsAsync(refresh, ct);
                 Payments = await sales.PaymentsAsync(ct);
+                Checks = await commissionPayroll.GetAsync(CheckMonth, Commissions, People, ct);
+                Locks = await commissionPayroll.LocksAsync(ct);
             }
             else if (CurrentTab == "doors")
             {
@@ -149,13 +162,19 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
         }
     }
 
+    private async Task LoadCommissionsAsync(bool refresh, CancellationToken ct)
+    {
+        Commissions = await sales.CommissionsAsync(refresh, ct);
+        People = SalesService.ByPerson(Commissions, await sales.UnallocatedAsync(ct));
+    }
+
     public IEnumerable<JobCommission> ShownCommissions => Show == "all" ? Commissions : Commissions.Where(c => c.Owed >= 1 || c.JobId == Open);
     /// <summary>Jobs whose salesperson has no commission rate yet (nothing can be owed until it's set).</summary>
     public int JobsWithoutRate => Commissions.Count(c => c.Rule is null);
 
     public async Task<IActionResult> OnPostRuleAsync(string person, string? percent, string? basis, string? notes, CancellationToken ct)
     {
-        if (!CanEdit || string.IsNullOrWhiteSpace(person)) return RedirectToPage(new { tab = Tab });
+        if (!CanEditCommissions || string.IsNullOrWhiteSpace(person)) return RedirectToPage(new { tab = Tab });
         if (!decimal.TryParse(percent, NumberStyles.Number, CultureInfo.InvariantCulture, out var p) || p < 0 || p > 100)
         {
             Message = "Commission % should be a number from 0 to 100."; return RedirectToPage(new { tab = Tab });
@@ -168,12 +187,18 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
 
     public async Task<IActionResult> OnPostPayAsync(string jobId, string? jobName, string person, string? amount, DateOnly? paidOn, string? note, CancellationToken ct)
     {
-        if (!CanEdit) return RedirectToPage(new { tab = Tab });
+        if (!CanEditCommissions) return RedirectToPage(new { tab = Tab });
         if (!decimal.TryParse(amount?.Replace("$", "").Replace(",", ""), NumberStyles.Number, CultureInfo.InvariantCulture, out var a) || a == 0)
         {
             Message = "Enter the amount paid."; return RedirectToPage(new { tab = Tab, show = Show });
         }
-        await sales.AddPaymentAsync(jobId, jobName, person, Math.Round(a, 2), paidOn ?? LocalClock.Today, note, User(), ct);
+        var on = paidOn ?? LocalClock.Today;
+        if (await commissionPayroll.IsLockedAsync(person, on, ct))
+        {
+            Message = $"{person}'s {CommissionPayroll.Label(CommissionPayroll.MonthOf(on))} commissions are paid & locked, so a payment can't be dated then. Date it in an open month, or unlock that month (Payroll checks).";
+            return RedirectToPage(null, null, new { tab = Tab, show = Show, open = jobId }, "comm-" + jobId);
+        }
+        await sales.AddPaymentAsync(jobId, jobName, person, Math.Round(a, 2), on, note, User(), ct);
         await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "commissions", "pay", $"{person} · {jobName}", new { jobId, amount = a, paidOn, note }, "Done")], ct);
         Message = $"Recorded {Format.Money(a)} paid to {person} for {jobName}.";
         return RedirectToPage(null, null, new { tab = Tab, show = Show, open = jobId }, "comm-" + jobId);
@@ -181,12 +206,18 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
 
     public async Task<IActionResult> OnPostDeletePaymentAsync(int id, string? jobId, CancellationToken ct)
     {
-        if (CanEdit)
+        if (CanEditCommissions && await sales.FindPaymentAsync(id, ct) is { } p)
         {
-            await sales.DeletePaymentAsync(id, ct);
-            await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "commissions", "delete-payment", id.ToString(), null, "Done")], ct);
-            Message = "Payment deleted.";
+            if (await commissionPayroll.IsLockedAsync(p.Person, p.PaidOn, ct))
+                Message = $"That payment is in {p.Person}'s paid & locked {CommissionPayroll.Label(CommissionPayroll.MonthOf(p.PaidOn))}, so it can't be deleted. Unlock the month first (Payroll checks).";
+            else
+            {
+                await sales.DeletePaymentAsync(id, ct);
+                await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "commissions", "delete-payment", id.ToString(), new { person = p.Person, job = p.JobName, amount = p.Amount, paidOn = p.PaidOn }, "Done")], ct);
+                Message = "Payment deleted.";
+            }
         }
+        if (Open?.StartsWith("chk-") == true) return BackToChecks(Open);
         return string.IsNullOrEmpty(jobId)
             ? RedirectToPage(new { tab = Tab, show = Show })
             : RedirectToPage(null, null, new { tab = Tab, show = Show, open = jobId }, "comm-" + jobId);
@@ -194,7 +225,7 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
 
     public async Task<IActionResult> OnPostActivityAsync(DateOnly? date, string? rep, int doors, int leads, int sold, string? soldAmount, string? notes, CancellationToken ct)
     {
-        if (!CanEdit) return RedirectToPage(new { tab = "doors" });
+        if (!CanEditDoors) return RedirectToPage(new { tab = "doors" });
         if (string.IsNullOrWhiteSpace(rep)) { Message = "Enter the rep's name."; return RedirectToPage(new { tab = "doors", period = Period }); }
         decimal.TryParse(soldAmount?.Replace("$", "").Replace(",", ""), NumberStyles.Number, CultureInfo.InvariantCulture, out var amt);
         await sales.AddActivityAsync(new SalesActivity
@@ -208,13 +239,13 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
 
     public async Task<IActionResult> OnPostDeleteActivityAsync(int id, CancellationToken ct)
     {
-        if (CanEdit) await sales.DeleteActivityAsync(id, ct);
+        if (CanEditDoors) await sales.DeleteActivityAsync(id, ct);
         return RedirectToPage(new { tab = "doors", period = Period });
     }
 
     public async Task<IActionResult> OnPostSpendAsync(string? month, string? channel, string? amount, int? leads, CancellationToken ct)
     {
-        if (!CanEdit) return RedirectToPage(new { tab = "ads" });
+        if (!CanEditAds) return RedirectToPage(new { tab = "ads" });
         if (string.IsNullOrWhiteSpace(month) || month.Length != 7 || string.IsNullOrWhiteSpace(channel)
             || !decimal.TryParse(amount?.Replace("$", "").Replace(",", ""), NumberStyles.Number, CultureInfo.InvariantCulture, out var a))
         {
@@ -227,8 +258,90 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
 
     public async Task<IActionResult> OnPostDeleteSpendAsync(int id, CancellationToken ct)
     {
-        if (CanEdit) await sales.DeleteSpendAsync(id, ct);
+        if (CanEditAds) await sales.DeleteSpendAsync(id, ct);
         return RedirectToPage(new { tab = "ads", period = Period });
+    }
+
+    // ---- Payroll checks (commission paychecks from QuickBooks) and Paid & locked ----
+
+    public static string Slug(string name) => new(name.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray());
+
+    private IActionResult BackToChecks(string? open) =>
+        RedirectToPage(null, null, new { show = Show, month = CommissionPayroll.Key(CheckMonth), open }, open ?? "checks");
+
+    /// <summary>Loads the month's rows fresh (for the payroll handlers).</summary>
+    private async Task<CommissionPayrollView> ReloadChecksAsync(CancellationToken ct)
+    {
+        await LoadCommissionsAsync(false, ct);
+        return await commissionPayroll.GetAsync(CheckMonth, Commissions, People, ct);
+    }
+
+    public async Task<IActionResult> OnPostPayFromPayrollAsync(string person, CancellationToken ct)
+    {
+        var open = "chk-" + Slug(person);
+        if (!CanEditCommissions) return BackToChecks(open);
+        var view = await ReloadChecksAsync(ct);
+        var row = view.Rows.FirstOrDefault(r => r.Name.Equals(person, StringComparison.OrdinalIgnoreCase));
+        if (row is null || row.Lock is not null || row.Unrecorded <= 0)
+        {
+            Message = row?.Lock is not null ? $"{person}'s {CommissionPayroll.Label(CheckMonth)} is paid & locked." : $"Nothing from payroll left to record for {person} in {CommissionPayroll.Label(CheckMonth)}.";
+            return BackToChecks(open);
+        }
+        Message = await RecordAsync(row, ct);
+        return BackToChecks(open);
+    }
+
+    private async Task<string> RecordAsync(CommissionCheckRow row, CancellationToken ct)
+    {
+        var last = row.Checks.OrderByDescending(c => c.Date).First();
+        var refs = string.Join(", ", row.Checks.Select(c => c.Num).Where(n => n is not null));
+        var made = await commissionPayroll.RecordFromPayrollAsync(row.Name, row.Unrecorded, last.Date, refs.Length > 0 ? refs : null, Commissions, User(), ct);
+        var toJobs = made.Where(p => p.JobId != CommissionPayroll.Unallocated).ToList();
+        var un = made.Where(p => p.JobId == CommissionPayroll.Unallocated).Sum(p => p.Amount);
+        static string Cents(decimal d) => d.ToString("$#,##0.00;-$#,##0.00", CultureInfo.InvariantCulture);
+        return $"Recorded {Cents(row.Unrecorded)} for {row.Name} from payroll{(refs.Length > 0 ? " (check " + refs + ")" : "")}: "
+            + string.Join(", ", toJobs.Select(p => $"{Cents(p.Amount)} to {p.JobName}"))
+            + (un > 0 ? $"{(toJobs.Count > 0 ? "; " : "")}{Cents(un)} unallocated (more than their owed jobs)" : "") + ".";
+    }
+
+    public async Task<IActionResult> OnPostLockAsync(string? person, CancellationToken ct)
+    {
+        var open = person is null ? null : "chk-" + Slug(person);
+        if (!CanEditCommissions) return BackToChecks(open);
+        var label = CommissionPayroll.Label(CheckMonth);
+        var view = await ReloadChecksAsync(ct);
+        var targets = view.Rows.Where(r => person is null ? r.ReadyToLock : r.CanLock && r.Name.Equals(person, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (person is not null && targets.Count == 0)
+        {
+            Message = $"Nothing to lock for {person} in {label} (no payment recorded or payroll check found).";
+            return BackToChecks(open);
+        }
+        // A check that isn't recorded here yet is recorded first, so the dashboard and payroll agree.
+        var notes = new List<string>();
+        foreach (var t in targets.Where(t => t.Unrecorded > 0)) notes.Add(await RecordAsync(t, ct));
+        if (notes.Count > 0)
+        {
+            var names = targets.Select(t => t.Name).ToList();
+            view = await ReloadChecksAsync(ct);
+            targets = view.Rows.Where(r => names.Contains(r.Name, StringComparer.OrdinalIgnoreCase)).ToList();
+        }
+        var paid = await commissionPayroll.PaymentsInAsync(CheckMonth, ct);
+        foreach (var t in targets) await commissionPayroll.LockAsync(t, CheckMonth, Commissions, paid, User(), ct);
+        Message = (person is not null ? $"{person}'s {label} commissions are paid & locked."
+            : targets.Count == 0 ? $"No one in {label} is ready to lock (a payroll check that matches what's recorded)."
+            : $"Locked {targets.Count} {(targets.Count == 1 ? "person" : "people")} for {label}.")
+            + (notes.Count > 0 ? " " + string.Join(" ", notes) : "");
+        return BackToChecks(open ?? "checks");
+    }
+
+    public async Task<IActionResult> OnPostUnlockAsync(string person, string? reason, CancellationToken ct)
+    {
+        var open = "chk-" + Slug(person);
+        if (!CanEditCommissions) return BackToChecks(open);
+        if (string.IsNullOrWhiteSpace(reason)) { Message = "Say why you're unlocking it."; return BackToChecks(open); }
+        await commissionPayroll.UnlockAsync(person, CheckMonth, reason, User(), ct);
+        Message = $"Unlocked {person}'s {CommissionPayroll.Label(CheckMonth)} commissions: payments dated then can be changed again.";
+        return BackToChecks(open);
     }
 
     private string User() => me.Email ?? me.DisplayName ?? "unknown";

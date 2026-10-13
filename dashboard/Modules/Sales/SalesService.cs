@@ -14,9 +14,13 @@ public sealed record JobCommission(
     public decimal Owed => Math.Max(0, Earned - Paid);
 }
 
-public sealed record PersonCommissions(string Person, CommissionRule? Rule, int Jobs, decimal Earned, decimal Paid)
+/// <summary>
+/// A salesperson's totals. Unallocated = payments recorded from payroll that weren't tied to a job (payroll paid more
+/// than their owed jobs); they lower the person's owed total.
+/// </summary>
+public sealed record PersonCommissions(string Person, CommissionRule? Rule, int Jobs, decimal Earned, decimal Paid, decimal Unallocated = 0)
 {
-    public decimal Owed => Math.Max(0, Earned - Paid);
+    public decimal Owed => Math.Max(0, Earned - Paid - Unallocated);
 }
 
 /// <summary>
@@ -142,10 +146,27 @@ public sealed class SalesService(ProjectsService projects, PurpleDashboard.Modul
         }
     }
 
-    public static List<PersonCommissions> ByPerson(IEnumerable<JobCommission> jobs) => jobs
-        .GroupBy(c => c.Person, StringComparer.OrdinalIgnoreCase)
-        .Select(g => new PersonCommissions(g.First().Person, g.First().Rule, g.Count(), g.Sum(c => c.Earned), g.Sum(c => c.Paid)))
-        .OrderByDescending(p => p.Owed).ThenBy(p => p.Person).ToList();
+    /// <summary>Totals per salesperson; <paramref name="unallocated"/> = unallocated payments by person (see <see cref="UnallocatedAsync"/>).</summary>
+    public static List<PersonCommissions> ByPerson(IEnumerable<JobCommission> jobs, IReadOnlyDictionary<string, decimal>? unallocated = null)
+    {
+        var un = unallocated ?? new Dictionary<string, decimal>();
+        var list = jobs
+            .GroupBy(c => c.Person, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new PersonCommissions(g.First().Person, g.First().Rule, g.Count(), g.Sum(c => c.Earned), g.Sum(c => c.Paid),
+                un.Where(kv => kv.Key.Equals(g.Key, StringComparison.OrdinalIgnoreCase)).Sum(kv => kv.Value)))
+            .ToList();
+        // Someone with only unallocated payments (no jobs shown) still gets a row.
+        foreach (var (person, amount) in un.Where(kv => kv.Value != 0 && !list.Any(p => p.Person.Equals(kv.Key, StringComparison.OrdinalIgnoreCase))))
+            list.Add(new PersonCommissions(person, null, 0, 0, 0, amount));
+        return list.OrderByDescending(p => p.Owed).ThenBy(p => p.Person).ToList();
+    }
+
+    /// <summary>Unallocated commission payments (recorded from payroll, not tied to a job) by person.</summary>
+    public async Task<Dictionary<string, decimal>> UnallocatedAsync(CancellationToken ct) =>
+        database.Available
+            ? (await Db.CommissionPayments.AsNoTracking().Where(p => p.JobId == CommissionPayroll.Unallocated).ToListAsync(ct))
+                .GroupBy(p => p.Person.Trim(), StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Sum(p => p.Amount), StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 
     public async Task SaveRuleAsync(string person, decimal percent, string basis, string? notes, string user, CancellationToken ct)
     {
@@ -173,6 +194,9 @@ public sealed class SalesService(ProjectsService projects, PurpleDashboard.Modul
 
     public async Task<List<CommissionPayment>> PaymentsAsync(CancellationToken ct) =>
         database.Available ? await Db.CommissionPayments.AsNoTracking().OrderByDescending(p => p.PaidOn).ThenByDescending(p => p.Id).Take(200).ToListAsync(ct) : [];
+
+    public async Task<CommissionPayment?> FindPaymentAsync(int id, CancellationToken ct) =>
+        database.Available ? await Db.CommissionPayments.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, ct) : null;
 
     public async Task DeletePaymentAsync(int id, CancellationToken ct) => await Db.CommissionPayments.Where(p => p.Id == id).ExecuteDeleteAsync(ct);
 

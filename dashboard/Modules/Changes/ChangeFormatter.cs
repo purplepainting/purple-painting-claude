@@ -94,7 +94,7 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
             "schedule" => Schedule(e, d, target, diffs, facts, used, out note),
             "employees" when e.Action == "save" => Employee(d, target, diffs, used),
             "bonuses" => Bonus(e.Action, d, target, facts, used),
-            "commissions" => Commission(e.Action, d, target, used),
+            "commissions" => Commission(e.Action, d, target, facts, used),
             "sundries" => Sundry(e.Action, d, target, extra, used),
             "equipment" => Equipment(e.Action, d, target, extra, used),
             "reviews" => Review(e.Action, d, target, used),
@@ -296,9 +296,11 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
         }
     }
 
-    // ---- Commissions: rule { percent, basis, notes }; pay { jobId, amount, paidOn, note }; delete-payment ----
+    // ---- Commissions: rule { percent, basis, notes }; pay { jobId, amount, paidOn, note }; delete-payment { person, job, amount, paidOn };
+    //      pay-from-payroll (person) { amount, paidOn, check, jobs [{ job, amount }], unallocated }; lock (person) { month, paid, owed, check, gross };
+    //      unlock (person) { month, reason, paid } ----
 
-    private static string? Commission(string action, JsonObject? d, string? target, HashSet<string> used)
+    private static string? Commission(string action, JsonObject? d, string? target, List<DetailFact> facts, HashSet<string> used)
     {
         switch (action)
         {
@@ -311,7 +313,25 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
                 var on = ParseDate(Str(Get(d, "paidOn")));
                 return $"Recorded {Money(Get(d, "amount"))} commission paid to {parts[0]}{(parts.Length > 1 ? " for " + parts[1] : "")}{(on is { } o ? " on " + Infrastructure.Format.Date(o) : "")}";
             case "delete-payment":
-                return $"Deleted a commission payment (#{target})";
+                if (Get(d, "amount") is null) return $"Deleted a commission payment (#{target})";
+                used.UnionWith(["person", "job", "amount"]);
+                return $"Deleted a {Money(Get(d, "amount"))} commission payment to {Str(Get(d, "person")) ?? "someone"}{(Str(Get(d, "job")) is { Length: > 0 } dj ? " for " + dj : "")}";
+            case "pay-from-payroll":
+            {
+                used.UnionWith(["amount", "paidOn", "check", "jobs", "unallocated"]);
+                var paidOn = ParseDate(Str(Get(d, "paidOn")));
+                foreach (var line in (Get(d, "jobs") as JsonArray ?? []).OfType<JsonObject>())
+                    facts.Add(new(Str(Get(line, "job")) ?? "Job", Money(Get(line, "amount"))));
+                if (Dec(Get(d, "unallocated")) is > 0) facts.Add(new("Unallocated", Money(Get(d, "unallocated"))));
+                return $"Recorded {Money(Get(d, "amount"))} commission paid to {target ?? "someone"} from payroll"
+                    + $"{(Str(Get(d, "check")) is { Length: > 0 } ck ? " (check " + ck + ")" : "")}{(paidOn is { } po ? " on " + Infrastructure.Format.Date(po) : "")}";
+            }
+            case "lock":
+                used.UnionWith(["paid", "check", "month"]);
+                return $"Paid & locked {Possessive(target ?? "someone")} {MonthLabel(Get(d, "month"))} commissions ({Money(Get(d, "paid"))}{(Str(Get(d, "check")) is { Length: > 0 } lc ? ", check " + lc : "")})";
+            case "unlock":
+                used.UnionWith(["reason", "month"]);
+                return $"Unlocked {Possessive(target ?? "someone")} {MonthLabel(Get(d, "month"))} commissions: {Str(Get(d, "reason"))}";
             default: return null;
         }
     }
