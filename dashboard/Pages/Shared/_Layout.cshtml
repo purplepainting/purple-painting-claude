@@ -45,6 +45,22 @@
                         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
                     </label>
                     <span class="topbar-title">@moduleName</span>
+                    @* Global search (search.js). Without JavaScript the form still goes to the /search results page,
+                       and on phones the icon is a plain link to it. *@
+                    <a class="search-open" href="/search" aria-label="Search" data-no-prefetch>
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></svg>
+                    </a>
+                    <form class="search" id="search" method="get" action="/search" role="search">
+                        <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4.5 4.5" /></svg>
+                        <input type="search" name="q" id="search-input" value="@(ViewData["SearchQuery"] as string)" placeholder="Search jobs, customers, people…"
+                               autocomplete="off" spellcheck="false" enterkeyhint="search" aria-label="Search everything"
+                               role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list">
+                        <kbd class="search-key" aria-hidden="true">/</kbd>
+                        <button type="button" class="search-close" aria-label="Close search">
+                            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                        </button>
+                        <div class="search-results" id="search-results" role="listbox" aria-label="Search results" hidden></div>
+                    </form>
                 </div>
             </header>
             <main class="page">
@@ -64,6 +80,7 @@
     ]}, "eagerness": "moderate"}]}
     </script>
     <script src="~/js/nav-feedback.js" asp-append-version="true"></script>
+    <script src="~/js/search.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

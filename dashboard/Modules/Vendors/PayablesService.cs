@@ -27,6 +27,9 @@ public sealed class PayablesService(QuickBooksClient quickBooks, IMemoryCache ca
         })!;
     }
 
+    /// <summary>Open bills if they're already cached, else null. Never calls QuickBooks (used by search).</summary>
+    public List<OpenBill>? CachedOpenBills() => cache.TryGetValue("payables:open", out List<OpenBill>? hit) ? hit : null;
+
     private static OpenBill ToBill(JsonNode b) => new(
         b["Id"]?.GetValue<string>() ?? "",
         b["VendorRef"]?["name"]?.GetValue<string>() ?? "Unknown vendor",

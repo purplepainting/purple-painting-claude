@@ -94,7 +94,8 @@ Phone checklist (iPhone Safari and Android Chrome), already handled in the shell
 - 8 module tiles in this order, each with its name, a short line (key-number label, or "Coming soon") and its key number:
   1. Projects · 2. Scheduling · 3. Financials · 4. Customers · 5. Sales & Marketing · 6. Vendors & Payables · 7. Employees · 8. Equipment & Sundries
 - The signed-in user's name at the bottom of the menu.
-- "/" opens the Projects list. Global search comes later.
+- "/" opens the Projects list.
+- **Global search (built):** a search box in the top bar of every page (phones: a search icon that opens a full-width box). Results drop down as you type, grouped: Jobs (open + closed in the last 12 months; name, number, customer, address; opens the job timeline, with a JobTread link), Customers, People (opens their Employees row), Equipment & sundries, and Vendors (only when QuickBooks bills are already cached). Up to 6 per group; ↑/↓ and Enter pick a result, Enter alone opens the full results page (`/search?q=`), Esc closes, "/" on the keyboard focuses search. Reads only cached data; a source that fails, isn't connected or takes over 2 seconds is skipped (`Modules/Search/SearchService.cs`).
 
 ### 1. Projects (JobTread)
 - Default view: **all active jobs** = Pre-Construction, Scheduled, In Progress, On Hold, **plus Completed jobs that still have money to bill or collect** (left to bill, unpaid invoices, or retention held). A completed job leaves the active list once it's fully billed and paid. Sorted **most active first**: nearest clock-in or scheduled day to today. Jobs in Pre-Construction / Color Submittals haven't started, so they sort to the bottom. Each row shows that activity ("Today", "Next Wed 10/14", "Last time Oct 6").
