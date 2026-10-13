@@ -35,6 +35,8 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<CustomerReview> CustomerReviews => Set<CustomerReview>();
     /// <summary>Facebook/Instagram ads (Meta Marketing API) connection. Entity in Data/MetaConnection.cs.</summary>
     public DbSet<MetaConnection> MetaConnections => Set<MetaConnection>();
+    /// <summary>Who has signed in, their role and permission overrides. Entity in Data/UserAccess.cs.</summary>
+    public DbSet<UserAccess> UserAccess => Set<UserAccess>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {

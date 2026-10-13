@@ -24,7 +24,7 @@
 </div>
 
 @if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
-@if (!Model.CanEdit) { <div class="card notice warn"><p>The dashboard database isn't available, so nothing can be shown or saved right now.</p></div> }
+@if (!Model.DbAvailable) { <div class="card notice warn"><p>The dashboard database isn't available, so nothing can be shown or saved right now.</p></div> }
 
 <datalist id="job-list">@foreach (var j in Model.Jobs) { <option value="@j.Name"></option> }</datalist>
 

@@ -13,7 +13,10 @@ public sealed class CurrentUser
     private const string NameClaim = "name";
     private const string ObjectIdClaim = "http://schemas.microsoft.com/identity/claims/objectidentifier";
 
-    public CurrentUser(IHttpContextAccessor accessor, IWebHostEnvironment env)
+    /// <summary>Development only: cookie holding the email to act as (set with ?devuser=email, cleared with ?devuser=).</summary>
+    public const string DevUserCookie = "devuser";
+
+    public CurrentUser(IHttpContextAccessor accessor, IWebHostEnvironment env, IConfiguration config)
     {
         var headers = accessor.HttpContext?.Request.Headers;
         var claims = ReadClaims(headers?["X-MS-CLIENT-PRINCIPAL"].ToString());
@@ -22,12 +25,23 @@ public sealed class CurrentUser
         ObjectId = NullIfEmpty(headers?["X-MS-CLIENT-PRINCIPAL-ID"].ToString()) ?? claims.GetValueOrDefault(ObjectIdClaim);
         DisplayName = claims.GetValueOrDefault(NameClaim) ?? Email;
 
-        // Running locally there is no Easy Auth in front of the app.
+        // Running locally there is no Easy Auth in front of the app. To test roles, act as someone else with
+        // the Dev:UserEmail setting or ?devuser=someone@purplepainting.net (a cookie). Never in production.
         if (DisplayName is null && env.IsDevelopment())
         {
-            DisplayName = "Local Developer";
-            Email = "dev@localhost";
-            ObjectId = "00000000-0000-0000-0000-000000000000";
+            var devEmail = NullIfEmpty(accessor.HttpContext?.Request.Cookies[DevUserCookie]) ?? NullIfEmpty(config["Dev:UserEmail"]);
+            if (devEmail is null)
+            {
+                DisplayName = "Local Developer";
+                Email = "dev@localhost";
+                ObjectId = "00000000-0000-0000-0000-000000000000";
+            }
+            else
+            {
+                Email = devEmail.Trim().ToLowerInvariant();
+                DisplayName = string.Join(' ', Email.Split('@')[0].Split('.', '_', '-').Where(p => p.Length > 0).Select(p => char.ToUpperInvariant(p[0]) + p[1..]));
+                ObjectId = new Guid(System.Security.Cryptography.MD5.HashData(Encoding.UTF8.GetBytes(Email))).ToString();
+            }
         }
     }
 

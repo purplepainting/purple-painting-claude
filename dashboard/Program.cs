@@ -15,11 +15,15 @@ builder.Services.AddRazorPages(options =>
 {
     // Home page = the Projects list (also at /projects).
     options.Conventions.AddPageRoute("/Projects/Index", "");
-});
+})
+// Users & access: every page and handler is checked against Auth/AccessMap.cs (default deny).
+.AddMvcOptions(o => o.Filters.Add<AccessFilter>());
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<CurrentUser>();
+builder.Services.AddSingleton<UserAccessStore>();
+builder.Services.AddScoped<Permissions>();
 builder.AddDashboardDatabase();
 
 // JobTread. The grant key comes from the JOBTREAD_API_KEY setting in Azure (same name as the function app).
@@ -132,6 +136,30 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/error");
 }
 app.UseStatusCodePagesWithReExecute("/error/{0}");
+
+// Every POST handler should be in the access map; anything missing works for admins only. Say so at startup.
+foreach (var missing in AccessFilter.FindUnmapped())
+    app.Logger.LogWarning("Access map: {Missing} isn't in Auth/AccessMap.cs, so only admins can use it", missing);
+
+if (app.Environment.IsDevelopment())
+{
+    // Local testing of roles: ?devuser=someone@purplepainting.net acts as that person (cookie), ?devuser= goes back
+    // to Dev:UserEmail / the default local developer. Development only; Easy Auth headers always win.
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Query.TryGetValue("devuser", out var devUser))
+        {
+            if (string.IsNullOrWhiteSpace(devUser)) context.Response.Cookies.Delete(CurrentUser.DevUserCookie);
+            else context.Response.Cookies.Append(CurrentUser.DevUserCookie, devUser.ToString().Trim(), new CookieOptions { HttpOnly = true, SameSite = SameSiteMode.Lax });
+            var query = new Microsoft.AspNetCore.Http.Extensions.QueryBuilder(context.Request.Query
+                .Where(q => q.Key != "devuser")
+                .SelectMany(q => q.Value.Select(v => new KeyValuePair<string, string>(q.Key, v ?? ""))));
+            context.Response.Redirect(context.Request.PathBase + context.Request.Path + query.ToQueryString());
+            return;
+        }
+        await next();
+    });
+}
 
 app.MapStaticAssets();
 

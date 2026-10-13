@@ -47,6 +47,7 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
         "equipment" => "Equipment",
         "reviews" => "Reviews",
         "connections" => "Connections",
+        "access" => "Users & access",
         _ => Humanize(area),
     };
 
@@ -61,6 +62,7 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
         "equipment" => "/equipment?tab=equipment",
         "reviews" => "/customers",
         "connections" => "/connections",
+        "access" => "/settings/access",
         _ => null,
     };
 
@@ -97,6 +99,7 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
             "equipment" => Equipment(e.Action, d, target, extra, used),
             "reviews" => Review(e.Action, d, target, used),
             "connections" => Connection(e.Action, d, target, used),
+            "access" => Access(d, target, diffs, used),
             _ => null,
         } ?? Fallback(e, target);
 
@@ -365,6 +368,40 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
     };
 
     private static string Done(HashSet<string> used, string key, string summary) { used.Add(key); return summary; }
+
+    // ---- Users & access: { email, before: { role, overrides }, after: { role, overrides } } ----
+
+    private static string Access(JsonObject? d, string? target, List<DetailDiff> diffs, HashSet<string> used)
+    {
+        used.UnionWith(["email", "before", "after"]);
+        var b = Get(d, "before") as JsonObject;
+        var a = Get(d, "after") as JsonObject;
+        var who = target ?? Str(Get(d, "email")) ?? "someone";
+        var fromRole = Auth.AccessRoles.Label(Str(Get(b, "role")));
+        var toRole = Auth.AccessRoles.Label(Str(Get(a, "role")));
+        var before = Overrides(Get(b, "overrides") as JsonObject);
+        var after = Overrides(Get(a, "overrides") as JsonObject);
+        diffs.Add(new("Role", fromRole, toRole));
+        diffs.Add(new("Changes to the role", OverridesText(before), OverridesText(after)));
+
+        var parts = new List<string>();
+        if (fromRole != toRole) parts.Add($"Changed {Possessive(who)} role {fromRole} → {toRole}");
+        var gave = after.Where(kv => kv.Value && !(before.TryGetValue(kv.Key, out var v) && v)).Select(kv => Auth.Perm.Describe(kv.Key)).ToList();
+        var took = after.Where(kv => !kv.Value && !(before.TryGetValue(kv.Key, out var v) && !v)).Select(kv => Auth.Perm.Describe(kv.Key)).ToList();
+        var reset = before.Keys.Where(k => !after.ContainsKey(k)).Select(Auth.Perm.Describe).ToList();
+        if (gave.Count > 0) parts.Add("gave " + string.Join(", ", gave));
+        if (took.Count > 0) parts.Add("took away " + string.Join(", ", took));
+        if (reset.Count > 0) parts.Add("back to the role for " + string.Join(", ", reset));
+        if (parts.Count == 0) return $"Saved {Possessive(who)} access (no change)";
+        var text = string.Join("; ", parts);
+        return fromRole == toRole ? $"{Possessive(who)} access: {text}" : text;
+
+        static Dictionary<string, bool> Overrides(JsonObject? o) =>
+            o?.Where(kv => kv.Value is JsonValue v && v.TryGetValue<bool>(out _)).ToDictionary(kv => kv.Key, kv => kv.Value!.GetValue<bool>()) ?? [];
+        static string OverridesText(Dictionary<string, bool> o) => o.Count == 0 ? "None"
+            : string.Join(", ", o.OrderBy(kv => kv.Key).Select(kv => (kv.Value ? "+ " : "− ") + Auth.Perm.Describe(kv.Key)));
+        static string Possessive(string name) => name.EndsWith('s') ? name + "'" : name + "'s";
+    }
 
     // ---- Generic details: every field not already shown, as a readable label and value ----
 

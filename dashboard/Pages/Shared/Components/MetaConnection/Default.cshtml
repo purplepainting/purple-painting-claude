@@ -1,8 +1,10 @@
 @model PurpleDashboard.ViewComponents.MetaConnectionCard
+@inject PurpleDashboard.Auth.Permissions Permissions
 @using PurpleDashboard.Infrastructure
 @{
     var c = Model.Connection;
     var warn = Model.Expired || Model.ExpiresSoon || Model.NeedsReconnect;
+    var canEdit = Permissions.Can(PurpleDashboard.Auth.Perm.ConnectionsEdit);
 }
 <section class="card connection" id="meta">
     <div class="connection-head">
@@ -28,7 +30,7 @@
     else if (c is null)
     {
         <p class="muted">One shared connection for everyone (read only). Connect once with a Facebook user who can see the Purple Painting ad account, and Sales &amp; Marketing shows Facebook and Instagram spend, clicks and leads by month and campaign.</p>
-        <div><a class="button" asp-page="/Connections/Meta" asp-page-handler="Connect">Connect Facebook</a></div>
+        @if (canEdit) { <div><a class="button" asp-page="/Connections/Meta" asp-page-handler="Connect">Connect Facebook</a></div> }
         <p class="muted small">Opens Facebook's sign-in. The dashboard only asks for <code>ads_read</code> (view ad results) and never changes your ads.</p>
     }
     else
@@ -53,7 +55,7 @@
             <p class="notice-inline warn">@Model.Problem</p>
         }
 
-        @if (Model.Accounts.Count > 0)
+        @if (canEdit && Model.Accounts.Count > 0)
         {
             <form method="post" asp-page="/Connections/Meta" asp-page-handler="Account" class="inline-form meta-account-form">
                 <label class="field grow">
@@ -74,12 +76,15 @@
             <p class="notice-inline warn">This Facebook user can't see any ad accounts. Reconnect with a user who has access to the Purple Painting ad account (in Meta Business Settings).</p>
         }
 
+        @if (canEdit)
+        {
         <div class="form-actions">
             <a class="@(warn ? "button" : "link-button")" asp-page="/Connections/Meta" asp-page-handler="Connect">Reconnect</a>
             <form method="post" asp-page="/Connections/Meta" asp-page-handler="Disconnect" onsubmit="return confirm('Disconnect Facebook/Instagram ads from the dashboard?')">
                 <button class="link-button" type="submit">Disconnect</button>
             </form>
         </div>
+        }
         <p class="muted small">Read only: the dashboard reads ad results and never changes campaigns, budgets or ads.@(Model.Fixtures ? " Showing sample data (Meta:FixtureDirectory)." : "")</p>
     }
 </section>

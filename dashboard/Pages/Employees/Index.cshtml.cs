@@ -14,7 +14,7 @@ namespace PurpleDashboard.Pages.Employees;
 /// Everyone in JobTread with their crew level and PM color. Levels and colors set here are what the
 /// schedule and projects pages use; anyone not set falls back to appsettings.
 /// </summary>
-public partial class IndexModel(TeamDirectory directory, LaborCostService laborCosts, QbEmployeeStatus qbStatus, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public partial class IndexModel(TeamDirectory directory, LaborCostService laborCosts, QbEmployeeStatus qbStatus, DatabaseStatus database, CurrentUser me, Permissions permissions, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"crew", "supervisors" or empty for everyone.</summary>
     [BindProperty(SupportsGet = true)] public string? Show { get; set; }
@@ -31,7 +31,12 @@ public partial class IndexModel(TeamDirectory directory, LaborCostService laborC
     public HashSet<string> FormerIds { get; private set; } = [];
     public Dictionary<string, decimal> HoursThisWeek { get; } = [];
     public string? Error { get; private set; }
-    public bool CanEdit => directory.CanEdit;
+    /// <summary>Database up and allowed to edit levels, colors and notes.</summary>
+    public bool CanEdit => directory.CanEdit && permissions.Can(Perm.EmployeesEdit);
+    /// <summary>The database is up (otherwise everything is read only for everyone).</summary>
+    public bool DbCanSave => directory.CanEdit;
+    /// <summary>QuickBooks base pay and JobTread burdened rates are shown only with employees.pay.view.</summary>
+    public bool ShowPay => permissions.Can(Perm.PayView);
     public DatabaseStatus Database => database;
 
     public async Task OnGetAsync(CancellationToken ct)
@@ -84,6 +89,22 @@ public partial class IndexModel(TeamDirectory directory, LaborCostService laborC
 
         decimal? pay = decimal.TryParse(qbBasePay?.Replace("$", "").Replace(",", "").Trim(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var p) && p > 0 ? Math.Round(p, 2) : null;
         var payType = qbPayType == "Salary" ? "Salary" : "Hourly";
+
+        // Pay needs employees.pay.edit. Without it the form has no pay fields and the stored pay is kept;
+        // a request that tries to change pay anyway is refused.
+        if (!permissions.Can(Perm.PayEdit))
+        {
+            var current = team.ByMembership[membershipId].Profile;
+            var sentPay = Request.HasFormContentType && (Request.Form.ContainsKey("qbBasePay") || Request.Form.ContainsKey("qbPayType"));
+            if (sentPay && (pay != current?.QbBasePay || (pay is not null && payType != (current?.QbPayType ?? "Hourly"))))
+            {
+                logger.LogInformation("Pay change refused for {Email} on {MembershipId}: no employees.pay.edit", me.Email, membershipId);
+                HttpContext.Items[AccessFilter.DeniedItem] = "You can't change pay rates. Ask an admin if you need to.";
+                return StatusCode(StatusCodes.Status403Forbidden);
+            }
+            pay = current?.QbBasePay;
+            payType = current?.QbPayType ?? "Hourly";
+        }
 
         await directory.SaveAsync(membershipId, level, color, notes, pay, payType, me.Email ?? me.DisplayName ?? "unknown", ct);
         return RedirectToPage(new { show = Show, q = Q, open = membershipId });

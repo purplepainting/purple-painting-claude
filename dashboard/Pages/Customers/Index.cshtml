@@ -99,6 +99,10 @@ else
                             {
                                 <p class="muted small">Marked "Left a Review" on the customer in JobTread. Change it there if that's wrong.</p>
                             }
+                            else if (!Model.CanEdit)
+                            {
+                                <p class="muted small">@(r is null ? "No review status yet." : $"Status: {r.Status}{(r.Platform is { } pf ? $" · {pf}" : "")}{(r.Notes is { } nt ? $" · {nt}" : "")}")@(Model.DbAvailable ? "" : " Saving needs the dashboard database.")</p>
+                            }
                             else
                             {
                             <form method="post" asp-page-handler="Review" asp-route-show="@Model.Show" asp-route-q="@Model.Q" class="inline-form">
@@ -114,10 +118,9 @@ else
                                     <select name="platform"><option value="">—</option>@foreach (var p in CustomersService.Platforms) { <option selected="@(r?.Platform == p)">@p</option> }</select>
                                 </label>
                                 <label class="field grow"><span>Notes</span><input name="notes" value="@r?.Notes"></label>
-                                <button class="button secondary" type="submit" disabled="@(!Model.CanEdit)">Save</button>
+                                <button class="button secondary" type="submit">Save</button>
                             </form>
                             <p class="muted small">When they leave the review, mark "Left a Review" on the customer in JobTread; it shows here automatically.</p>
-                            @if (!Model.CanEdit) { <p class="muted small">Saving needs the dashboard database.</p> }
                             }
                         </section>
                     }
