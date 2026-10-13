@@ -1,0 +1,19 @@
+@using PurpleDashboard.Modules.Hiring
+@model IReadOnlyList<TextMessage>
+@* Copy-paste texts for one candidate (already in their language). Texts go out from Google Voice. *@
+<div class="hire-texts">
+    <p class="hire-texts-head muted small">
+        Copy a text, then paste it in
+        <a href="@TextTemplates.GoogleVoiceUrl" target="_blank" rel="noopener">Google Voice ↗</a>
+    </p>
+    @foreach (var t in Model)
+    {
+        <div class="hire-text" data-key="@t.Key">
+            <div class="hire-text-top">
+                <span><b>@t.Label</b> <span class="muted small">· @t.When</span></span>
+                <button type="button" class="button secondary small-button" data-copy>Copy</button>
+            </div>
+            <p class="hire-text-body">@t.Body</p>
+        </div>
+    }
+</div>

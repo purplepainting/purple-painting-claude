@@ -79,6 +79,7 @@ builder.Services.AddScoped<PurpleDashboard.Modules.Financials.BonusService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Financials.JobReconciliationService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Sales.SalesService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Equipment.EquipmentService>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Hiring.HiringService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Vendors.PayablesService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Customers.CustomersService>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Customers.CustomersOwingMetric>();
