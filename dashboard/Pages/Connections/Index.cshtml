@@ -146,7 +146,7 @@
             <dl class="detail-grid">
                 <div><dt>Google account</dt><dd>@g.Email</dd></div>
                 <div><dt>Connected</dt><dd>@Format.Date(DateOnly.FromDateTime(g.ConnectedAt.ToLocalTime())) by @g.ConnectedBy</dd></div>
-                <div><dt>Ads account</dt><dd>@(g.AdsCustomerId is { } aid ? $"{g.AdsCustomerName} ({PurpleDashboard.Integrations.Google.AdsAccount.FormatId(aid)})" : "Not picked")</dd></div>
+                <div><dt>Ads account</dt><dd>@(g.AdsCustomerId is { } aid ? PurpleDashboard.Integrations.Google.AdsAccount.Labelled(g.AdsCustomerName, aid) : "Not picked")</dd></div>
                 <div><dt>Business location</dt><dd>@(g.BusinessLocationTitle ?? "Not picked")</dd></div>
             </dl>
 
@@ -157,7 +157,7 @@
                     <li class="todo">Not allowed on Google's page: @string.Join(" and ", Model.GoogleMissingScopes.Select(s => s.EndsWith("adwords") ? "Google Ads" : "Business Profile")). Reconnect and tick every box.</li>
                 }
                 <li class="@(Model.GoogleHasDeveloperToken ? "ok" : "todo")">Google Ads developer token @(Model.GoogleHasDeveloperToken ? "set" : "not set (GOOGLE_ADS_DEVELOPER_TOKEN)")</li>
-                <li class="@(Model.AdsProblem is null && g.AdsCustomerId is not null ? "ok" : "todo")">Google Ads: @(Model.AdsProblem ?? (g.AdsCustomerId is null ? "pick the account below" : "reading " + g.AdsCustomerName))</li>
+                <li class="@(Model.AdsProblem is null && g.AdsCustomerId is not null ? "ok" : "todo")">Google Ads: @(Model.AdsProblem ?? (g.AdsCustomerId is null ? "pick the account below" : "reading " + PurpleDashboard.Integrations.Google.AdsAccount.Labelled(g.AdsCustomerName, g.AdsCustomerId)))</li>
                 <li class="@(Model.LocationsProblem is null ? "ok" : "todo")">Business Profile API access: @(Model.LocationsProblem ?? "approved")</li>
                 <li class="@(Model.LocationsProblem is null && g.BusinessLocation is not null ? "ok" : "todo")">Reviews: @(Model.LocationsProblem is not null ? "waiting for Business Profile access (above)" : g.BusinessLocation is null ? "pick the location below" : "reading " + g.BusinessLocationTitle)</li>
             </ul>
@@ -171,7 +171,7 @@
                             @if (g.AdsCustomerId is null) { <option value="">Pick an account…</option> }
                             @foreach (var a in Model.AdsAccounts.Where(a => !a.IsManager))
                             {
-                                <option value="@a.Value" selected="@(a.CustomerId == g.AdsCustomerId)">@a.Name (@a.DisplayId)@(a.LoginCustomerId is { } via && via != a.CustomerId ? " · via manager " + PurpleDashboard.Integrations.Google.AdsAccount.FormatId(via) : "")@(a.IsTest ? " · test account" : "")</option>
+                                <option value="@a.Value" selected="@(a.CustomerId == g.AdsCustomerId)">@a.Label@(a.LoginCustomerId is { } via && via != a.CustomerId ? " · via manager " + PurpleDashboard.Integrations.Google.AdsAccount.FormatId(via) : "")@(a.IsTest ? " · test account" : "")</option>
                             }
                         </select>
                     </label>

@@ -8,6 +8,10 @@ public sealed record AdsAccount(string CustomerId, string Name, string? LoginCus
 {
     /// <summary>"123-456-7890", the way Google Ads shows account ids.</summary>
     public string DisplayId => FormatId(CustomerId);
+    /// <summary>"Name (123-456-7890)", or just the id when the account has no name of its own.</summary>
+    public string Label => Labelled(Name, CustomerId);
+    public static string Labelled(string? name, string customerId) =>
+        string.IsNullOrWhiteSpace(name) || name == customerId || name == FormatId(customerId) ? FormatId(customerId) : $"{name} ({FormatId(customerId)})";
 
     /// <summary>Form value for the account picker: "customerId|loginCustomerId".</summary>
     public string Value => CustomerId + "|" + LoginCustomerId;

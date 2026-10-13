@@ -2,10 +2,12 @@
 @using PurpleDashboard.Infrastructure
 @using PurpleDashboard.Integrations.Meta
 @using PurpleDashboard.Modules.Sales
-@* Facebook & Instagram ads (Meta Marketing API) on the Ads & lead sources tab. *@
+@* Facebook & Instagram ads (Meta Marketing API) on the Ads & lead sources tab, Facebook pill. *@
 @{
     var m = Model;
     var period = Context.Request.Query["period"].ToString();
+    var channel = AdChannels.Parse(Context.Request.Query["channel"].ToString());
+    var refreshUrl = "/sales?" + (channel is null ? "" : "channel=" + channel + "&") + (string.IsNullOrEmpty(period) ? "" : "period=" + Uri.EscapeDataString(period) + "&") + "metaRefresh=true#meta-ads";
     string Cpl(decimal? v) => v is { } d ? d.ToString("$#,0.00") : "—";
     string N(long v) => v.ToString("#,0");
 }
@@ -18,7 +20,7 @@
             {
                 <span class="muted small">
                     From Meta (read only)@(m.Report?.AdAccountName is { } acct ? $" · {acct}" : "") ·
-                    <a class="refresh-button" href="/sales?tab=ads@(string.IsNullOrEmpty(period) ? "" : "&period=" + Uri.EscapeDataString(period))&metaRefresh=true#meta-ads">↻ Refresh</a>
+                    <a class="refresh-button" href="@refreshUrl">↻ Refresh</a>
                     @if (MetaClient.DataAsOf is { } asOf) { <span>· as of @Format.QbAsOf(asOf)</span> }
                 </span>
             }

@@ -969,3 +969,17 @@ details.ledger-ytd { margin-top: 4px; }
 .settings-fields .field { display: grid; gap: 4px; min-width: 0; }
 .settings-fields .field > span { font-size: 12px; font-weight: 600; color: var(--muted); }
 .settings-fields input, .settings-fields select { width: 100%; min-height: 44px; padding: 0 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); font-family: inherit; }
+
+/* Sales → Ads & lead sources: channel pills (All · Facebook · Google · Other) next to the period, and the By channel table. */
+.ads-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.ads-bar .channel-pills { flex: 1 1 auto; min-width: 0; }
+.pills.wrap { flex-wrap: wrap; overflow-x: visible; padding-bottom: 0; }
+table.data.by-channel td:first-child { white-space: nowrap; }
+table.data.by-channel tr.sub-row td { font-size: 13px; color: var(--muted); }
+table.data.by-channel tr.sub-row td:first-child { padding-left: 24px; }
+table.data.by-channel td.small { white-space: nowrap; }
+@media (max-width: 520px) {
+  .ads-total { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .ads-total .kpi { padding: 10px 12px; min-width: 0; }
+  .ads-total .kpi-value { font-size: 20px; }
+}

@@ -1,7 +1,9 @@
 # Facebook & Instagram ads (Meta Marketing API)
 
 The dashboard reads Facebook and Instagram ad results (spend, impressions, reach, clicks, link clicks, leads) through
-the Meta Marketing API and shows them on **Sales & Marketing > Ads & lead sources**. It never changes campaigns,
+the Meta Marketing API and shows them on **Sales & Marketing > Ads & lead sources**, **Facebook** pill
+(`/sales?channel=facebook`), under Facebook's JobTread leads, jobs sold and cost per lead; Meta spend and link clicks
+also feed the All pill (total and "By channel"). It never changes campaigns,
 budgets or ads. It's one shared company connection: someone connects it once on **Connections**.
 
 API version: `MetaOptions.GraphVersion` in `Integrations/Meta/MetaOptions.cs` (currently **v26.0**, released
@@ -124,4 +126,4 @@ ad account. Connecting isn't possible in fixture mode.
   (`/connections/meta/callback`). Card: `ViewComponents/MetaConnectionViewComponent.cs` +
   `Pages/Shared/Components/MetaConnection/Default.cshtml`
 - `Modules/Sales/MetaAdsService.cs`: report parsing, lead counting, merge with hand-entered spend.
-  Page section: `Pages/Sales/_MetaAds.cshtml` (after the Google Ads section)
+  Page section: `Pages/Sales/_MetaAds.cshtml` (on the Facebook pill of the Ads tab)

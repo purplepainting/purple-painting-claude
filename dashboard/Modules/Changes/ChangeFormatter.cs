@@ -57,7 +57,7 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
         "schedule" => "/scheduling",
         "employees" => "/employees",
         "bonuses" => "/financials/bonuses",
-        "commissions" => "/sales",
+        "commissions" => "/sales?tab=commissions",
         "sundries" => "/equipment",
         "equipment" => "/equipment?tab=equipment",
         "reviews" => "/customers",
