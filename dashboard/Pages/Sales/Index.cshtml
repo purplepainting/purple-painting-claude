@@ -24,6 +24,13 @@
                     }
                 </nav>
                 @if (Model.CurrentChannel is { } ch) { <input type="hidden" name="channel" value="@ch"> }
+                @if (Model.CurrentList is { } dl)
+                {
+                    @* Changing the period on a drill-down keeps the list (same scope, new period). *@
+                    <input type="hidden" name="list" value="@dl">
+                    @if (!string.IsNullOrWhiteSpace(Model.Group)) { <input type="hidden" name="group" value="@Model.Group"> }
+                    @if (!string.IsNullOrWhiteSpace(Model.Source)) { <input type="hidden" name="source" value="@Model.Source"> }
+                }
             }
             else
             {
@@ -316,6 +323,72 @@ else if (Model.CurrentTab == "doors" && Model.Error is null)
         </section>
     }
 }
+else if (Model.CurrentTab == "ads" && Model.Drilldown is { } dd)
+{
+    var leads = dd.IsLeads;
+    var dch = Model.CurrentChannel;
+    var backFragment = !string.IsNullOrWhiteSpace(Model.Source) ? (dch == AdChannels.Other ? "other-channels" : dch is null ? "lead-sources" : null) : dch is null && Model.Group is not null ? "by-channel" : null;
+    var dateFmt = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+    <section class="card fin-section drill" id="drill">
+        <a class="drill-back" asp-page="/Sales/Index" asp-all-route-data="Model.AdsRoute()" asp-fragment="@backFragment">← Back to ads</a>
+        <h2 class="section-title">@dd.Scope · @(leads ? "JobTread leads" : "Jobs sold") · @(leads ? Model.PeriodLabel : "open + last year") <span class="num">(@dd.Count)</span></h2>
+        @if (leads)
+        {
+            <p class="muted small">New customer accounts created in JobTread @Model.JtLeads?.From.ToString("MMM d, yyyy", dateFmt) – @Model.JtLeads?.To.ToString("MMM d, yyyy", dateFmt) (whole months, like spend)@(dd.Scope == "No lead source" ? " with no Lead Source" : dd.Scope == "All channels" ? "" : " whose Lead Source is counted in " + dd.Scope), newest first. <b>Sold</b> = the account has a sold job (open, or closed in the last year, with a contract); <b>click id</b> is the ad click the website form turns into that Lead Source (it can also be picked by hand).</p>
+        }
+        else
+        {
+            <p class="muted small">Sold jobs (open, or closed in the last year, with an approved contract)@(dd.Scope == "All channels" ? "" : dd.Scope == "No lead source" ? " whose customer has no Lead Source" : " whose customer's Lead Source is counted in " + dd.Scope), like the Jobs sold figure: not limited to the period. Newest first by the issue date of the first approved order (JobTread doesn't keep the approval date).</p>
+        }
+        @if (!dd.Found) { <p class="notice-inline warn small">There's no "@dd.Scope" row in this period.</p> }
+        @if (!dd.Matches) { <p class="notice-inline warn small">This list has @dd.Count but the figure on the ads view is @dd.Expected. Refresh the page; if it stays different, tell Kareem.</p> }
+        <div class="table-wrap">
+            @if (leads)
+            {
+                <table class="data stack-phone drill-table">
+                    <thead><tr><th>Customer</th><th>Created</th><th>Lead source</th><th>How bid came in</th><th>Sold</th><th class="num">Contract</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in dd.Leads)
+                        {
+                            <tr>
+                                <td><a href="@JobTreadIds.CustomerUrl(r.Account.Id)" target="_blank" rel="noopener">@r.Account.Name ↗</a></td>
+                                <td class="num" data-label="Created">@r.Account.CreatedOn.ToString("MMM d, yyyy", dateFmt)</td>
+                                <td data-label="Lead source">@(r.Account.LeadSource ?? "—")@if (r.ClickId is { } cid) { <span class="chip api-chip num" title="The website form sets this Lead Source from the @cid ad click id">@cid</span> }</td>
+                                <td data-label="How bid came in">@(r.HowBidCameIn ?? "—")</td>
+                                <td data-label="Sold">@if (r.Sold) { <span class="chip good">Sold</span> foreach (var j in r.Jobs) { <a class="drill-job" href="@JobTreadIds.JobUrl(j.Id)" target="_blank" rel="noopener">#@j.Number ↗</a> } } else { <span class="muted">—</span> }</td>
+                                <td class="num" data-label="Contract">@(r.Sold ? Format.Money(r.Contract) : "—")</td>
+                            </tr>
+                        }
+                        @if (dd.Leads.Count == 0) { <tr><td colspan="6" class="muted">No new customer accounts here in this period.</td></tr> }
+                    </tbody>
+                    <tfoot><tr class="total"><td>Total · @dd.Count lead@(dd.Count == 1 ? "" : "s")</td><td></td><td></td><td></td><td data-label="Sold" class="num">@dd.Leads.Count(l => l.Sold) sold</td><td class="num" data-label="Contract">@Format.Money(dd.Contract)</td></tr></tfoot>
+                </table>
+            }
+            else
+            {
+                <table class="data stack-phone drill-table">
+                    <thead><tr><th>Job</th><th>Customer</th><th>Lead source</th><th>How bid came in</th><th title="Issue date of the first approved customer order">Sold on</th><th>Stage</th><th class="num">Contract</th></tr></thead>
+                    <tbody>
+                        @foreach (var j in dd.Jobs)
+                        {
+                            <tr>
+                                <td><a href="@JobTreadIds.JobUrl(j.Id)" target="_blank" rel="noopener"><span class="num">#@j.Number</span> @j.Name ↗</a></td>
+                                <td data-label="Customer">@if (j.CustomerId is { } cust) { <a href="@JobTreadIds.CustomerUrl(cust)" target="_blank" rel="noopener">@(j.Customer ?? "—")</a> } else { @(j.Customer ?? "—") }</td>
+                                <td data-label="Lead source">@(j.CustomerLeadSource ?? "—")</td>
+                                <td data-label="How bid came in">@(j.HowBidCameIn ?? "—")</td>
+                                <td class="num" data-label="Sold on">@(j.FirstApprovedOrderOn?.ToString("MMM d, yyyy", dateFmt) ?? "—")</td>
+                                <td data-label="Stage">@(j.Stage ?? "—")@if (j.ClosedOn is { } closed) { <span class="muted small"> · closed @closed.ToString("MMM d, yyyy", dateFmt)</span> }</td>
+                                <td class="num" data-label="Contract">@Format.Money(j.Contract)</td>
+                            </tr>
+                        }
+                        @if (dd.Jobs.Count == 0) { <tr><td colspan="7" class="muted">No sold jobs here.</td></tr> }
+                    </tbody>
+                    <tfoot><tr class="total"><td>Total · @dd.Count job@(dd.Count == 1 ? "" : "s")</td><td></td><td></td><td></td><td></td><td></td><td class="num" data-label="Contract">@Format.Money(dd.Contract)</td></tr></tfoot>
+                </table>
+            }
+        </div>
+    </section>
+}
 else if (Model.CurrentTab == "ads")
 {
     var ch = Model.CurrentChannel;
@@ -335,9 +408,9 @@ else if (Model.CurrentTab == "ads")
             }
             @if (Model.JtLeads is { } jl)
             {
-                <div class="card kpi"><span class="kpi-label">Leads (JobTread)</span><span class="kpi-value num">@(tot.JtLeads?.ToString("#,0") ?? "—")</span><span class="kpi-sub">@(who is null ? $"new customer accounts · {jl.Tagged:#,0} with a lead source" : $"new customer accounts with {who} lead source")</span></div>
+                <a class="card kpi kpi-link drill-kpi" href="@Model.DrillUrl(AdDrilldown.LeadsList, ch)" title="List these JobTread accounts"><span class="kpi-label">Leads (JobTread)</span><span class="kpi-value num">@(tot.JtLeads?.ToString("#,0") ?? "—")</span><span class="kpi-sub">@(who is null ? $"new customer accounts · {jl.Tagged:#,0} with a lead source" : $"new customer accounts with {who} lead source")</span></a>
             }
-            <div class="card kpi"><span class="kpi-label">Jobs sold</span><span class="kpi-value num">@tot.Jobs</span><span class="kpi-sub">open + last year, by the customer's lead source</span></div>
+            <a class="card kpi kpi-link drill-kpi" href="@Model.DrillUrl(AdDrilldown.SoldList, ch)" title="List these JobTread jobs"><span class="kpi-label">Jobs sold</span><span class="kpi-value num">@tot.Jobs</span><span class="kpi-sub">open + last year, by the customer's lead source</span></a>
             <div class="card kpi"><span class="kpi-label">Contract value</span><span class="kpi-value num">@Format.Money(tot.Contract)</span></div>
             <div class="card kpi"><span class="kpi-label">Cost per lead</span><span class="kpi-value num">@(tot.CostPerLead is { } cpl ? Format.Money(cpl) : "—")</span><span class="kpi-sub">spend ÷ JobTread leads</span></div>
             <div class="card kpi"><span class="kpi-label">Cost per sold job</span><span class="kpi-value num">@(tot.CostPerSoldJob is { } cps ? Format.Money(cps) : "—")</span><span class="kpi-sub">spend ÷ @tot.WonLeads new lead@(tot.WonLeads == 1 ? "" : "s") from the period with a sold job</span></div>
@@ -494,7 +567,7 @@ else if (Model.CurrentTab == "ads")
                         @if (Model.SourcesShown.Count == 0) { <tr><td colspan="9" class="muted">No other lead sources, spend or leads in this period.</td></tr> }
                         else if (Model.ChannelTotals is { } ot)
                         {
-                            <tr class="total"><td>Other total</td><td class="num">@ot.Jobs</td><td class="num">@Format.Money(ot.Contract)</td><td class="num">@(ot.Spend > 0 ? Format.Money(ot.Spend) : "—")</td><td class="num">—</td><td class="num">@(ot.JtLeads?.ToString("#,0") ?? "—")</td><td class="num">@(ot.CostPerLead is { } ocpl ? Format.Money(ocpl) : "—")</td><td class="num">@(ot.CloseRate is { } ocr ? Format.Percent(100m * ocr) : "—")</td><td class="num">@(ot.Spend > 0 ? (ot.Contract / ot.Spend).ToString("$0.00") : "—")</td></tr>
+                            <tr class="total"><td>Other total</td><td class="num">@{ DrillCount(ot.Jobs, AdDrilldown.SoldList, ot); }</td><td class="num">@Format.Money(ot.Contract)</td><td class="num">@(ot.Spend > 0 ? Format.Money(ot.Spend) : "—")</td><td class="num">—</td><td class="num">@{ DrillCount(ot.JtLeads, AdDrilldown.LeadsList, ot); }</td><td class="num">@(ot.CostPerLead is { } ocpl ? Format.Money(ocpl) : "—")</td><td class="num">@(ot.CloseRate is { } ocr ? Format.Percent(100m * ocr) : "—")</td><td class="num">@(ot.Spend > 0 ? (ot.Contract / ot.Spend).ToString("$0.00") : "—")</td></tr>
                         }
                         @foreach (var s in Model.Sources.Where(s => s.NoLeadSource)) { SourceRow(s); }
                     </tbody>
@@ -649,8 +722,18 @@ else if (Model.CurrentTab == "ads")
     void SourceRow(LeadSource s)
     {
         var isQb = s.ApiSource == QuickBooksAdSpendService.SourceName;
-        <tr class="@(s.NoLeadSource ? "muted" : "")"><td>@s.Source@if (s.FromApi) { <span class="chip @(isQb ? "" : "good") api-chip" title="@(isQb ? "Spend booked in QuickBooks" : $"Spend and leads from the {s.ApiSource} API")">@(isQb ? "QB" : "API")</span> }</td><td class="num">@s.Jobs</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Leads is { } l ? Format.Number(l) : "—")</td><td class="num">@(s.JtLeads?.ToString("#,0") ?? "—")</td><td class="num">@(s.CostPerJtLead is { } cpl ? Format.Money(cpl) : "—")</td><td class="num" title="@(s.CloseRate is not null ? $"{s.WonLeads} of {s.JtLeads} new accounts have a sold job" : "")">@(s.CloseRate is { } cr ? Format.Percent(100m * cr) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
+        <tr class="@(s.NoLeadSource ? "muted" : "")"><td>@s.Source@if (s.FromApi) { <span class="chip @(isQb ? "" : "good") api-chip" title="@(isQb ? "Spend booked in QuickBooks" : $"Spend and leads from the {s.ApiSource} API")">@(isQb ? "QB" : "API")</span> }</td><td class="num">@{ DrillLink(s.Jobs, Model.DrillUrl(AdDrilldown.SoldList, source: s.Source)); }</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Leads is { } l ? Format.Number(l) : "—")</td><td class="num">@{ DrillLink(s.JtLeads, Model.DrillUrl(AdDrilldown.LeadsList, source: s.Source)); }</td><td class="num">@(s.CostPerJtLead is { } cpl ? Format.Money(cpl) : "—")</td><td class="num" title="@(s.CloseRate is not null ? $"{s.WonLeads} of {s.JtLeads} new accounts have a sold job" : "")">@(s.CloseRate is { } cr ? Format.Percent(100m * cr) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
     }
+
+    /// <summary>A lead or jobs-sold figure as a link to the JobTread records behind it (plain when there's nothing to list).</summary>
+    void DrillLink(int? n, string? href)
+    {
+        if (n is null) { <text>—</text> }
+        else if (n == 0 || href is null) { <text>@n.Value.ToString("#,0")</text> }
+        else { <a class="drill" href="@href" title="List them">@n.Value.ToString("#,0")</a> }
+    }
+
+    void DrillCount(int? n, string list, ChannelSummary c) => DrillLink(n, Model.DrillUrl(list, c));
 
     /// <summary>The figures of a "By channel" row (after the channel name).</summary>
     void ChannelCells(ChannelSummary c)
@@ -658,9 +741,9 @@ else if (Model.CurrentTab == "ads")
         <td class="num">@(c.Kind == AdChannels.NoLeadSource ? "—" : Format.Money(c.Spend))</td>
         <td class="small">@(c.Kind == AdChannels.NoLeadSource ? "" : c.SpendFromLabel)</td>
         <td class="num">@(c.Clicks?.ToString("#,0") ?? "—")</td>
-        <td class="num">@(c.JtLeads?.ToString("#,0") ?? "—")</td>
+        <td class="num">@{ DrillCount(c.JtLeads, AdDrilldown.LeadsList, c); }</td>
         <td class="num" title="@(c.CloseRate is not null ? $"{c.WonLeads} of {c.JtLeads} new accounts have a sold job" : "")">@(c.CloseRate is { } cr ? Format.Percent(100m * cr) : "—")</td>
-        <td class="num">@c.Jobs</td>
+        <td class="num">@{ DrillCount(c.Jobs, AdDrilldown.SoldList, c); }</td>
         <td class="num">@Format.Money(c.Contract)</td>
         <td class="num">@(c.CostPerLead is { } cpl ? Format.Money(cpl) : "—")</td>
         <td class="num">@(c.CostPerSoldJob is { } cps ? Format.Money(cps) : "—")</td>

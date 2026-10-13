@@ -117,6 +117,49 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
     public DateOnly From { get; private set; }
     public DateOnly To { get; private set; }
 
+    // ---- Drill-down: the JobTread records behind a lead or jobs-sold figure (?list=leads|sold&group=…|source=…) ----
+
+    /// <summary>"leads" or "sold": show that list instead of the ads view.</summary>
+    [BindProperty(SupportsGet = true)] public string? List { get; set; }
+    /// <summary>Drill-down scope: a pill group ("facebook", "google", "other") or "none" (no Lead Source).</summary>
+    [BindProperty(SupportsGet = true)] public string? Group { get; set; }
+    /// <summary>Drill-down scope: one lead source row (its name in the table).</summary>
+    [BindProperty(SupportsGet = true)] public string? Source { get; set; }
+    public string? CurrentList => CurrentTab == "ads" ? AdDrilldown.ParseList(List) : null;
+    public AdDrilldown? Drilldown { get; private set; }
+    /// <summary>The sold jobs the ads figures are built from (open + closed in the last year, with a contract).</summary>
+    public List<ProjectSummary> SoldJobs { get; private set; } = [];
+
+    /// <summary>Link values for a drill-down from the ads view (keeps the pill and period).</summary>
+    public Dictionary<string, string> DrillRoute(string list, string? group = null, string? source = null)
+    {
+        var route = AdsRoute();
+        route["list"] = list;
+        if (group is not null) route["group"] = group;
+        if (source is not null) route["source"] = source;
+        return route;
+    }
+
+    public string? DrillUrl(string list, string? group = null, string? source = null) =>
+        Url.Page("/Sales/Index", new Microsoft.AspNetCore.Routing.RouteValueDictionary(DrillRoute(list, group, source).ToDictionary(kv => kv.Key, kv => (object?)kv.Value)));
+
+    /// <summary>Drill-down link for a "By channel" row: its group, "none", the total, or (a channel inside Other) its lead source row.</summary>
+    public string? DrillUrl(string list, ChannelSummary c) => c.Kind switch
+    {
+        AdChannels.Facebook or AdChannels.Google or AdChannels.Other or AdChannels.NoLeadSource => DrillUrl(list, c.Kind),
+        AdChannels.Total => DrillUrl(list),
+        _ => DrillUrl(list, source: c.Key),
+    };
+
+    /// <summary>"Last 90 days", "Year to date"… for drill-down titles.</summary>
+    public string PeriodLabel => Period switch
+    {
+        "30" => "Last 30 days",
+        "ytd" => "Year to date",
+        "12" => "Last 12 months",
+        _ => "Last 90 days",
+    };
+
     public async Task OnGetAsync(bool refresh, CancellationToken ct)
     {
         ViewData["Title"] = "Sales & Marketing";
@@ -165,7 +208,9 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
     {
         string fromMonth = From.ToString("yyyy-MM"), toMonth = To.ToString("yyyy-MM");
         var channel = CurrentChannel;
-        if (channel is null or AdChannels.Google)
+        // A drill-down lists JobTread records only: the ad platform APIs (clicks, platform spend) aren't needed for it.
+        var drill = CurrentList is not null;
+        if (!drill && (channel is null or AdChannels.Google))
         {
             Google = await googleAds.GetAsync(refresh, ct);
             if (Google.Report is { } report)
@@ -175,7 +220,7 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
                 GoogleClicks = GoogleMonths.Where(m => string.CompareOrdinal(m.Month, fromMonth) >= 0 && string.CompareOrdinal(m.Month, toMonth) <= 0).Sum(m => m.Clicks);
             }
         }
-        if (channel is null or AdChannels.Facebook)
+        if (!drill && (channel is null or AdChannels.Facebook))
         {
             Meta = await metaAds.LoadAsync(From, To, refresh || MetaRefresh, ct);
             if (Meta.Report is not null) MetaClicks = Meta.MonthsInPeriod.Sum(m => m.Stats.LinkClicks);
@@ -207,6 +252,13 @@ public class IndexModel(SalesService sales, CommissionPayroll commissionPayroll,
         JtLeads = await jtLeads.GetAsync(new DateOnly(From.Year, From.Month, 1), To, refresh, ct);
         Sources = SalesService.LeadSources(jobs, CountedSpend, googleAds.Channel, JtLeads);
         Channels = AdChannels.Compare(Sources, CountedSpend, googleAds.Channel, GoogleClicks, MetaClicks, JtLeads);
+        SoldJobs = jobs;
+        if (drill)
+        {
+            Drilldown = AdDrilldown.Build(CurrentList!, Group, Source, Sources, Channels, JtLeads, jobs, googleAds.Channel);
+            if (!Drilldown.Matches)
+                logger.LogWarning("Ads drill-down {List} {Scope}: {Count} records but the figure is {Expected}", Drilldown.List, Drilldown.Scope, Drilldown.Count, Drilldown.Expected);
+        }
     }
 
     private async Task LoadCommissionsAsync(bool refresh, CancellationToken ct)

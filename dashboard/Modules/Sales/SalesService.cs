@@ -368,6 +368,14 @@ public sealed class SalesService(ProjectsService projects, PurpleDashboard.Modul
     public static string NoLeadSourceLabel(string? howBidCameIn) =>
         string.IsNullOrWhiteSpace(howBidCameIn) ? "No lead source" : $"No lead source (bid: {howBidCameIn.Trim()})";
 
+    /// <summary>The lead source row a sold job is counted in: its customer's Lead Source as a channel, else "No lead source (bid: …)".</summary>
+    public static string SourceKey(ProjectSummary job, string googleChannel) =>
+        job.CustomerLeadSource is { } ls ? ChannelFor(ls, googleChannel) : NoLeadSourceLabel(job.HowBidCameIn);
+
+    /// <summary>The lead source row a new JobTread account's lead is counted in (null = no Lead Source: in no row).</summary>
+    public static string? SourceKey(LeadAccount account, string googleChannel) =>
+        account.LeadSource is { } ls ? ChannelFor(ls, googleChannel) : null;
+
     /// <summary>
     /// Ads → revenue by lead source. Sold jobs are grouped by the customer account's Lead Source in JobTread (set by the
     /// website form from the ad click id, or by hand), mapped to a channel by <see cref="ChannelFor"/>, next to spend and
@@ -379,7 +387,7 @@ public sealed class SalesService(ProjectsService projects, PurpleDashboard.Modul
     {
         var cmp = StringComparer.OrdinalIgnoreCase;
         var jobList = jobs.ToList();
-        string KeyOf(ProjectSummary j) => j.CustomerLeadSource is { } ls ? ChannelFor(ls, googleChannel) : NoLeadSourceLabel(j.HowBidCameIn);
+        string KeyOf(ProjectSummary j) => SourceKey(j, googleChannel);
 
         var bySource = jobList.GroupBy(KeyOf, cmp)
             .ToDictionary(g => g.Key, g => (Jobs: g.Count(), Contract: g.Sum(j => j.Contract ?? 0)), cmp);
@@ -387,8 +395,8 @@ public sealed class SalesService(ProjectsService projects, PurpleDashboard.Modul
         var spendBy = spend.GroupBy(s => ChannelFor(s.Channel, googleChannel), cmp).ToDictionary(g => g.Key,
             g => (Amount: g.Sum(s => s.Amount), Leads: g.Any(s => s.Leads is not null) ? g.Sum(s => s.Leads ?? 0) : (decimal?)null, Api: g.Select(s => s.ApiSource).Where(a => a is not null).OrderBy(a => a == QuickBooksAdSpendService.SourceName).FirstOrDefault()),
             cmp);
-        var leadsBy = (jtLeads?.BySource ?? new Dictionary<string, int>())
-            .GroupBy(kv => ChannelFor(kv.Key, googleChannel), cmp).ToDictionary(g => g.Key, g => g.Sum(kv => kv.Value), cmp);
+        var leadsBy = (jtLeads?.Accounts ?? []).Select(a => SourceKey(a, googleChannel)).OfType<string>()
+            .GroupBy(k => k, cmp).ToDictionary(g => g.Key, g => g.Count(), cmp);
         var wonBy = jtLeads is null ? new Dictionary<string, int>(cmp) : jobList
             .Where(j => j.CustomerLeadSource is not null && j.CustomerId is not null && j.CustomerCreatedOn >= jtLeads.From && j.CustomerCreatedOn <= jtLeads.To)
             .GroupBy(KeyOf, cmp).ToDictionary(g => g.Key, g => g.Select(j => j.CustomerId).Distinct().Count(), cmp);

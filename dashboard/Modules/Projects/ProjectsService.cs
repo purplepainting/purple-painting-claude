@@ -95,6 +95,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
                             "leadSource": { "_": "customFieldValues", "$": { "where": [["customField", "id"], "22PWNYKhTU6S"] }, "nodes": { "value": {} } } } },
                           "billed": { "_": "documents", "$": { "where": { "and": [["type", "customerInvoice"], ["status", "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } },
                           "unpaid": { "_": "documents", "$": { "where": { "and": [["type", "customerInvoice"], ["status", "in", ["approved", "pending"]]] } }, "sum": { "$": ["balance"] } },
+                          "approvedOrders": { "_": "documents", "$": { "where": { "and": [["type", "customerOrder"], ["status", "approved"]] } }, "min": { "$": "issueDate" } },
                           "pendingOrders": { "_": "documents", "$": { "where": { "and": [["type", "customerOrder"], ["status", "pending"]] } }, "sum": { "$": ["price"] }, "count": {} },
                           "unsentChangeOrders": { "_": "documents", "$": { "where": { "and": [["type", "customerOrder"], ["status", "draft"], ["name", "like", "%Change Order%"]] } }, "sum": { "$": ["price"] }, "count": {} },
                           "retainageCostItem": { "held": { "_": "documentCostItems", "$": { "where": { "and": [[["document", "type"], "customerInvoice"], [["document", "status"], "in", ["approved", "pending"]]] } }, "sum": { "$": ["price"] } } }
@@ -143,6 +144,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             FolderUrl = fields.GetValueOrDefault(JobFields.FolderLink),
             ClosedOn = job.Str("closedOn") is { Length: >= 10 } closedOn && DateOnly.TryParse(closedOn[..10], System.Globalization.CultureInfo.InvariantCulture, out var closedDate) ? closedDate : null,
             ApprovedContract = job.Dec("projectedPrice"),
+            FirstApprovedOrderOn = job["approvedOrders"].Date("min"),
             ActualCost = job.Dec("actualCost") ?? 0,
             PendingOrders = job["pendingOrders"].Dec("sum") ?? 0,
             UnsentChangeOrders = job["unsentChangeOrders"].Dec("sum") ?? 0,

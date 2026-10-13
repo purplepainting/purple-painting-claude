@@ -66,12 +66,15 @@ Read through `customFieldValues { value, customField { id } }`. Filter to the id
 
 ### New leads by Lead Source (Sales → Ads & lead sources)
 
-New customer accounts in a period, counted by Lead Source in one request (two root fields):
+New customer accounts in a period, as a list (Oct 2026: the counts and the drill-down lists come from the same rows):
 
-- `customField(id: 22PWNYKhTU6S).customFieldValues` where `account.createdAt` is in the range (Pacific midnight boundaries as UTC), `size: 100`, `group: { by: ["value"], aggs: { n: { count: "id" } } }`, `withValues`, `nextPage`. One row per value with its count; accounts with no Lead Source have no value row.
-- `organization.accounts` (aliased `newAccounts`) where `type = customer` and `createdAt` in the range, `count`. Total minus the grouped counts = new accounts with no Lead Source.
+- `organization.accounts` (aliased `newAccounts`) where `type = customer` and `createdAt` in the range (Pacific midnight boundaries as UTC), `size: 100`, `sortBy: [{ field: "createdAt", order: "desc" }]`, `nextPage`; nodes `id`, `name`, `createdAt`, and `leadSource` (alias of `customFieldValues` where `customField.id = 22PWNYKhTU6S`, `size: 1`, `value`). An account with no value (or an empty one) has no Lead Source. About 225 accounts per 3½ months (Oct 2026), so a 12-month period is a handful of pages.
 
-Fixture name `sales-leads`. Cached like projects (dropped on account events).
+Fixture names `sales-leads` (first page) and `sales-leads-more`: `{ "organization": { "newAccounts": { "nextPage": null, "nodes": [ … ] } } }`. Cached like projects (dropped on account events).
+
+The jobs list also reads `approvedOrders`: `documents` where `type = customerOrder`, `status = approved`, `min` of `issueDate` (the first approved order's issue date; JobTread doesn't store when an order was approved). Shown as "Sold on" in the jobs-sold drill-down.
+
+Customer account link for people: `https://app.jobtread.com/customers/{accountId}` (`JobTreadIds.CustomerUrl`).
 
 ## Money on a job
 

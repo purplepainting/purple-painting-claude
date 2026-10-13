@@ -26,6 +26,8 @@ public sealed record ProjectSummary
     /// <summary>When the job was closed in JobTread (closedOn); null while open. Bonus retention is released then.</summary>
     public DateOnly? ClosedOn { get; init; }
     public decimal? ApprovedContract { get; init; } // approved customer orders (JobTread projectedPrice)
+    /// <summary>Issue date of the job's first approved customer order (the proposal it was sold on). JobTread doesn't keep when it was approved.</summary>
+    public DateOnly? FirstApprovedOrderOn { get; init; }
 
     /// <summary>
     /// Contract used everywhere: approved orders plus pending change orders, which are usually
