@@ -61,3 +61,18 @@ document.querySelectorAll('details[data-detail-url] [data-tab]').forEach(functio
     showTab(button.closest('details'), button.dataset.tab);
   });
 });
+
+// Schedule month view on phones: tapping a day lists its jobs under the grid instead of opening the day.
+// Wider screens (and no script) follow the link to the Day view.
+document.querySelectorAll('[data-month]').forEach(function (grid) {
+  var phone = window.matchMedia('(max-width: 760px)');
+  grid.addEventListener('click', function (e) {
+    var link = e.target.closest('a.month-date');
+    if (!link || !phone.matches) return;
+    e.preventDefault();
+    var day = link.closest('[data-day]').dataset.day;
+    document.querySelectorAll('.month-cell[data-day], .month-day[data-day]').forEach(function (el) {
+      el.classList.toggle('selected', el.dataset.day === day);
+    });
+  });
+});
