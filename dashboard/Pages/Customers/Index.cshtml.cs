@@ -52,32 +52,33 @@ public class IndexModel(CustomersService customers, ChangeLogWriter changeLog, D
     }
 
     /// <summary>Saves the customer's review status (dashboard database only; JobTread's "Left Review" field isn't changed).</summary>
-    public async Task<IActionResult> OnPostReviewAsync(string accountId, string? customerName, string status, string? platform, int? rating, string? notes, CancellationToken ct)
+    public async Task<IActionResult> OnPostReviewAsync(string accountId, string? customerName, string status, string? platform, string? notes, CancellationToken ct)
     {
-        if (!CanEdit || string.IsNullOrWhiteSpace(accountId) || status is not ("requested" or "received" or "later" or "skip")) return RedirectToPage(new { show = Show, q = Q });
+        if (!CanEdit || string.IsNullOrWhiteSpace(accountId) || status is not ("requested" or "later" or "skip")) return RedirectToPage(new { show = Show, q = Q });
         var user = me.Email ?? me.DisplayName ?? "unknown";
-        await customers.SaveReviewAsync(accountId, customerName, status, platform, rating, notes, user, ct);
-        await changeLog.WriteAsync([ChangeLogWriter.Entry(user, "reviews", status, customerName, new { accountId, platform, rating, notes }, "Done")], ct);
+        await customers.SaveReviewAsync(accountId, customerName, status, platform, null, notes, user, ct);
+        await changeLog.WriteAsync([ChangeLogWriter.Entry(user, "reviews", status, customerName, new { accountId, platform, notes }, "Done")], ct);
         Message = $"Saved review status for {customerName}.";
         return RedirectToPage(new { show = Show, q = Q });
     }
 
     /// <summary>
-    /// The customer's review chip: the dashboard's status first, then JobTread's "Left Review" field,
-    /// then "Review to request" for customers with a completed job. Null when there's nothing to show.
+    /// The customer's review chip: JobTread's "Left Review" field first (the source of truth for a left review),
+    /// then the dashboard's request status, then "Review to request" for customers with a completed job.
+    /// Null when there's nothing to show.
     /// </summary>
     public (string Label, string Css, string? Title)? ReviewChip(CustomerView c)
     {
         var r = c.AccountId is { } id ? Reviews.GetValueOrDefault(id) : null;
-        if (r is not null) return (ReviewLabel(r), r.Status == "received" ? "good" : "", r.UpdatedBy is { } by ? $"Updated {r.UpdatedAt:MMM d} by {by}" : null);
         if (c.LeftReviewInJobTread) return ("Left a review (JobTread)", "good", "JobTread customer field \"Left Review\"");
+        if (r is not null) return (ReviewLabel(r), r.Status == "received" ? "good" : "", r.UpdatedBy is { } by ? $"Updated {r.UpdatedAt:MMM d} by {by}" : null);
         if (CustomersService.NeedsReview(c, Reviews)) return ("Review to request", "warn", null);
         return null;
     }
 
     public static string ReviewLabel(CustomerReview? r) => r?.Status switch
     {
-        "requested" => $"Requested {r.RequestedOn:MMM d}",
+        "requested" => $"Requested {r.RequestedOn:MMM d}{(r.Platform is { } asked ? " · " + asked : "")}",
         "received" => $"Received{(r.Rating is { } s ? $" ★{s}" : "")}{(r.Platform is { } p ? " · " + p : "")}",
         "later" => "Ask later",
         "skip" => "Not asking",
