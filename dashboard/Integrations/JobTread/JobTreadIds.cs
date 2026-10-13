@@ -26,4 +26,7 @@ public static class JobTreadIds
     }
 
     public static string JobUrl(string jobId) => $"https://app.jobtread.com/jobs/{jobId}";
+
+    /// <summary>A customer account's page in JobTread (customer accounts live under Customers).</summary>
+    public static string CustomerUrl(string accountId) => $"https://app.jobtread.com/customers/{accountId}";
 }

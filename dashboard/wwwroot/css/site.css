@@ -983,3 +983,18 @@ table.data.by-channel td.small { white-space: nowrap; }
   .ads-total .kpi { padding: 10px 12px; min-width: 0; }
   .ads-total .kpi-value { font-size: 20px; }
 }
+
+/* Sales → Ads: lead and jobs-sold figures link to the JobTread records behind them (?list=leads|sold). */
+a.drill { color: var(--purple-700); text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+@media (hover: hover) { a.drill:hover { text-decoration-style: solid; } }
+a.drill-kpi .kpi-value { color: var(--purple-700); }
+.drill-back { display: inline-flex; align-items: center; min-height: var(--touch); font-size: 14px; font-weight: 600; text-decoration: none; }
+@media (hover: hover) { .drill-back:hover { text-decoration: underline; } }
+.drill .section-title .num { color: var(--muted); font-weight: 600; }
+table.data.drill-table td:first-child a { font-weight: 600; }
+table.data.drill-table .drill-job { margin-left: 6px; white-space: nowrap; font-family: var(--font-num); font-size: 13px; }
+table.data.drill-table td.num { white-space: nowrap; }
+@media (max-width: 640px) {
+  table.data.drill-table td:empty { display: none; }
+  table.data.drill-table td.num { white-space: normal; }
+}
