@@ -19,6 +19,11 @@ public sealed class FinancialPeriod
     public decimal JtLaborCost { get; set; }     // time entries, at JobTread's burdened rates
     public decimal JtHours { get; set; }
     public decimal JtBills { get; set; }         // vendor bills on jobs
+    // Internal jobs (Office Work, Time Off, Shop Labor...): office pay and paid time off are overhead, which
+    // JobTread's burdened rates already absorb, so they're left out of JobTread's job profit.
+    public decimal JtInternalLabor { get; set; }
+    public decimal JtInternalHours { get; set; }
+    public decimal JtInternalBills { get; set; }
 
     // QuickBooks
     public decimal QbIncome { get; set; }
@@ -26,11 +31,27 @@ public sealed class FinancialPeriod
     public decimal QbBurden { get; set; }
     public decimal QbJobCosts { get; set; }      // materials, jobsite services, other job costs
     public decimal QbOverhead { get; set; }
+    /// <summary>Bonus payroll (part of overhead). Bonuses are paid out of profit, so they're not in the burdened rates.</summary>
+    public decimal QbBonuses { get; set; }
 
     public decimal QbLabor => QbFieldWages + QbBurden;
     public decimal QbGrossProfit => QbIncome - QbLabor - QbJobCosts;
     public decimal QbNet => QbGrossProfit - QbOverhead;
     public decimal JtGrossProfit => JtInvoiced - JtLaborCost - JtBills;
+
+    // The goal: JobTread's burdened rates carry wages, payroll taxes, comp, insurance and overhead, so profit on
+    // JobTread's jobs matches QuickBooks net profit before bonuses. What's left is timing (billing, bills) or rates.
+    public decimal JtJobHours => JtHours - JtInternalHours;
+    public decimal JtJobLabor => JtLaborCost - JtInternalLabor;
+    /// <summary>Invoices − bills − time at burdened rates, on real jobs (internal jobs left out).</summary>
+    public decimal JtJobProfit => JtInvoiced - JtJobLabor - (JtBills - JtInternalBills);
+    public decimal QbNetBeforeBonuses => QbNet + QbBonuses;
+    /// <summary>JobTread job profit − QuickBooks net before bonuses: positive = JobTread shows more profit than there was.</summary>
+    public decimal NetDelta => JtJobProfit - QbNetBeforeBonuses;
+    /// <summary>Everything the burdened rates have to cover, per JobTread hour on jobs: field wages + burden + overhead (not bonuses).</summary>
+    public decimal? QbAllInPerHour => JtJobHours > 0 ? (QbLabor + QbOverhead - QbBonuses) / JtJobHours : null;
+    /// <summary>JobTread's average burdened rate on job hours.</summary>
+    public decimal? JtJobRate => JtJobHours > 0 ? JtJobLabor / JtJobHours : null;
 
     /// <summary>Real field labor cost per JobTread clocked hour (QuickBooks wages + burden ÷ JobTread hours).</summary>
     public decimal? QbCostPerHour => JtHours > 0 ? QbLabor / JtHours : null;
@@ -60,7 +81,8 @@ public sealed class FinancialsReport
 /// Job bills are entered in JobTread and pushed to QuickBooks, so QuickBooks job costs should match
 /// JobTread bills; differences are listed as flags to clean up.
 /// </summary>
-public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClient jobTread, AccountRules rules, IMemoryCache cache, IOptions<JobTreadOptions> jtOptions)
+public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClient jobTread, AccountRules rules, IMemoryCache cache, IOptions<JobTreadOptions> jtOptions,
+    PurpleDashboard.Modules.Projects.ProjectsService projects)
 {
     public Task<FinancialsReport> GetAsync(DateOnly from, DateOnly to, string basis, bool refresh, CancellationToken ct)
     {
@@ -112,7 +134,7 @@ public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClie
                     case AccountKind.FieldWages: p.QbFieldWages += v; break;
                     case AccountKind.LaborBurden: p.QbBurden += v; break;
                     case AccountKind.JobCost: p.QbJobCosts += v; break;
-                    case AccountKind.Overhead: p.QbOverhead += v; break;
+                    case AccountKind.Overhead: p.QbOverhead += v; if (c.Category == "Bonuses") p.QbBonuses += v; break;
                 }
             }
             return p;
@@ -125,6 +147,8 @@ public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClie
             JtHours = periods.Sum(p => p.JtHours), JtBills = periods.Sum(p => p.JtBills),
             QbIncome = periods.Sum(p => p.QbIncome), QbFieldWages = periods.Sum(p => p.QbFieldWages),
             QbBurden = periods.Sum(p => p.QbBurden), QbJobCosts = periods.Sum(p => p.QbJobCosts), QbOverhead = periods.Sum(p => p.QbOverhead),
+            QbBonuses = periods.Sum(p => p.QbBonuses), JtInternalLabor = periods.Sum(p => p.JtInternalLabor),
+            JtInternalHours = periods.Sum(p => p.JtInternalHours), JtInternalBills = periods.Sum(p => p.JtInternalBills),
         };
 
         List<CategoryTotal> Categories(AccountKind kind) => classified
@@ -202,6 +226,10 @@ public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClie
     /// <summary>JobTread invoices, bills and time per month, all months in one request (aggregates only).</summary>
     private async Task<List<FinancialPeriod>> JobTreadByMonthAsync(List<(DateOnly From, DateOnly To)> months, CancellationToken ct)
     {
+        var open = await projects.GetOpenJobsAsync(false, ct);
+        var closed = await projects.GetClosedJobsAsync(months[0].From, false, ct);
+        var internalIds = open.Concat(closed).Where(j => j.IsInternal).Select(j => j.Id).Distinct().ToList();
+        JsonArray OnInternal() => new(new JsonArray("job", "id"), "in", new JsonArray(internalIds.Select(id => (JsonNode?)JsonValue.Create(id)).ToArray()));
         var org = new JsonObject { ["$"] = new JsonObject { ["id"] = jtOptions.Value.OrganizationId } };
         for (var i = 0; i < months.Count; i++)
         {
@@ -228,6 +256,24 @@ public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClie
                 ["cost"] = new JsonObject { ["_"] = "sum", ["$"] = "cost" },
                 ["minutes"] = new JsonObject { ["_"] = "sum", ["$"] = "minutes" },
             };
+            if (internalIds.Count == 0) continue;
+            var timeAnd = (JsonArray)org[$"time{i}"]!["$"]!["where"]!["and"]!.DeepClone();
+            timeAnd.Add(OnInternal());
+            org[$"itime{i}"] = new JsonObject
+            {
+                ["_"] = "timeEntries",
+                ["$"] = new JsonObject { ["where"] = new JsonObject { ["and"] = timeAnd } },
+                ["cost"] = new JsonObject { ["_"] = "sum", ["$"] = "cost" },
+                ["minutes"] = new JsonObject { ["_"] = "sum", ["$"] = "minutes" },
+            };
+            var billAnd = (JsonArray)org[$"bill{i}"]!["$"]!["where"]!["and"]!.DeepClone();
+            billAnd.Add(OnInternal());
+            org[$"ibill{i}"] = new JsonObject
+            {
+                ["_"] = "documents",
+                ["$"] = new JsonObject { ["where"] = new JsonObject { ["and"] = billAnd } },
+                ["sum"] = new JsonObject { ["$"] = "cost" },
+            };
         }
         var result = (await jobTread.QueryAsync("financials-months", new JsonObject { ["organization"] = org }, ct))["organization"];
         return months.Select((m, i) => new FinancialPeriod
@@ -238,6 +284,9 @@ public sealed class FinancialsService(QuickBooksClient quickBooks, IJobTreadClie
             JtBills = result?[$"bill{i}"].Dec("sum") ?? 0,
             JtLaborCost = result?[$"time{i}"].Dec("cost") ?? 0,
             JtHours = Math.Round((result?[$"time{i}"].Dec("minutes") ?? 0) / 60m, 1),
+            JtInternalLabor = result?[$"itime{i}"].Dec("cost") ?? 0,
+            JtInternalHours = Math.Round((result?[$"itime{i}"].Dec("minutes") ?? 0) / 60m, 1),
+            JtInternalBills = result?[$"ibill{i}"].Dec("sum") ?? 0,
         }).ToList();
     }
 

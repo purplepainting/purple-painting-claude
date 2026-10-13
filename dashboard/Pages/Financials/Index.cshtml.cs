@@ -82,4 +82,5 @@ public class IndexModel(FinancialsService financials, QuickBooksClient quickBook
     public static string Pct(decimal part, decimal whole) => whole == 0 ? "—" : Format.Percent(100m * part / whole);
     public static string PerHour(decimal? v) => v is null ? "—" : v.Value.ToString("$#,##0.00", System.Globalization.CultureInfo.InvariantCulture) + "/hr";
     public static string Gap(decimal qb, decimal jt) => Format.Money(qb - jt);
+    public static string Signed(decimal v) => v > 0 ? "+" + Format.Money(v) : v < 0 ? "−" + Format.Money(-v) : Format.Money(0);
 }

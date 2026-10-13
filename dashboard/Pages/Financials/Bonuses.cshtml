@@ -91,6 +91,17 @@ else if (Model.Ledger is { } ledger)
                 bonus lines this month @Signed(monthEntries.Sum(e => e.Net)) (earned @Format.Money(monthEntries.Where(e => e.Net > 0).Sum(e => e.Net)), losses @Format.Money(monthEntries.Where(e => e.Net < 0).Sum(e => e.Net)))
                 @if (kept > 0) { <text> · kept by the company @Format.Money(kept) (probation, left, excluded, cap)</text> } else if (kept < 0) { <text> · company carries @Format.Money(-kept) of losses (shares of people not eligible)</text> }
             </p>
+            @{
+                var monthJobs = ledger.Jobs.Select(j => j.In(sel)).Where(x => x is not null).ToList();
+                var pools = monthJobs.Sum(x => x!.SupervisorPool + x!.FieldPool);
+                var poolPct = r.SupervisorPercent + r.FieldPercent;
+            }
+            @if (Model.CompanyNetBeforeBonuses is { } nb)
+            {
+                var target = nb * poolPct / 100m;
+                var delta = pools - target;
+                <p><b>Pools vs @poolPct.ToString("0.#")% of real profit:</b> pools this month @Signed(pools) (@poolPct.ToString("0.#")% of @Format.Money(monthJobs.Sum(x => x!.Profit)) JobTread profit on bonus jobs) · @poolPct.ToString("0.#")% of QuickBooks net before bonuses (@Format.Money(nb)) is @Signed(target) · <b>delta @Signed(delta)</b>@(ledger.LeftOutJobs.Count > 0 ? $" (jobs left out of bonuses: {ledger.LeftOutJobs.Count}; their profit is in QuickBooks but not in the pools)" : ""). <a asp-page="/Financials/Index">Where JobTread and QuickBooks differ</a></p>
+            }
             @if (Model.CompanyNet < 0) { <p>@(Model.Held ? "The company lost money this month, so nothing is payable for it (the rule in Settings); amounts stay owed." : "The company lost money this month but bonuses are still being paid (Settings: hold when the company loses is off).")</p> }
         </div>
         @if (notRated.Count > 0)

@@ -51,6 +51,8 @@ public class BonusesModel(
     [TempData] public string? Message { get; set; }
     /// <summary>QuickBooks net profit for the month (null when QuickBooks isn't connected).</summary>
     public decimal? CompanyNet { get; private set; }
+    /// <summary>QuickBooks net profit for the month with bonus payroll added back: what the pools should be 20% of.</summary>
+    public decimal? CompanyNetBeforeBonuses { get; private set; }
     public bool Held => Rules.HoldWhenCompanyLoses && CompanyNet < 0;
     public DateTime? QbAsOf => QuickBooksClient.DataAsOf;
 
@@ -124,6 +126,7 @@ public class BonusesModel(
             if (await quickBooks.GetConnectionAsync(ct) is null) return;
             var report = await financials.GetAsync(Selected, Selected.AddMonths(1).AddDays(-1), "Accrual", false, ct);
             CompanyNet = report.Total.QbNet;
+            CompanyNetBeforeBonuses = report.Total.QbNetBeforeBonuses;
         }
         catch (Exception e) when (e is QuickBooksException or JobTreadException or HttpRequestException or TaskCanceledException)
         {
