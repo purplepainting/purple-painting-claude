@@ -88,24 +88,6 @@ public class CandidateModel(HiringService hiring, CurrentUser me) : PageModel
         return File(doc.Data, doc.ContentType);
     }
 
-    public async Task<IActionResult> OnPostUploadAsync(List<IFormFile> files, string? kind, CancellationToken ct)
-    {
-        if (!CanEdit) return Back("files");
-        if (files.Count == 0) { Message = "Pick a file or take a photo first."; return Back("files"); }
-        var errors = new List<string>();
-        var saved = 0;
-        foreach (var f in files.Take(10))
-        {
-            if (f.Length > HiringService.MaxDocumentBytes) { errors.Add($"{f.FileName}: files can be up to 10 MB."); continue; }
-            using var ms = new MemoryStream();
-            await f.CopyToAsync(ms, ct);
-            if (await hiring.AddDocumentAsync(Id, f.FileName, ms.ToArray(), kind, Who(), ct) is { } error) errors.Add($"{f.FileName}: {error}");
-            else saved++;
-        }
-        Message = string.Join(" ", new[] { saved > 0 ? $"Uploaded {saved} file{(saved == 1 ? "" : "s")}." : null }.Concat(errors).OfType<string>());
-        return Back("files");
-    }
-
     public async Task<IActionResult> OnPostDeleteFileAsync(int docId, CancellationToken ct)
     {
         if (!CanEdit) return Back("files");

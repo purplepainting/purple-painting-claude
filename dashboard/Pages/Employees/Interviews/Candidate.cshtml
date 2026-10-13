@@ -204,6 +204,8 @@ else if (Model.CanEdit && c.Stage is not (HiringStages.Booked or HiringStages.Co
     <p class="muted small"><a href="/employees/interviews/candidate/@c.Id/sheet">Fill in the interview sheet</a> (no sheet yet).</p>
 }
 
+@if (Model.Documents.Count > 0)
+{
 <section class="card fin-section hire-files" id="files">
     <h2 class="section-title">Files <span class="muted">@Model.Documents.Count</span></h2>
     @if (Model.Documents.Count > 0)
@@ -232,16 +234,8 @@ else if (Model.CanEdit && c.Stage is not (HiringStages.Booked or HiringStages.Co
             }
         </ul>
     }
-    @if (Model.CanEdit)
-    {
-        <form method="post" asp-page-handler="Upload" asp-route-id="@Model.Id" enctype="multipart/form-data" class="inline-form wrap hire-upload">
-            <label class="field"><span>What is it</span><select name="kind">@foreach (var k in HiringService.DocumentKinds) { <option selected="@(k == (c.SheetJson is null ? "Interview sheet" : c.Stage == HiringStages.Trial ? "Trial timesheet" : "Other"))">@k</option> }</select></label>
-            <label class="field grow"><span>PDF, JPG, PNG or HEIC · up to 10 MB · take a photo on a phone</span>
-                <input type="file" name="files" accept="image/*,application/pdf,.heic,.heif" multiple required></label>
-            <button class="button secondary" type="submit">Upload</button>
-        </form>
-    }
 </section>
+}
 
 <section class="card fin-section" id="texts">
     <h2 class="section-title">Texts <span class="muted">in @HiringLists.LanguageLabel(c.Language)@(c.Language == "both" ? " (English, then Spanish)" : "")</span></h2>
