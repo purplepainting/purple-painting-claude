@@ -39,6 +39,7 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Integrations/QuickBooks/` | QuickBooks Online connection (read only). Setup: `docs/QUICKBOOKS.md` |
 | `Modules/Financials/` | Financials: QuickBooks report parsing, account rules (which account counts as wages, burden, job cost, overhead), JobTread vs QuickBooks by month |
 | `Pages/Connections/` | Connections page: JobTread status, your own JobTread key (for pushes), connect QuickBooks |
+| `Modules/Changes/` | Change log page data: `ChangeLogReader` (filters, paging), `ChangeFormatter` (one summary formatter per area; add one when a new area starts logging), `PersonNames` (email → name) |
 | `Modules/People/TeamDirectory.cs` | Everyone's crew level and PM color (Employees page, then settings, then JobTread role) |
 | `ViewComponents/SideNavViewComponent.cs` | Builds the left menu tiles and their numbers |
 | `Pages/Shared/_Icon.cshtml` | Line icons used on menu tiles |

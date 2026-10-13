@@ -513,3 +513,37 @@ body.navigating { cursor: progress; }
 .refresh-button { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 12px; margin: 2px 0; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--purple-700); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; vertical-align: middle; }
 @media (hover: hover) { .refresh-button:hover { border-color: var(--purple-600); } }
 .refresh-button:active, .refresh-button.pressed { background: var(--purple-50); }
+
+/* Change log */
+.chg-row { display: grid; grid-template-columns: 116px 150px 112px minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 8px 14px; min-height: 56px; cursor: pointer; list-style: none; }
+.chg-row::-webkit-details-marker { display: none; }
+.chg-row > * { min-width: 0; }
+.chg[open] > .chg-row { border-bottom: 1px solid var(--border); }
+.chg-when { font-size: 13px; white-space: nowrap; }
+.chg-who { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chg-text { display: grid; gap: 1px; }
+.chg-summary { font-size: 14px; overflow-wrap: anywhere; }
+.chg-note { font-size: 12px; overflow-wrap: anywhere; }
+.chg-result { justify-self: end; }
+.chg-detail { padding: 12px 14px 14px; display: grid; gap: 12px; }
+.chg-detail > * { min-width: 0; }
+.chg-detail .table-wrap { border: 1px solid var(--border); border-radius: var(--radius-sm); }
+table.data.chg-diff th, table.data.chg-diff td { padding: 8px 12px; }
+table.data.chg-diff tbody th { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--muted); width: 1%; }
+table.data.chg-diff tbody tr:last-child th { border-bottom: 0; }
+table.data.chg-diff tr.same td { color: var(--muted); }
+table.data.chg-diff tr.changed td:last-child { font-weight: 600; background: var(--purple-50); }
+.chg-meta { margin: 0; }
+.chg-pager { display: flex; justify-content: center; gap: 10px; margin: 16px 0 8px; }
+@media (max-width: 760px) {
+  .chg-row { grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: "text text text result" "who when area area"; gap: 4px 8px; padding: 10px 12px; }
+  .chg-text { grid-area: text; }
+  .chg-result { grid-area: result; align-self: start; }
+  .chg-who { grid-area: who; font-size: 12px; color: var(--muted); }
+  .chg-when { grid-area: when; font-size: 12px; }
+  .chg-when::before { content: "· "; }
+  .chg-area { grid-area: area; justify-self: start; }
+  .chg-area .chip { font-size: 11px; padding: 1px 7px; }
+  .chg-row .chevron { display: none; }
+  .chg-detail { padding: 10px 12px 12px; }
+}
