@@ -21,6 +21,7 @@ per query (`financials-months`, `projects-list`, `projects-activity`, `projects-
 
 **QuickBooks locally:** `QuickBooks__FixtureDirectory=/path` serves saved reports (`ProfitAndLoss.json`, `query-{Entity}.json`) instead of calling Intuit.
 
+**Google locally:** `Google__FixtureDirectory=/path` serves saved Google Ads / Business Profile responses (file list in `docs/GOOGLE.md`), and Connect Google connects straight away as the sample account (needs the local database below).
 **Meta (Facebook/Instagram ads) locally:** `Meta__FixtureDirectory=/path` serves saved Graph responses (`adaccounts.json`, `insights-account.json`, `insights-campaign.json`, `insights-platform.json`) instead of calling Meta. See `docs/META.md`.
 
 **Database locally:** without a connection string the app runs with no database (Employees is read only).
@@ -39,9 +40,12 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Data/DatabaseSetup.cs` | Picks Azure SQL or SQLite from the connection string; applies migrations at startup |
 | `Data/Migrations/` | Schema history. Add one with `dotnet ef migrations add <Name> -o Data/Migrations` |
 | `Integrations/QuickBooks/` | QuickBooks Online connection (read only). Setup: `docs/QUICKBOOKS.md` |
+| `Integrations/Google/` | Google connection (read only): one company Google account for Google Ads (`googleAds:searchStream`) and Business Profile reviews. Setup: `docs/GOOGLE.md` |
+| `Modules/Sales/GoogleAdsService.cs` | Google Ads by month and campaign for Sales & Marketing; `SalesService.MergeApiSpend` puts it (and Meta, via `MetaAdsService.SpendSource`) in Ads → revenue without double counting |
+| `Modules/Customers/GoogleReviewsService.cs`, `ReviewMatcher.cs` | Google reviews for Customers, matched to customers by name (display only) |
 | `Integrations/Meta/` | Facebook/Instagram ads via the Meta Marketing API (read only; API version constant in `MetaOptions`). Setup: `docs/META.md`. Connections card: `ViewComponents/MetaConnectionViewComponent.cs`; Sales section: `Modules/Sales/MetaAdsService.cs`, `Pages/Sales/_MetaAds.cshtml` |
 | `Modules/Financials/` | Financials: QuickBooks report parsing, account rules (which account counts as wages, burden, job cost, overhead), JobTread vs QuickBooks by month |
-| `Pages/Connections/` | Connections page: JobTread status, your own JobTread key (for pushes), connect QuickBooks |
+| `Pages/Connections/` | Connections page: JobTread status, your own JobTread key (for pushes), connect QuickBooks, connect Google (pick the Ads account and Business Profile location) |
 | `Modules/Changes/` | Change log page data: `ChangeLogReader` (filters, paging), `ChangeFormatter` (one summary formatter per area; add one when a new area starts logging), `PersonNames` (email → name) |
 | `Modules/People/TeamDirectory.cs` | Everyone's crew level and PM color (Employees page, then settings, then JobTread role) |
 | `ViewComponents/SideNavViewComponent.cs` | Builds the left menu tiles and their numbers |
@@ -52,6 +56,9 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Modules/Projects/` | Projects data: models, preset views, `ProjectsService` (JobTread queries) |
 | `Modules/Scheduling/` | Schedule: `ScheduleService` (read tasks), `SchedulePushService` (write changes to JobTread), `LaborCostService` (actual and estimated labor), job colors and crew levels |
 | `Modules/People/` | `PeopleService` (staff and roles from JobTread), PM colors |
+| `Modules/Hiring/` | Hiring (Employees → Hiring): `HiringService` (candidates, interview days, bookings, files), `TextTemplates` (English/Spanish texts), `InterviewSheet` (sheet answers), `HiringLists` (stages, positions, tools, checklists, SharePoint links) |
+| `Pages/Employees/Interviews/` | Hiring pages: candidates and days (`Index`), one day (`Day`), one candidate (`Candidate`), interview sheet (`Sheet`) |
+| `wwwroot/js/hiring.js` | Hiring: copy buttons, checkboxes that save in place |
 | `Modules/Search/` | `SearchService`: global search across the module services' cached data. Page and JSON at `Pages/Search/` (`/search?q=`, `/search?handler=suggest&q=`), top bar box in `_Layout` + `wwwroot/js/search.js` |
 | `wwwroot/js/schedule-editor.js` | The schedule editor (draft, drag/tap, review & push) |
 | `Infrastructure/` | Shared helpers: `LocalClock` (Pacific time), `Format` (money, %, dates) |

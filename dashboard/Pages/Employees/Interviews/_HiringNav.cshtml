@@ -1,0 +1,7 @@
+@model string
+@* Section pills shared by the hiring pages. Model = "candidates" or "days" (or "" when on a candidate/day page). *@
+<div class="pills" role="tablist" aria-label="Employees sections">
+    <a class="pill" href="/employees">Employees</a>
+    <a class="pill@(Model == "candidates" ? " active" : "")" href="/employees/interviews" aria-current="@(Model == "candidates" ? "page" : null)">Candidates</a>
+    <a class="pill@(Model == "days" ? " active" : "")" href="/employees/interviews?tab=days" aria-current="@(Model == "days" ? "page" : null)">Interview days</a>
+</div>

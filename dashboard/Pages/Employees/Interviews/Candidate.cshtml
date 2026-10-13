@@ -1,0 +1,297 @@
+@page "/employees/interviews/candidate/{id:int}"
+@model PurpleDashboard.Pages.Employees.Interviews.CandidateModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Modules.Hiring
+@{
+    var c = Model.C;
+    var stage = HiringStages.Get(c.Stage);
+    var texts = TextTemplates.For(Model.Context());
+    var pos = HiringLists.Position(c.Position);
+    var today = LocalClock.Today;
+    var canTrial = c.Stage is HiringStages.Interviewed or HiringStages.Confirmed or HiringStages.Booked;
+    var trialDefault = today.AddDays(1).DayOfWeek == DayOfWeek.Saturday ? today.AddDays(3) : today.AddDays(1).DayOfWeek == DayOfWeek.Sunday ? today.AddDays(2) : today.AddDays(1);
+}
+
+<div class="module-head">
+    <partial name="_HiringNav" model="@("")" />
+</div>
+
+@if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
+
+<section class="card hire-head">
+    <div class="hire-head-top">
+        <span class="avatar hire-avatar lang-@c.Language" aria-hidden="true">@IndexModel.Initials(c.Name)</span>
+        <div class="job-main">
+            <h1 class="hire-h1">@c.Name</h1>
+            <div class="hire-head-chips">
+                <span class="chip @stage.Css">@stage.Label</span>
+                <span class="chip">@pos.Label</span>
+                <span class="chip @(HiringLists.SpeaksEnglish(c.Language) ? "" : "warn")">@HiringLists.LanguageLabel(c.Language)</span>
+                @if (c.Rating is not null) { <span class="hire-stars" title="@c.Rating out of 5">@IndexModel.Stars(c.Rating)</span> }
+            </div>
+        </div>
+    </div>
+    <dl class="detail-grid hire-facts">
+        <div><dt>Phone</dt><dd>@if (c.Phone is not null) { <a href="tel:@c.Phone">@c.Phone</a> } else { <span class="muted">—</span> }</dd></div>
+        <div><dt>Source</dt><dd>@(c.Source ?? "—")</dd></div>
+        <div><dt>Interview</dt><dd>
+            @if (Model.Booking is { } b) { <a href="/employees/interviews/day/@b.Day.Id">@Format.Day(b.Day.Date) · @HiringService.SlotLabel(b.Booking.Time)</a> @if (b.Booking.ConfirmedAt is not null) { <span class="chip good small-chip">Confirmed</span> } }
+            else { <span class="muted">Not booked</span> }
+        </dd></div>
+        @if (c.InterviewedOn is { } io) { <div><dt>Interviewed</dt><dd>@Format.Day(io)@(c.Interviewer is null ? "" : " · " + c.Interviewer)</dd></div> }
+        @if (c.Experience is not null) { <div class="wide"><dt>Experience</dt><dd>@c.Experience</dd></div> }
+        @if (c.NotHiredReason is not null && c.Stage == HiringStages.NotHired) { <div class="wide"><dt>Not hired because</dt><dd>@c.NotHiredReason</dd></div> }
+    </dl>
+</section>
+
+@if (Model.CanEdit)
+{
+    @* ---- Next step, by stage ---- *@
+    @if (c.Stage is HiringStages.Texted or HiringStages.NoShow or HiringStages.Withdrew || (c.Stage is HiringStages.Booked or HiringStages.Confirmed && !Model.IsUpcomingBooking && c.SheetJson is null))
+    {
+        <section class="card fin-section hire-next">
+            <h2 class="section-title">Book an interview</h2>
+            @if (Model.OpenSlots.Count == 0)
+            {
+                <p class="muted">No open slots on upcoming interview days. <a href="/employees/interviews?tab=days">Create an interview day</a>.</p>
+            }
+            else
+            {
+                <form method="post" asp-page-handler="Book" asp-route-id="@Model.Id" class="inline-form">
+                    <label class="field grow"><span>Slot (@(c.Language == "es" ? "Spanish speakers go later" : "English speakers go earlier"))</span>
+                        <select name="slot">
+                            @foreach (var g in Model.OpenSlots.GroupBy(x => x.Day.Id))
+                            {
+                                var day = g.First().Day;
+                                <optgroup label="@Format.Day(day.Date)">
+                                    @foreach (var (_, s) in g)
+                                    {
+                                        <option value="@day.Id|@s.ToString("HH:mm")" selected="@(Model.Suggested is { } sg && sg.DayId == day.Id && sg.Slot == s)">@Format.Day(day.Date) · @HiringService.SlotLabel(s)@(Model.Suggested is { } sg2 && sg2.DayId == day.Id && sg2.Slot == s ? " (suggested)" : "")</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select></label>
+                    <button class="button" type="submit">Book</button>
+                </form>
+            }
+        </section>
+    }
+    else if (c.Stage is HiringStages.Booked or HiringStages.Confirmed)
+    {
+        <section class="card fin-section hire-next">
+            <h2 class="section-title">Interview</h2>
+            <p class="muted">@(c.Stage == HiringStages.Confirmed ? "Confirmed." : "Booked, not confirmed yet.") Fill in the interview sheet with them; saving it moves them to Interviewed.</p>
+            <div class="form-actions"><a class="button" href="/employees/interviews/candidate/@c.Id/sheet">Fill in interview sheet</a></div>
+        </section>
+    }
+
+    @if (canTrial && c.SheetJson is not null)
+    {
+        <section class="card fin-section hire-next" id="trial">
+            <h2 class="section-title">Invite to a trial day</h2>
+            <form method="post" asp-page-handler="Trial" asp-route-id="@Model.Id" class="inline-form wrap">
+                <label class="field"><span>Trial day</span><input type="date" name="date" value="@trialDefault.ToString("yyyy-MM-dd")" required></label>
+                <label class="field grow"><span>Jobsite supervisor</span><input name="supervisor" autocomplete="off"></label>
+                <label class="field grow"><span>Notes (jobsite, start time)</span><input name="notes" autocomplete="off"></label>
+                <button class="button" type="submit">Invite to trial day</button>
+            </form>
+        </section>
+    }
+
+    @if (c.Stage == HiringStages.Trial || (c.TrialDate is not null && c.Stage == HiringStages.Hired))
+    {
+        <section class="card fin-section hire-trial" id="trial">
+            <h2 class="section-title">Trial day @(c.TrialDate is { } td ? "· " + td.ToString("ddd M/d") : "")</h2>
+            <form method="post" asp-page-handler="TrialSave" asp-route-id="@Model.Id" class="inline-form wrap">
+                <label class="field"><span>Date</span><input type="date" name="date" value="@c.TrialDate?.ToString("yyyy-MM-dd")"></label>
+                <label class="field grow"><span>Jobsite supervisor</span><input name="supervisor" value="@c.TrialSupervisor"></label>
+                <label class="field"><span>Hours worked</span><input name="hours" inputmode="decimal" value="@c.TrialHours?.ToString("0.##")" style="width:100px" placeholder="e.g. 7.5"></label>
+                <label class="field grow"><span>Notes</span><input name="notes" value="@c.TrialNotes"></label>
+                <button class="button secondary" type="submit">Save</button>
+            </form>
+            <div class="hire-two-col">
+                <div>
+                    <h3 class="detail-title">They'll need if hired</h3>
+                    <ul class="hire-checklist-static">@foreach (var r in HiringLists.TrialRequirements) { <li>@r.En</li> }</ul>
+                    <p class="muted small">Hand them the <a href="@HiringLists.Documents[1].Url" target="_blank" rel="noopener">Trial Day Info</a> sheet and the <a href="@HiringLists.Documents[2].Url" target="_blank" rel="noopener">Trial Day Timesheet</a>. Upload a photo of the timesheet under Files.</p>
+                </div>
+                @if (HiringLists.ToolsFor(c.Position) is { Count: > 0 } levels)
+                {
+                    <div>
+                        <h3 class="detail-title">Required tools · @pos.Label</h3>
+                        @foreach (var (level, tools) in levels)
+                        {
+                            <div class="hire-tools-level"><span class="pchip lvl-@level.ToLowerInvariant()">@level</span>
+                                <span class="hire-tools">@string.Join(", ", tools.Select(t => t.En))</span></div>
+                        }
+                        <div class="hire-compact"><partial name="_Texts" model="@texts.Where(t => t.Key == "tools").ToList()" /></div>
+                    </div>
+                }
+            </div>
+            @if (c.Stage == HiringStages.Trial)
+            {
+                <div class="hire-decide">
+                    <form method="post" asp-page-handler="Hire" asp-route-id="@Model.Id" class="inline-form">
+                        <label class="field"><span>Hire date</span><input type="date" name="date" value="@today.ToString("yyyy-MM-dd")"></label>
+                        <button class="button" type="submit">Hire</button>
+                    </form>
+                </div>
+            }
+        </section>
+    }
+
+    @if (c.Stage == HiringStages.Hired)
+    {
+        var done = HiringService.OnboardingDone(c);
+        <section class="card fin-section hire-onboarding" id="onboarding" data-live>
+            <h2 class="section-title">Onboarding <span class="muted">@done.Count / @HiringLists.Onboarding.Length · hired @(c.HiredOn is { } h ? Format.Day(h) : "")</span></h2>
+            <form method="post" asp-page-handler="Onboarding" asp-route-id="@Model.Id" class="hire-onboarding-form">
+                <p class="muted small">New Hire Packet</p>
+                @foreach (var (key, label) in HiringLists.Onboarding)
+                {
+                    if (key == "shoplabor") { <p class="muted small">Setup</p> }
+                    <label class="hire-check big"><input type="checkbox" name="done" value="@key" checked="@done.Contains(key)" data-autosubmit-check> @label</label>
+                }
+                <p class="muted small">JobTread and QuickBooks aren't changed from here: add them there, then tick the box.</p>
+                <noscript><button class="button secondary" type="submit">Save</button></noscript>
+            </form>
+        </section>
+    }
+
+    @if (stage.Open)
+    {
+        <details class="card fin-section hire-nothired">
+            <summary class="muted">Not hired…</summary>
+            <form method="post" asp-page-handler="NotHired" asp-route-id="@Model.Id" class="inline-form">
+                <label class="field grow"><span>Reason</span><input name="reason" placeholder="e.g. not enough experience, no tools" autocomplete="off"></label>
+                <button class="button danger" type="submit">Mark not hired</button>
+            </form>
+        </details>
+    }
+}
+
+@if (Model.Sheet is { } s)
+{
+    <section class="card fin-section hire-sheet-summary">
+        <div class="hire-section-head">
+            <h2 class="section-title">Interview sheet <span class="muted">@(s.Date is { } sd ? Format.Day(sd) : "")@(s.Interviewer is null ? "" : " · " + s.Interviewer)</span></h2>
+            @if (Model.CanEdit) { <a class="refresh-button" href="/employees/interviews/candidate/@c.Id/sheet">Edit</a> }
+        </div>
+        <dl class="detail-grid">
+            <div><dt>Lives in</dt><dd>@(s.Location ?? "—")</dd></div>
+            <div><dt>Bilingual</dt><dd>@InterviewSheet.YesNo(s.Bilingual)</dd></div>
+            <div><dt>Desired pay</dt><dd>@(s.DesiredPay ?? "—")</dd></div>
+            <div><dt>90-day rate</dt><dd>@(s.StartRate ?? "—")</dd></div>
+            <div><dt>Years experience</dt><dd>@(s.Years ?? "—")</dd></div>
+            <div><dt>Skills</dt><dd>@(s.Skills.Count == 0 ? "—" : string.Join(", ", s.Skills))</dd></div>
+            <div><dt>Transportation</dt><dd>@(s.Transportation ?? "—")</dd></div>
+            <div><dt>Basic tools</dt><dd>@InterviewSheet.YesNo(s.BasicTools)</dd></div>
+            <div><dt>OK payroll only</dt><dd>@InterviewSheet.YesNo(s.PayrollOk)</dd></div>
+            <div><dt>Felony</dt><dd>@InterviewSheet.YesNo(s.Felony)</dd></div>
+            <div><dt>Part-time / weekends</dt><dd>@InterviewSheet.YesNo(s.PartTimeOk)</dd></div>
+            <div><dt>Ever fired</dt><dd>@InterviewSheet.YesNo(s.EverFired)@(string.IsNullOrWhiteSpace(s.FiredWhy) ? "" : " · " + s.FiredWhy)</dd></div>
+            @if (s.Companies is not null) { <div class="wide"><dt>Companies worked for</dt><dd>@s.Companies</dd></div> }
+            @if (s.Hobbies is not null) { <div class="wide"><dt>Hobbies</dt><dd>@s.Hobbies</dd></div> }
+            @if (s.Notes is not null) { <div class="wide"><dt>Notes</dt><dd>@s.Notes</dd></div> }
+            <div class="wide"><dt>Points covered</dt><dd>
+                @foreach (var (key, label) in HiringLists.PointsFor(c.Position)) { <span class="chip @(s.Points.Contains(key) ? "good" : "warn") small-chip">@(s.Points.Contains(key) ? "✓" : "✗") @label</span> }
+            </dd></div>
+        </dl>
+    </section>
+}
+else if (Model.CanEdit && c.Stage is not (HiringStages.Booked or HiringStages.Confirmed))
+{
+    <p class="muted small"><a href="/employees/interviews/candidate/@c.Id/sheet">Fill in the interview sheet</a> (no sheet yet).</p>
+}
+
+<section class="card fin-section hire-files" id="files">
+    <h2 class="section-title">Files <span class="muted">@Model.Documents.Count</span></h2>
+    @if (Model.Documents.Count > 0)
+    {
+        <ul class="hire-file-list">
+            @foreach (var doc in Model.Documents)
+            {
+                var url = $"/employees/interviews/candidate/{c.Id}?handler=File&docId={doc.Id}";
+                <li class="hire-file">
+                    <a class="hire-thumb" href="@url" target="_blank" rel="noopener" data-no-prefetch>
+                        @if (HiringService.CanPreview(doc.ContentType)) { <img src="@url" alt="" loading="lazy"> }
+                        else { <span class="hire-file-icon">@(doc.ContentType == "application/pdf" ? "PDF" : "HEIC")</span> }
+                    </a>
+                    <div class="hire-file-main">
+                        <a href="@url" target="_blank" rel="noopener" class="hire-file-name" data-no-prefetch>@doc.FileName</a>
+                        <span class="muted small">@doc.Kind · @CandidateModel.Size(doc.Size) · @Format.Day(DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(doc.UploadedAt, LocalClock.Zone))) · @doc.UploadedBy</span>
+                        <span class="hire-file-actions">
+                            <a href="@url&download=true" data-no-prefetch>Download</a>
+                            @if (Model.CanEdit)
+                            {
+                                <form method="post" asp-page-handler="DeleteFile" asp-route-id="@Model.Id" onsubmit="return confirm('Delete @doc.FileName?')"><input type="hidden" name="docId" value="@doc.Id"><button class="link-button" type="submit">Delete</button></form>
+                            }
+                        </span>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+    @if (Model.CanEdit)
+    {
+        <form method="post" asp-page-handler="Upload" asp-route-id="@Model.Id" enctype="multipart/form-data" class="inline-form wrap hire-upload">
+            <label class="field"><span>What is it</span><select name="kind">@foreach (var k in HiringService.DocumentKinds) { <option selected="@(k == (c.SheetJson is null ? "Interview sheet" : c.Stage == HiringStages.Trial ? "Trial timesheet" : "Other"))">@k</option> }</select></label>
+            <label class="field grow"><span>PDF, JPG, PNG or HEIC · up to 10 MB · take a photo on a phone</span>
+                <input type="file" name="files" accept="image/*,application/pdf,.heic,.heif" multiple required></label>
+            <button class="button secondary" type="submit">Upload</button>
+        </form>
+    }
+</section>
+
+<section class="card fin-section" id="texts">
+    <h2 class="section-title">Texts <span class="muted">in @HiringLists.LanguageLabel(c.Language)@(c.Language == "both" ? " (English, then Spanish)" : "")</span></h2>
+    <partial name="_Texts" model="@texts" />
+</section>
+
+<section class="card fin-section" id="history">
+    <h2 class="section-title">History</h2>
+    @if (Model.CanEdit)
+    {
+        <form method="post" asp-page-handler="Note" asp-route-id="@Model.Id" class="inline-form">
+            <label class="field grow"><span>Add a note</span><input name="note" autocomplete="off" placeholder="e.g. Asked to move to 1pm, has own truck"></label>
+            <button class="button secondary" type="submit">Add</button>
+        </form>
+    }
+    <ul class="hire-history">
+        @foreach (var e in Model.Events)
+        {
+            var local = TimeZoneInfo.ConvertTimeFromUtc(e.At, LocalClock.Zone);
+            <li class="hire-event kind-@e.Kind">
+                <span class="hire-event-text">@(e.Kind == "note" ? "Note: " : "")@CandidateModel.EventText(e)</span>
+                <span class="muted small">@local.ToString("ddd M/d h:mm tt") · @e.By</span>
+            </li>
+        }
+    </ul>
+</section>
+
+@if (Model.CanEdit)
+{
+    <details class="card fin-section">
+        <summary class="muted">Edit details or change stage</summary>
+        <form method="post" asp-page-handler="Edit" asp-route-id="@Model.Id" class="inline-form wrap">
+            <label class="field grow"><span>Name</span><input name="name" value="@c.Name" required></label>
+            <label class="field"><span>Phone</span><input name="phone" type="tel" value="@c.Phone"></label>
+            <label class="field"><span>Position</span><select name="position">@foreach (var p in HiringLists.Positions) { <option value="@p.Key" selected="@(p.Key == c.Position)">@p.Label</option> }</select></label>
+            <label class="field"><span>Language</span><select name="language">@foreach (var l in HiringLists.Languages) { <option value="@l.Key" selected="@(l.Key == c.Language)">@l.Label</option> }</select></label>
+            <label class="field"><span>Source</span><select name="source"><option value="">—</option>@foreach (var src in HiringLists.Sources) { <option selected="@(src == c.Source)">@src</option> }</select></label>
+            <label class="field grow"><span>Experience</span><input name="experience" value="@c.Experience"></label>
+            <button class="button secondary" type="submit">Save</button>
+        </form>
+        <form method="post" asp-page-handler="Stage" asp-route-id="@Model.Id" class="inline-form">
+            <label class="field"><span>Stage</span><select name="stage">@foreach (var st in HiringStages.All) { <option value="@st.Key" selected="@(st.Key == c.Stage)">@st.Label</option> }</select></label>
+            <label class="field grow"><span>Note</span><input name="note" autocomplete="off"></label>
+            <button class="button secondary" type="submit">Set stage</button>
+        </form>
+    </details>
+}
+
+<partial name="_DocsBox" />
+
+@section Scripts {
+    <script src="~/js/hiring.js" asp-append-version="true"></script>
+}

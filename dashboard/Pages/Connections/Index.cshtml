@@ -100,5 +100,99 @@
         }
     </section>
 
+    <section class="card connection" id="google">
+        <div class="connection-head">
+            <h2>Google</h2>
+            @if (!Model.GoogleConfigured) { <span class="chip warn">Not set up</span> }
+            else if (Model.Google is null) { <span class="chip warn">Not connected</span> }
+            else if (Model.AdsProblem is null && Model.LocationsProblem is null && Model.Google.AdsCustomerId is not null && Model.Google.BusinessLocation is not null) { <span class="chip good">Connected</span> }
+            else { <span class="chip warn">Connected · setup unfinished</span> }
+            @if (Model.GoogleUsesFixtures) { <span class="chip">Sample data</span> }
+        </div>
+        <p class="muted">One shared connection for everyone (read only): the company Google account that owns Google Ads and the Google Business Profile. Ads spend, clicks and leads show on Sales &amp; Marketing; reviews show on Customers.</p>
+
+        @if (!Model.GoogleConfigured)
+        {
+            <p class="muted">The dashboard's Google sign-in app isn't set up yet. Add <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> (and <code>GOOGLE_ADS_DEVELOPER_TOKEN</code> for Ads) in Azure, following docs/GOOGLE.md, then come back here.</p>
+        }
+        else if (!Model.Database.Available)
+        {
+            <p class="muted">The dashboard database isn't available, so a connection can't be saved right now.</p>
+        }
+        else if (Model.Google is not { } g)
+        {
+            <ul class="setup-list">
+                <li class="ok">Google sign-in app set up</li>
+                <li class="@(Model.GoogleHasDeveloperToken ? "ok" : "todo")">Google Ads developer token @(Model.GoogleHasDeveloperToken ? "set" : "not set yet (GOOGLE_ADS_DEVELOPER_TOKEN): Ads won't load until it is; reviews still work")</li>
+            </ul>
+            <div><a class="button" asp-page="/Connections/Index" asp-page-handler="GoogleConnect">Connect Google</a></div>
+            <p class="muted small">Sign in with the Google account that owns the Ads account and the Business Profile, and allow every box on Google's page. You come right back here.</p>
+        }
+        else
+        {
+            <dl class="detail-grid">
+                <div><dt>Google account</dt><dd>@g.Email</dd></div>
+                <div><dt>Connected</dt><dd>@Format.Date(DateOnly.FromDateTime(g.ConnectedAt.ToLocalTime())) by @g.ConnectedBy</dd></div>
+                <div><dt>Ads account</dt><dd>@(g.AdsCustomerId is { } aid ? $"{g.AdsCustomerName} ({PurpleDashboard.Integrations.Google.AdsAccount.FormatId(aid)})" : "Not picked")</dd></div>
+                <div><dt>Business location</dt><dd>@(g.BusinessLocationTitle ?? "Not picked")</dd></div>
+            </dl>
+
+            <ul class="setup-list">
+                <li class="ok">Connected as @g.Email</li>
+                @if (Model.GoogleMissingScopes.Count > 0)
+                {
+                    <li class="todo">Not allowed on Google's page: @string.Join(" and ", Model.GoogleMissingScopes.Select(s => s.EndsWith("adwords") ? "Google Ads" : "Business Profile")). Reconnect and tick every box.</li>
+                }
+                <li class="@(Model.GoogleHasDeveloperToken ? "ok" : "todo")">Google Ads developer token @(Model.GoogleHasDeveloperToken ? "set" : "not set (GOOGLE_ADS_DEVELOPER_TOKEN)")</li>
+                <li class="@(Model.AdsProblem is null && g.AdsCustomerId is not null ? "ok" : "todo")">Google Ads: @(Model.AdsProblem ?? (g.AdsCustomerId is null ? "pick the account below" : "reading " + g.AdsCustomerName))</li>
+                <li class="@(Model.LocationsProblem is null ? "ok" : "todo")">Business Profile API access: @(Model.LocationsProblem ?? "approved")</li>
+                <li class="@(Model.LocationsProblem is null && g.BusinessLocation is not null ? "ok" : "todo")">Reviews: @(Model.LocationsProblem is not null ? "waiting for Business Profile access (above)" : g.BusinessLocation is null ? "pick the location below" : "reading " + g.BusinessLocationTitle)</li>
+            </ul>
+
+            @if (Model.AdsAccounts.Any(a => !a.IsManager))
+            {
+                <form method="post" asp-page-handler="GoogleAds" class="link-form">
+                    <label class="field">
+                        <span>Google Ads account</span>
+                        <select name="account" required>
+                            @if (g.AdsCustomerId is null) { <option value="">Pick an account…</option> }
+                            @foreach (var a in Model.AdsAccounts.Where(a => !a.IsManager))
+                            {
+                                <option value="@a.Value" selected="@(a.CustomerId == g.AdsCustomerId)">@a.Name (@a.DisplayId)@(a.LoginCustomerId is { } via && via != a.CustomerId ? " · via manager " + PurpleDashboard.Integrations.Google.AdsAccount.FormatId(via) : "")@(a.IsTest ? " · test account" : "")</option>
+                            }
+                        </select>
+                    </label>
+                    <button class="button secondary" type="submit">Use this account</button>
+                </form>
+            }
+            @if (Model.AdsNotes.Count > 0) { <p class="muted small">Some accounts couldn't be read: @string.Join(" ", Model.AdsNotes)</p> }
+
+            @if (Model.Locations.Count > 0)
+            {
+                <form method="post" asp-page-handler="GoogleLocation" class="link-form">
+                    <label class="field">
+                        <span>Business Profile location</span>
+                        <select name="location" required>
+                            @if (g.BusinessLocation is null) { <option value="">Pick a location…</option> }
+                            @foreach (var l in Model.Locations)
+                            {
+                                <option value="@l.Value" selected="@(l.Location == g.BusinessLocation)">@l.Title@(l.Address is { } addr ? " · " + addr : "")</option>
+                            }
+                        </select>
+                    </label>
+                    <button class="button secondary" type="submit">Use this location</button>
+                </form>
+            }
+
+            <div class="form-actions">
+                <a class="button secondary" asp-page="/Connections/Index" asp-route-refreshGoogle="true" asp-fragment="google">Check again</a>
+                <a class="link-button" asp-page="/Connections/Index" asp-page-handler="GoogleConnect">Reconnect</a>
+                <form method="post" asp-page-handler="GoogleDisconnect" onsubmit="return confirm('Disconnect Google from the dashboard?')">
+                    <button class="link-button" type="submit">Disconnect</button>
+                </form>
+            </div>
+            <p class="muted small">Read only: the dashboard never creates or changes ads, the Business Profile or review replies.@(Model.GoogleLoginCustomerIdSetting is { } mcc ? $" Ads calls go through manager account {PurpleDashboard.Integrations.Google.AdsAccount.FormatId(mcc)} (GOOGLE_ADS_LOGIN_CUSTOMER_ID)." : "")</p>
+        }
+    </section>
     @await Component.InvokeAsync("MetaConnection")
 </div>

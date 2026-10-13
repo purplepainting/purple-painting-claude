@@ -94,7 +94,7 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
             "bonuses" => Bonus(e.Action, d, target, facts, used),
             "commissions" => Commission(e.Action, d, target, used),
             "sundries" => Sundry(e.Action, d, target, extra, used),
-            "equipment" when e.Action == "load-starting-list" => $"Loaded the starting equipment list{Paren(extra)}",
+            "equipment" => Equipment(e.Action, d, target, extra, used),
             "reviews" => Review(e.Action, d, target, used),
             "connections" => Connection(e.Action, d, target, used),
             _ => null,
@@ -229,7 +229,7 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
 
     private static string? Bonus(string action, JsonObject? d, string? target, List<DetailFact> facts, HashSet<string> used)
     {
-        var job = target ?? "a job";
+        var job = target ?? "a customer";
         switch (action)
         {
             case "approve":
@@ -293,7 +293,35 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
                 return $"Issued {Infrastructure.Format.Number(Dec(Get(d, "q")))} {item} to {target ?? "a job"} ({Money(Get(d, "cost"))})";
             }
             case "undo-issue": return $"Undid a sundry issued to a job (#{target})";
+            case "count":
+                used.Add("counted");
+                return $"Counted {ItemName(target)}: {Infrastructure.Format.Number(Dec(Get(d, "counted")))} on hand";
+            case "remove-item": return $"Removed {ItemName(target)} from the sundries list";
             case "load-starting-list": return $"Loaded the starting sundries list{Paren(extra)}";
+            default: return null;
+        }
+    }
+
+    // ---- Equipment: target is the piece's name ----
+
+    private static string? Equipment(string action, JsonObject? d, string? target, string? extra, HashSet<string> used)
+    {
+        var gear = target ?? "a piece of equipment";
+        switch (action)
+        {
+            case "load-starting-list": return $"Loaded the starting equipment list{Paren(extra)}";
+            case "add": return $"Added equipment {gear}";
+            case "edit": return $"Edited equipment {gear}";
+            case "move":
+                used.UnionWith(["to", "with"]);
+                var with = Str(Get(d, "with")) is { Length: > 0 } w ? $", with {w}" : "";
+                return $"Moved {gear} to {Str(Get(d, "to")) ?? "the shop"}{with}";
+            case "condition":
+            case "service":
+                used.UnionWith(["condition", "note"]);
+                var note = Str(Get(d, "note")) is { Length: > 0 } n ? $" ({n})" : "";
+                return action == "service" ? $"Serviced {gear}, now {Str(Get(d, "condition"))}{note}" : $"Marked {gear} {Str(Get(d, "condition"))}{note}";
+            case "retire": return $"Retired {gear}";
             default: return null;
         }
     }
@@ -324,6 +352,11 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
 
     private static string? Connection(string action, JsonObject? d, string? target, HashSet<string> used) => action switch
     {
+        "connect" when target == "Google" => Str(Get(d, "email")) is { } email ? Done(used, "email", $"Connected Google ({email})") : "Connected Google",
+        "google-ads-account" => $"Picked Google Ads account {target}",
+        "google-location" => $"Picked Business Profile location {target}",
+        "connect" when target == "Facebook/Instagram ads" => Str(Get(d, "facebookUser")) is { } fbUser ? Done(used, "facebookUser", $"Connected Facebook/Instagram ads (as {fbUser})") : "Connected Facebook/Instagram ads",
+        "meta-ad-account" => $"Picked Facebook ad account {target}",
         "connect" => Str(Get(d, "CompanyName")) is { } company ? Done(used, "CompanyName", $"Connected QuickBooks ({company})") : "Connected QuickBooks",
         "disconnect" => $"Disconnected {target ?? "QuickBooks"}",
         "link-jobtread" => target is null ? "Linked a JobTread key" : $"Linked a JobTread key (as {target})",

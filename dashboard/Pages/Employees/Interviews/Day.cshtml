@@ -1,0 +1,232 @@
+@page "/employees/interviews/day/{id:int}"
+@model PurpleDashboard.Pages.Employees.Interviews.DayModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Modules.Hiring
+@{
+    var d = Model.Day;
+    var today = LocalClock.Today;
+    var times = Model.Slots.Union(Model.Bookings.Select(b => b.Time)).OrderBy(t => t).ToList();
+    var openSlots = Model.Slots.Where(s => Model.BookingAt(s) is null).ToList();
+    var flagged = Model.Bookings.Where(Model.NeedsRemoval).ToList();
+}
+
+<div class="module-head">
+    <partial name="_HiringNav" model="@("days")" />
+</div>
+
+@if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
+
+<section class="card hire-day-head">
+    <div class="hire-day-title">
+        <span class="hire-date-badge@(d.Date == today ? " today" : "")"><span>@d.Date.ToString("MMM")</span><b>@d.Date.Day</b></span>
+        <div>
+            <h1 class="hire-h1">@d.Date.ToString("dddd, MMMM d")@(d.Date == today ? " · today" : "")</h1>
+            <div class="muted">@HiringService.SlotLabel(d.Start) – @HiringService.SlotLabel(d.End) · @d.SlotMinutes-minute slots</div>
+            <a class="hire-map" href="https://www.google.com/maps/search/?api=1&query=@Uri.EscapeDataString(d.Location)" target="_blank" rel="noopener">@d.Location</a>
+        </div>
+    </div>
+    <div class="hire-day-stats" id="day-stats" data-live-also>
+        <span class="chip">@Model.Bookings.Count / @Model.Slots.Count booked</span>
+        @{ var rem = Model.Bookings.Count(b => b.ReminderSentAt is not null); }<span class="chip">@rem reminder@(rem == 1 ? "" : "s") sent</span>
+        <span class="chip @(Model.Bookings.Count > 0 && Model.Bookings.All(b => b.ConfirmedAt is not null) ? "good" : "")">@Model.Bookings.Count(b => b.ConfirmedAt is not null) confirmed</span>
+        <a class="refresh-button" href="/employees/interviews?day=@d.Id&stage=all">Applicants from this day</a>
+    </div>
+    <p class="muted small hire-hint">English speakers go earlier in the day, Spanish speakers later. The booking list suggests that order; it isn't enforced.
+        Day before: send everyone the reminder. Day of, around 9am: send the confirmation; anyone not confirmed by 10am comes off the schedule.</p>
+</section>
+
+@if (flagged.Count > 0)
+{
+    <div class="card notice warn hire-flag-notice">
+        <strong>@flagged.Count not confirmed by 10am.</strong>
+        <p>They didn't reply to the confirmation text. Take them off the schedule below (No-show, or back to Texted to rebook), or tick Confirmed if they did reply.</p>
+    </div>
+}
+
+<h2 class="section-title">Schedule</h2>
+<div class="job-list hire-slots">
+    @foreach (var t in times)
+    {
+        var b = Model.BookingAt(t);
+        var inWindow = Model.Slots.Contains(t);
+        if (b is not null && Model.People.TryGetValue(b.CandidateId, out var c))
+        {
+            var stage = HiringStages.Get(c.Stage);
+            var flag = Model.NeedsRemoval(b);
+            var langOff = HiringService.IsLaterHalf(d, t) ? c.Language == "en" : c.Language == "es";
+            <div class="card hire-booking@(flag ? " flagged" : "")" id="b-@b.Id" data-live>
+                <span class="anchor" id="@DayModel.SlotId(t)"></span>
+                <div class="hire-booking-top">
+                    <span class="hire-time num">@HiringService.SlotLabel(t)</span>
+                    <div class="job-main">
+                        <a class="job-title" href="/employees/interviews/candidate/@c.Id">@c.Name</a>
+                        <div class="job-sub muted">
+                            @if (c.Phone is not null) { <a href="tel:@c.Phone">@c.Phone</a> <text>·</text> }
+                            @HiringLists.Position(c.Position).Label@(c.Experience is null ? "" : " · " + c.Experience)
+                        </div>
+                    </div>
+                    <span class="hire-booking-chips">
+                        <span class="chip @(HiringLists.SpeaksEnglish(c.Language) ? "" : "warn")" title="Speaks English? (ENG column)">@HiringLists.LanguageShort(c.Language)</span>
+                        <span class="chip @stage.Css">@stage.Label</span>
+                        @if (!inWindow) { <span class="chip warn">Off schedule</span> }
+                        @if (langOff) { <span class="muted small" title="English early, Spanish later">order?</span> }
+                    </span>
+                </div>
+                @if (Model.CanEdit)
+                {
+                    <div class="hire-checks">
+                        <form method="post" asp-page-handler="Reminder" asp-route-id="@Model.Id">
+                            <input type="hidden" name="bookingId" value="@b.Id">
+                            <label class="hire-check"><input type="checkbox" name="sent" value="true" checked="@(b.ReminderSentAt is not null)" data-autosubmit-check> Reminder sent <span class="muted">(day before)</span></label>
+                            <input type="hidden" name="sent" value="false">
+                            <noscript><button class="link-button" type="submit">Save</button></noscript>
+                        </form>
+                        <form method="post" asp-page-handler="Confirm" asp-route-id="@Model.Id">
+                            <input type="hidden" name="bookingId" value="@b.Id">
+                            <label class="hire-check"><input type="checkbox" name="confirmed" value="true" checked="@(b.ConfirmedAt is not null)" data-autosubmit-check> Confirmed <span class="muted">(day of)</span></label>
+                            <input type="hidden" name="confirmed" value="false">
+                            <noscript><button class="link-button" type="submit">Save</button></noscript>
+                        </form>
+                    </div>
+                    @if (flag)
+                    {
+                        <div class="hire-flag">
+                            <span><b>Not confirmed — remove?</b></span>
+                            <form method="post" asp-page-handler="Cancel" asp-route-id="@Model.Id"><input type="hidden" name="bookingId" value="@b.Id"><input type="hidden" name="toStage" value="@HiringStages.NoShow"><button class="button danger small-button" type="submit">Remove · No-show</button></form>
+                            <form method="post" asp-page-handler="Cancel" asp-route-id="@Model.Id"><input type="hidden" name="bookingId" value="@b.Id"><input type="hidden" name="toStage" value="@HiringStages.Texted"><button class="button secondary small-button" type="submit">Remove · back to Texted</button></form>
+                        </div>
+                    }
+                    <details class="hire-more">
+                        <summary>Texts &amp; actions</summary>
+                        <div class="hire-more-body">
+                            <div class="form-actions">
+                                <a class="button small-button" href="/employees/interviews/candidate/@c.Id/sheet">Interview sheet</a>
+                                <a class="button secondary small-button" href="/employees/interviews/candidate/@c.Id">Open @c.Name.Split(' ')[0]</a>
+                            </div>
+                            <partial name="_Texts" model="@TextTemplates.For(Model.Context(c, t)).Where(x => x.Key is "location" or "expectations" or "reminder" or "dayof").ToList()" />
+                            @if (openSlots.Count > 0)
+                            {
+                                <form method="post" asp-page-handler="Move" asp-route-id="@Model.Id" class="inline-form">
+                                    <input type="hidden" name="bookingId" value="@b.Id">
+                                    <label class="field"><span>Move to</span>
+                                        <select name="slot">@foreach (var s in openSlots) { <option value="@s.ToString("HH:mm")">@HiringService.SlotLabel(s)</option> }</select></label>
+                                    <button class="button secondary" type="submit">Move</button>
+                                </form>
+                            }
+                            <form method="post" asp-page-handler="Cancel" asp-route-id="@Model.Id" class="inline-form">
+                                <input type="hidden" name="bookingId" value="@b.Id">
+                                <label class="field"><span>Take off the schedule as</span>
+                                    <select name="toStage">
+                                        <option value="@HiringStages.Texted">Cancelled (back to Texted)</option>
+                                        <option value="@HiringStages.NoShow">No-show</option>
+                                        <option value="@HiringStages.Withdrew">Withdrew</option>
+                                    </select></label>
+                                <button class="button danger" type="submit">Remove</button>
+                            </form>
+                        </div>
+                    </details>
+                }
+            </div>
+        }
+        else if (inWindow)
+        {
+            var later = HiringService.IsLaterHalf(d, t);
+            <details class="card hire-open" id="@DayModel.SlotId(t)">
+                <summary class="hire-booking-top">
+                    <span class="hire-time num">@HiringService.SlotLabel(t)</span>
+                    <span class="job-main"><span class="hire-open-label">Open</span> <span class="muted small">· @(later ? "Spanish speakers suggested" : "English speakers suggested")</span></span>
+                    @if (Model.CanEdit) { <span class="hire-book-link">Book</span> }
+                </summary>
+                @if (Model.CanEdit)
+                {
+                    <div class="hire-more-body">
+                        @if (Model.Bookable.Count > 0)
+                        {
+                            <form method="post" asp-page-handler="Book" asp-route-id="@Model.Id" class="inline-form">
+                                <input type="hidden" name="slot" value="@t.ToString("HH:mm")">
+                                <label class="field grow"><span>Someone already in the list</span>
+                                    <select name="candidateId" required>
+                                        @foreach (var p in Model.PickerOrder(t))
+                                        {
+                                            <option value="@p.Id">@p.Name · @HiringLists.LanguageShort(p.Language) · @HiringLists.Position(p.Position).Label@(p.Stage == HiringStages.Texted ? "" : " · " + HiringStages.Label(p.Stage))</option>
+                                        }
+                                    </select></label>
+                                <button class="button" type="submit">Book @HiringService.SlotLabel(t)</button>
+                            </form>
+                        }
+                        <form method="post" asp-page-handler="Book" asp-route-id="@Model.Id" class="inline-form wrap">
+                            <input type="hidden" name="slot" value="@t.ToString("HH:mm")">
+                            <label class="field grow"><span>Or someone new: name</span><input name="name" required autocomplete="off"></label>
+                            <label class="field"><span>Phone</span><input name="phone" type="tel" inputmode="tel" autocomplete="off"></label>
+                            <label class="field"><span>Position</span><select name="position">@foreach (var p in HiringLists.Positions) { <option value="@p.Key" selected="@(p.Key == "painter")">@p.Label</option> }</select></label>
+                            <label class="field"><span>Language</span><select name="language">@foreach (var l in HiringLists.Languages) { <option value="@l.Key" selected="@(later ? l.Key == "es" : l.Key == "en")">@l.Label</option> }</select></label>
+                            <button class="button secondary" type="submit">Add &amp; book</button>
+                        </form>
+                    </div>
+                }
+            </details>
+        }
+    }
+</div>
+
+<section class="card fin-section hire-sheet-table">
+    <h2 class="section-title">Spreadsheet view</h2>
+    <div class="table-wrap">
+        <table class="data">
+            <thead><tr><th>Name</th><th>Time</th><th>Phone #</th><th>ENG (Y/N)</th><th>Conf.</th><th>Position / Experience</th></tr></thead>
+            <tbody>
+                @foreach (var t in times)
+                {
+                    var b = Model.BookingAt(t);
+                    var c = b is null ? null : Model.People.GetValueOrDefault(b.CandidateId);
+                    <tr class="@(c is null ? "hire-empty-row" : "")">
+                        <td>@(c?.Name ?? "")</td>
+                        <td class="num">@HiringService.SlotLabel(t)</td>
+                        <td>@(c?.Phone ?? "")</td>
+                        <td>@(c is null ? "" : HiringLists.SpeaksEnglish(c.Language) ? "Y" : "N")</td>
+                        <td>@(b is null ? "" : b.ConfirmedAt is not null ? "Y" : "")</td>
+                        <td>@(c is null ? "" : HiringLists.Position(c.Position).Label + (c.Experience is null ? "" : " / " + c.Experience))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="card fin-section">
+    <h2 class="section-title">Texts for this day</h2>
+    <p class="muted small">Filled in with this day's date, time window and place. Each person's own texts (with their time, in their language) are under "Texts &amp; actions" on their row.
+        <a href="@TextTemplates.GoogleVoiceUrl" target="_blank" rel="noopener">Open Google Voice ↗</a></p>
+    <div class="hire-two-lang">
+        @foreach (var (lang, label) in new[] { ("en", "English"), ("es", "Español") })
+        {
+            <div>
+                <h3 class="detail-title">@label</h3>
+                <partial name="_Texts" model="@TextTemplates.DayKeys.Select(k => TextTemplates.One(k, Model.Context(null, null), lang)).ToList()" />
+            </div>
+        }
+    </div>
+</section>
+
+@if (Model.CanEdit)
+{
+    <details class="card fin-section hire-edit-day">
+        <summary class="muted">Edit this day</summary>
+        <form method="post" asp-page-handler="EditDay" asp-route-id="@Model.Id" class="inline-form wrap">
+            <label class="field"><span>Date</span><input type="date" name="date" value="@d.Date.ToString("yyyy-MM-dd")" required></label>
+            <label class="field"><span>From</span><input type="time" name="start" value="@d.Start.ToString("HH:mm")" step="300" required></label>
+            <label class="field"><span>To</span><input type="time" name="end" value="@d.End.ToString("HH:mm")" step="300" required></label>
+            <label class="field"><span>Slot (min)</span><input type="number" name="slotMinutes" value="@d.SlotMinutes" min="5" max="120" step="5" style="width:90px" required></label>
+            <label class="field grow"><span>Location</span><input name="location" value="@d.Location"></label>
+            <button class="button secondary" type="submit">Save day</button>
+        </form>
+        @if (Model.Bookings.Count == 0)
+        {
+            <form method="post" asp-page-handler="DeleteDay" asp-route-id="@Model.Id" onsubmit="return confirm('Delete this interview day?')"><button class="link-button" type="submit">Delete day</button></form>
+        }
+    </details>
+}
+
+@section Scripts {
+    <script src="~/js/hiring.js" asp-append-version="true"></script>
+}

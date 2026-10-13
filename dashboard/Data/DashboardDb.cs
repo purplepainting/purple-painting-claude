@@ -13,6 +13,7 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<EmployeeProfile> EmployeeProfiles => Set<EmployeeProfile>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<QuickBooksConnection> QuickBooksConnections => Set<QuickBooksConnection>();
+    public DbSet<GoogleConnection> GoogleConnections => Set<GoogleConnection>();
     public DbSet<JobTreadUserKey> JobTreadUserKeys => Set<JobTreadUserKey>();
     public DbSet<JobTreadOAuthClient> JobTreadOAuthClients => Set<JobTreadOAuthClient>();
     public DbSet<BonusPayout> BonusPayouts => Set<BonusPayout>();
@@ -26,6 +27,11 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<EquipmentEvent> EquipmentEvents => Set<EquipmentEvent>();
     /// <summary>No longer used (reviews are per customer now, see CustomerReviews). Kept so the table and its rows stay.</summary>
     public DbSet<JobReview> JobReviews => Set<JobReview>();
+    public DbSet<HiringCandidate> HiringCandidates => Set<HiringCandidate>();
+    public DbSet<HiringEvent> HiringEvents => Set<HiringEvent>();
+    public DbSet<InterviewDay> InterviewDays => Set<InterviewDay>();
+    public DbSet<InterviewBooking> InterviewBookings => Set<InterviewBooking>();
+    public DbSet<CandidateDocument> CandidateDocuments => Set<CandidateDocument>();
     public DbSet<CustomerReview> CustomerReviews => Set<CustomerReview>();
     /// <summary>Facebook/Instagram ads (Meta Marketing API) connection. Entity in Data/MetaConnection.cs.</summary>
     public DbSet<MetaConnection> MetaConnections => Set<MetaConnection>();
@@ -47,6 +53,18 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.RealmId).HasMaxLength(40);
             e.Property(x => x.CompanyName).HasMaxLength(200);
             e.Property(x => x.ConnectedBy).HasMaxLength(200);
+        });
+        b.Entity<GoogleConnection>(e =>
+        {
+            e.Property(x => x.Email).HasMaxLength(200);
+            e.Property(x => x.Scopes).HasMaxLength(1000);
+            e.Property(x => x.ConnectedBy).HasMaxLength(200);
+            e.Property(x => x.AdsCustomerId).HasMaxLength(20);
+            e.Property(x => x.AdsLoginCustomerId).HasMaxLength(20);
+            e.Property(x => x.AdsCustomerName).HasMaxLength(200);
+            e.Property(x => x.BusinessAccount).HasMaxLength(100);
+            e.Property(x => x.BusinessLocation).HasMaxLength(100);
+            e.Property(x => x.BusinessLocationTitle).HasMaxLength(200);
         });
         b.Entity<JobTreadUserKey>(e =>
         {
@@ -144,6 +162,56 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.Platform).HasMaxLength(40);
             e.Property(x => x.UpdatedBy).HasMaxLength(200);
         });
+        b.Entity<HiringCandidate>(e =>
+        {
+            e.HasIndex(x => x.Stage);
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Phone).HasMaxLength(40);
+            e.Property(x => x.Position).HasMaxLength(20);
+            e.Property(x => x.Language).HasMaxLength(10);
+            e.Property(x => x.Source).HasMaxLength(40);
+            e.Property(x => x.Experience).HasMaxLength(500);
+            e.Property(x => x.Stage).HasMaxLength(20);
+            e.Property(x => x.Interviewer).HasMaxLength(200);
+            e.Property(x => x.TrialSupervisor).HasMaxLength(200);
+            e.Property(x => x.TrialHours).HasColumnType("decimal(6,2)");
+            e.Property(x => x.Onboarding).HasMaxLength(500);
+            e.Property(x => x.NotHiredReason).HasMaxLength(500);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+        });
+        b.Entity<HiringEvent>(e =>
+        {
+            e.HasIndex(x => x.CandidateId);
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.FromStage).HasMaxLength(20);
+            e.Property(x => x.ToStage).HasMaxLength(20);
+            e.Property(x => x.Detail).HasMaxLength(2000);
+            e.Property(x => x.By).HasMaxLength(200);
+        });
+        b.Entity<InterviewDay>(e =>
+        {
+            e.HasIndex(x => x.Date);
+            e.Property(x => x.Location).HasMaxLength(300);
+            e.Property(x => x.Notes).HasMaxLength(2000);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+        });
+        b.Entity<InterviewBooking>(e =>
+        {
+            e.HasIndex(x => new { x.DayId, x.Time }).IsUnique();
+            e.HasIndex(x => new { x.DayId, x.CandidateId }).IsUnique();
+            e.HasIndex(x => x.CandidateId);
+            e.Property(x => x.ReminderSentBy).HasMaxLength(200);
+            e.Property(x => x.ConfirmedBy).HasMaxLength(200);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+        });
+        b.Entity<CandidateDocument>(e =>
+        {
+            e.HasIndex(x => x.CandidateId);
+            e.Property(x => x.FileName).HasMaxLength(260);
+            e.Property(x => x.ContentType).HasMaxLength(100);
+            e.Property(x => x.Kind).HasMaxLength(40);
+            e.Property(x => x.UploadedBy).HasMaxLength(200);
+        });
         b.Entity<CustomerReview>(e =>
         {
             e.HasIndex(x => x.AccountId).IsUnique();
@@ -202,6 +270,34 @@ public sealed class QuickBooksConnection
     public DateTime ConnectedAt { get; set; }
     public string? ConnectedBy { get; set; }
     public string? Scopes { get; set; }
+}
+
+/// <summary>
+/// The company Google account the dashboard is connected to (one row): it owns the Google Ads account and the
+/// Google Business Profile. The refresh token is encrypted with ASP.NET Data Protection. Read only: the dashboard
+/// never changes ads or the profile.
+/// </summary>
+public sealed class GoogleConnection
+{
+    public int Id { get; set; }
+    /// <summary>The Google account that approved the connection.</summary>
+    public required string Email { get; set; }
+    public required string RefreshTokenProtected { get; set; }
+    /// <summary>Scopes Google says were granted (space separated); the person can untick some on Google's page.</summary>
+    public string? Scopes { get; set; }
+    public DateTime ConnectedAt { get; set; }
+    public string? ConnectedBy { get; set; }
+
+    /// <summary>The Google Ads account read for Sales &amp; Marketing (10 digits, no dashes).</summary>
+    public string? AdsCustomerId { get; set; }
+    /// <summary>The manager account the Ads calls go through (login-customer-id), or null for direct access.</summary>
+    public string? AdsLoginCustomerId { get; set; }
+    public string? AdsCustomerName { get; set; }
+
+    /// <summary>Business Profile account ("accounts/123") and location ("locations/456") reviews are read from.</summary>
+    public string? BusinessAccount { get; set; }
+    public string? BusinessLocation { get; set; }
+    public string? BusinessLocationTitle { get; set; }
 }
 
 /// <summary>
@@ -407,6 +503,107 @@ public sealed class JobReview
     public string? Notes { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+/// <summary>
+/// Someone applying to work for us (Employees → Hiring). Moves through stages from the first text to hired.
+/// The interview sheet answers are kept as JSON (Modules/Hiring/InterviewSheet.cs) so the questions can change
+/// without a migration; rating and interview date are columns so lists can show them.
+/// </summary>
+public sealed class HiringCandidate
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    public string? Phone { get; set; }
+    /// <summary>"helper", "painter", "foreman", "sales".</summary>
+    public required string Position { get; set; }
+    /// <summary>"en", "es", "both".</summary>
+    public required string Language { get; set; }
+    /// <summary>Craigslist, Indeed, Referral, Other.</summary>
+    public string? Source { get; set; }
+    public string? Experience { get; set; }
+    /// <summary>A key from HiringStages (texted, booked, confirmed, interviewed, trial, hired, not_hired, no_show, withdrew).</summary>
+    public required string Stage { get; set; }
+    public DateTime StageAt { get; set; }
+    /// <summary>1 to 5 stars, from the interview sheet.</summary>
+    public int? Rating { get; set; }
+    public string? SheetJson { get; set; }
+    public DateOnly? InterviewedOn { get; set; }
+    public string? Interviewer { get; set; }
+    public DateOnly? TrialDate { get; set; }
+    public string? TrialSupervisor { get; set; }
+    public string? TrialNotes { get; set; }
+    public decimal? TrialHours { get; set; }
+    public DateOnly? HiredOn { get; set; }
+    /// <summary>Onboarding checklist keys done, comma separated (HiringLists.Onboarding).</summary>
+    public string? Onboarding { get; set; }
+    public string? NotHiredReason { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}
+
+/// <summary>A candidate's history: stage changes, bookings, notes (who and when).</summary>
+public sealed class HiringEvent
+{
+    public long Id { get; set; }
+    public int CandidateId { get; set; }
+    public DateTime At { get; set; }
+    /// <summary>"stage", "booking", "note", "sheet", "trial", "hire", "edit".</summary>
+    public required string Kind { get; set; }
+    public string? FromStage { get; set; }
+    public string? ToStage { get; set; }
+    public string? Detail { get; set; }
+    public string? By { get; set; }
+}
+
+/// <summary>A group interview day (usually a Wednesday at Topa Topa) split into slots.</summary>
+public sealed class InterviewDay
+{
+    public int Id { get; set; }
+    public DateOnly Date { get; set; }
+    public required string Location { get; set; }
+    public TimeOnly Start { get; set; }
+    /// <summary>End of the window: the last slot starts one slot length before this.</summary>
+    public TimeOnly End { get; set; }
+    public int SlotMinutes { get; set; }
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>A candidate booked into a slot on an interview day, with the reminder and day-of confirmation.</summary>
+public sealed class InterviewBooking
+{
+    public int Id { get; set; }
+    public int DayId { get; set; }
+    public int CandidateId { get; set; }
+    public TimeOnly Time { get; set; }
+    public DateTime? ReminderSentAt { get; set; }
+    public string? ReminderSentBy { get; set; }
+    public DateTime? ConfirmedAt { get; set; }
+    public string? ConfirmedBy { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>
+/// A file kept with a candidate (scanned interview sheet, resume, trial day timesheet photo). Hiring replaces the
+/// interview spreadsheets and paper sheets, so the file itself lives in the database (max 10 MB). List queries
+/// must project without Data; only the download handler reads it.
+/// </summary>
+public sealed class CandidateDocument
+{
+    public int Id { get; set; }
+    public int CandidateId { get; set; }
+    public required string FileName { get; set; }
+    public required string ContentType { get; set; }
+    public long Size { get; set; }
+    public required byte[] Data { get; set; }
+    /// <summary>"Interview sheet", "Resume", "Trial timesheet", "Other".</summary>
+    public required string Kind { get; set; }
+    public DateTime UploadedAt { get; set; }
+    public string? UploadedBy { get; set; }
 }
 
 /// <summary>

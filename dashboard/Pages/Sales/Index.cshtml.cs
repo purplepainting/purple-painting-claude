@@ -10,13 +10,13 @@ using PurpleDashboard.Modules.Sales;
 
 namespace PurpleDashboard.Pages.Sales;
 
-public class IndexModel(SalesService sales, MetaAdsService metaAds, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsService metaAds, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"commissions" (default), "doors", "ads".</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
     /// <summary>Commissions filter: "owed" (default), "all".</summary>
     [BindProperty(SupportsGet = true)] public string? Show { get; set; }
-    /// <summary>Door-to-door and ads period: "30" days, "90" (default), "ytd".</summary>
+    /// <summary>Door-to-door and ads period: "30" days, "90" (default), "ytd", "12" (last 12 months, ads only).</summary>
     [BindProperty(SupportsGet = true)] public string? Period { get; set; }
 
     public string CurrentTab => Tab is "doors" or "ads" ? Tab : "commissions";
@@ -31,13 +31,19 @@ public class IndexModel(SalesService sales, MetaAdsService metaAds, ChangeLogWri
     public List<AdSpend> Spend { get; private set; } = [];
     /// <summary>Facebook/Instagram ads from the Meta API (ads tab). Null on other tabs.</summary>
     public MetaAdsView? Meta { get; private set; }
-    /// <summary>Spend used for totals and lead sources: manual rows, with Meta's number replacing manual Facebook/Instagram rows for months it covers.</summary>
-    public List<AdSpend> EffectiveSpend { get; private set; } = [];
-    /// <summary>Manual rows not counted because Meta's API number for the same channel and month is used instead.</summary>
-    public List<AdSpend> ReplacedSpend { get; private set; } = [];
     /// <summary>Refresh link in the Facebook/Instagram section: drop cached Meta data.</summary>
     [BindProperty(SupportsGet = true)] public bool MetaRefresh { get; set; }
     public List<LeadSource> Sources { get; private set; } = [];
+    /// <summary>Spend counted for the period: Google Ads and Facebook/Instagram from their APIs when connected, everything else as entered.</summary>
+    public List<SpendLine> CountedSpend { get; private set; } = [];
+    /// <summary>Hand-entered rows not counted because an API (Google Ads, Meta) has that channel and month, by AdSpend id.</summary>
+    public Dictionary<int, ReplacedSpend> ReplacedSpend { get; private set; } = [];
+    /// <summary>API channels feeding the ads view right now, e.g. ("Google Ads", "Google Ads API"), ("Facebook/Instagram", "Meta").</summary>
+    public List<(string Channel, string Api)> ApiChannels { get; private set; } = [];
+    public GoogleAdsView? Google { get; private set; }
+    public List<AdsMonth> GoogleMonths { get; private set; } = [];
+    public List<AdsCampaign> GoogleCampaigns { get; private set; } = [];
+    public string GoogleChannel => googleAds.Channel;
     public DateOnly From { get; private set; }
     public DateOnly To { get; private set; }
 
@@ -47,7 +53,13 @@ public class IndexModel(SalesService sales, MetaAdsService metaAds, ChangeLogWri
         ViewData["ModuleName"] = "Sales & Marketing";
         var today = LocalClock.Today;
         To = today;
-        From = Period switch { "30" => today.AddDays(-30), "ytd" => new DateOnly(today.Year, 1, 1), _ => today.AddDays(-90) };
+        From = Period switch
+        {
+            "30" => today.AddDays(-30),
+            "ytd" => new DateOnly(today.Year, 1, 1),
+            "12" when Tab == "ads" => new DateOnly(today.Year, today.Month, 1).AddMonths(-11),
+            _ => today.AddDays(-90),
+        };
 
         try
         {
@@ -63,11 +75,26 @@ public class IndexModel(SalesService sales, MetaAdsService metaAds, ChangeLogWri
             }
             else
             {
-                Spend = await sales.SpendAsync(From.ToString("yyyy-MM"), To.ToString("yyyy-MM"), ct);
-                Meta = await metaAds.LoadAsync(From, To, MetaRefresh, ct);
-                (EffectiveSpend, ReplacedSpend) = MetaAdsService.MergeSpend(Spend, Meta.Report, From.ToString("yyyy-MM"), To.ToString("yyyy-MM"));
+                string fromMonth = From.ToString("yyyy-MM"), toMonth = To.ToString("yyyy-MM");
+                Google = await googleAds.GetAsync(refresh, ct);
+                if (Google.Report is { } report)
+                {
+                    GoogleMonths = GoogleAdsService.Months(report);
+                    GoogleCampaigns = GoogleAdsService.Campaigns(report, fromMonth, toMonth);
+                }
+                Meta = await metaAds.LoadAsync(From, To, refresh || MetaRefresh, ct);
+                Spend = await sales.SpendAsync(fromMonth, toMonth, ct);
+
+                // API channels replace hand-entered rows for the same channel and month (never both).
+                var apis = new List<ApiSpendSource>();
+                if (Google.Ready) apis.Add(SalesService.GoogleSpendSource(GoogleMonths, googleAds.Channel));
+                if (Meta.Report is { } metaReport) apis.Add(MetaAdsService.SpendSource(metaReport));
+                ApiChannels = apis.Select(a => (a.Channel, a.ApiName)).ToList();
+                var merged = SalesService.MergeApiSpend(Spend, apis, fromMonth, toMonth);
+                CountedSpend = merged.Lines;
+                ReplacedSpend = merged.Replaced.ToDictionary(r => r.Row.Id);
                 var jobs = (await sales.SoldJobsAsync(refresh, ct)).Where(j => j.ApprovedContract > 0).ToList();
-                Sources = SalesService.LeadSources(jobs, EffectiveSpend);
+                Sources = SalesService.LeadSources(jobs, CountedSpend);
             }
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)

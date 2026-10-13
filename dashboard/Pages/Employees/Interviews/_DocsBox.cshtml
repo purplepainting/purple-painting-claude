@@ -1,0 +1,11 @@
+@using PurpleDashboard.Modules.Hiring
+@* SharePoint documents for hiring. The Office Manager Task Manual is left out on purpose (it has passwords in it). *@
+<section class="card fin-section hire-docs">
+    <h2 class="section-title">Documents</h2>
+    <ul class="hire-doc-list">
+        @foreach (var (label, note, url) in HiringLists.Documents)
+        {
+            <li><a href="@url" target="_blank" rel="noopener">@label</a> <span class="muted small">@note</span></li>
+        }
+    </ul>
+</section>

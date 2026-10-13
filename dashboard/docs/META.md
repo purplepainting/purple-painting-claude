@@ -99,7 +99,7 @@ All calls are `GET` (plus a report job if needed) with `appsecret_proof`:
 Meta spend is fed into the existing ads view as the channel **Facebook/Instagram**, next to hand-entered spend rows.
 For every month the API covers (the last 12), Meta's number **replaces** a hand-entered row for the same channel and
 month (Facebook/Instagram, Facebook, Instagram, Meta, Facebook Ads…). Both are never counted. The page notes which
-manual rows weren't counted, and marks them "Meta API used" in the Spend entered table. Older months still use
+manual rows weren't counted, and marks them "Not counted · API: $X" in the Spend entered table (the same mechanism as Google Ads: `SalesService.MergeApiSpend`). Older months still use
 hand-entered rows.
 
 ## Nextdoor
@@ -124,4 +124,4 @@ ad account. Connecting isn't possible in fixture mode.
   (`/connections/meta/callback`). Card: `ViewComponents/MetaConnectionViewComponent.cs` +
   `Pages/Shared/Components/MetaConnection/Default.cshtml`
 - `Modules/Sales/MetaAdsService.cs`: report parsing, lead counting, merge with hand-entered spend.
-  Page section: `Pages/Sales/_MetaAds.cshtml`, note: `_MetaSpendNote.cshtml`
+  Page section: `Pages/Sales/_MetaAds.cshtml` (after the Google Ads section)

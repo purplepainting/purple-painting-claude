@@ -104,10 +104,15 @@ public sealed class CustomersService(ProjectsService projects, QuickBooksClient 
 
     /// <summary>
     /// A customer needs a review request when they have at least one completed job, JobTread doesn't mark them
-    /// "Left a Review", and there's no review status for them in the dashboard yet (any status, including "later" or "skip").
+    /// "Left a Review", they have no Google review matched to them (<paramref name="googleReviewed"/>, keys from <see cref="Key(CustomerView)"/>),
+    /// and there's no review status for them in the dashboard yet (any status, including "later" or "skip").
     /// </summary>
-    public static bool NeedsReview(CustomerView c, IReadOnlyDictionary<string, CustomerReview> reviews) =>
-        c.AccountId is not null && c.HasCompletedJob && !c.LeftReviewInJobTread && !reviews.ContainsKey(c.AccountId);
+    public static bool NeedsReview(CustomerView c, IReadOnlyDictionary<string, CustomerReview> reviews, IReadOnlyDictionary<string, ReviewMatch>? googleReviewed = null) =>
+        c.AccountId is not null && c.HasCompletedJob && !c.LeftReviewInJobTread && !reviews.ContainsKey(c.AccountId)
+        && (googleReviewed is null || !googleReviewed.ContainsKey(Key(c)));
+
+    /// <summary>Stable key for a customer: the JobTread account id, else the name (QuickBooks-only customers).</summary>
+    public static string Key(CustomerView c) => c.AccountId ?? "name:" + c.Name.Trim().ToLowerInvariant();
 
     private static string Key(string name) => new string(name.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 

@@ -26,7 +26,7 @@ public class MetaCallbackModel(MetaClient meta, DatabaseStatus database, ChangeL
             {
                 var user = me.Email ?? me.DisplayName ?? "unknown";
                 var c = await meta.CompleteConnectAsync(code, MetaModel.RedirectUri(HttpContext, meta), user, ct);
-                await changeLog.WriteAsync([ChangeLogWriter.Entry(user, "connections", "meta-connect", c.UserName ?? MetaModel.Target, new { facebookUser = c.UserName, adAccount = c.AdAccountName }, "Done")], ct);
+                await changeLog.WriteAsync([ChangeLogWriter.Entry(user, "connections", "connect", MetaModel.Target, new { facebookUser = c.UserName, adAccount = c.AdAccountName }, "Done")], ct);
                 message = $"Facebook/Instagram ads connected as {c.UserName ?? "your Facebook user"}."
                     + (c.AdAccountName is { } a ? $" Reading ad account {a}." : " Now pick the ad account below.");
             }

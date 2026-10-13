@@ -149,22 +149,14 @@ public sealed class MetaAdsService(MetaClient meta, ILogger<MetaAdsService> logg
     }
 
     /// <summary>
-    /// Ad spend per channel and month for the ads → revenue view: manual rows, except that for months Meta covers,
-    /// the API's Facebook/Instagram number replaces any manual row for the same channel (never both, so nothing is
-    /// counted twice). Returns the rows to use and the manual rows that were replaced (for a note on the page).
+    /// Meta as an <see cref="ApiSpendSource"/> for <see cref="SalesService.MergeApiSpend"/>: the "Facebook/Instagram" channel
+    /// for every month of the 12-month window (a month with no spend is $0, not missing), replacing hand-entered rows
+    /// named like it (<see cref="ChannelAliases"/>) for those months.
     /// </summary>
-    public static (List<AdSpend> Effective, List<AdSpend> Replaced) MergeSpend(IReadOnlyList<AdSpend> manual, MetaAdsReport? report, string fromMonth, string toMonth)
-    {
-        if (report is null) return (manual.ToList(), []);
-        var replaced = manual.Where(s => ChannelAliases.Contains(s.Channel.Trim()) && report.Covers(s.Month)).ToList();
-        var effective = manual.Except(replaced).ToList();
-        foreach (var m in report.Months.Where(m => report.Covers(m.Month) && string.CompareOrdinal(m.Month, fromMonth) >= 0 && string.CompareOrdinal(m.Month, toMonth) <= 0))
-        {
-            if (m.Stats.Spend == 0 && m.Stats.Leads == 0) continue;
-            effective.Add(new AdSpend { Id = 0, Month = m.Month, Channel = Channel, Amount = Math.Round(m.Stats.Spend, 2), Leads = m.Stats.Leads, UpdatedBy = "Meta API" });
-        }
-        return (effective.OrderByDescending(s => s.Month).ThenBy(s => s.Channel).ToList(), replaced);
-    }
+    public static ApiSpendSource SpendSource(MetaAdsReport report) => new(
+        "Meta", Channel, ChannelAliases.Contains, report.Covers,
+        report.Months.Where(m => m.Stats.Spend > 0 || m.Stats.Leads > 0)
+            .Select(m => new SpendLine(m.Month, Channel, Math.Round(m.Stats.Spend, 2), m.Stats.Leads, "Meta")).ToList());
 
     // ---- Parsing insights rows ----
 

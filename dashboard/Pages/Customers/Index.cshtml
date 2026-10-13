@@ -3,10 +3,11 @@
 @using PurpleDashboard.Infrastructure
 @using PurpleDashboard.Integrations.JobTread
 @using PurpleDashboard.Modules.Customers
+@using PurpleDashboard.Integrations.Google
 
 <div class="module-head">
     <div class="pills" role="tablist" aria-label="Filters">
-        @foreach (var (key, label) in new[] { ((string?)null, "All"), ("owes", "Owes money"), ("review", "Review to request") })
+        @foreach (var (key, label) in new[] { ((string?)null, "All"), ("owes", "Owes money"), ("review", "Review to request"), ("google", "Google reviews") })
         {
             <a class="pill@(Model.Show == key ? " active" : "")" asp-page="/Customers/Index" asp-route-show="@key" asp-route-q="@Model.Q">@label</a>
         }
@@ -28,9 +29,20 @@ else
     <div class="kpis">
         <div class="card kpi"><span class="kpi-label">Customers</span><span class="kpi-value num">@Model.All.Count</span><span class="kpi-sub">open jobs + last 12 months</span></div>
         <div class="card kpi"><span class="kpi-label">Owed to us</span><span class="kpi-value num">@Format.Money(Model.All.Sum(c => c.Owes))</span><span class="kpi-sub">@Model.All.Count(c => c.Owes >= 1) customers</span></div>
-        <div class="card kpi"><span class="kpi-label">Reviews to request</span><span class="kpi-value num">@Model.All.Count(c => CustomersService.NeedsReview(c, Model.Reviews))</span><span class="kpi-sub">customers with a completed job</span></div>
+        <div class="card kpi"><span class="kpi-label">Reviews to request</span><span class="kpi-value num">@Model.All.Count(c => Model.NeedsReview(c))</span><span class="kpi-sub">customers with a completed job</span></div>
+        @if (Model.Google.Data is { } gd)
+        {
+            <a class="card kpi kpi-link" asp-page="/Customers/Index" asp-route-show="google"><span class="kpi-label">Google rating</span><span class="kpi-value num">@(gd.AverageRating is { } avg ? "★ " + avg.ToString("0.0") : "—")</span><span class="kpi-sub">@gd.TotalCount reviews · @Model.Google.ByCustomer.Count matched to customers</span></a>
+        }
     </div>
-    <p class="list-meta muted">Jobs from JobTread; balances and contact info from QuickBooks (matched by name) · <a class="refresh-button" asp-page="/Customers/Index" asp-route-show="@Model.Show" asp-route-q="@Model.Q" asp-route-refresh="true">↻ Refresh JobTread + QuickBooks</a> @if (PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.DataAsOf is { } qbAsOf) { <span class="muted small">QuickBooks as of @Format.QbAsOf(qbAsOf)</span> }</p>
+    <p class="list-meta muted">Jobs from JobTread; balances and contact info from QuickBooks (matched by name) · <a class="refresh-button" asp-page="/Customers/Index" asp-route-show="@Model.Show" asp-route-q="@Model.Q" asp-route-refresh="true">↻ Refresh JobTread + QuickBooks@(Model.Google.Ready ? " + Google" : "")</a> @if (PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.DataAsOf is { } qbAsOf) { <span class="muted small">QuickBooks as of @Format.QbAsOf(qbAsOf)</span> } @if (Model.Google.Ready && GoogleClient.ReviewsAsOf is { } gAsOf) { <span class="muted small">· Google reviews as of @Format.QbAsOf(gAsOf)</span> }</p>
+
+    @if (Model.Show == "google")
+    {
+        <partial name="_GoogleReviews" model="Model" />
+    }
+    else
+    {
 
     <div class="job-list">
         @if (!Model.Shown.Any()) { <div class="card empty-state"><p class="muted">No customers here.</p></div> }
@@ -58,7 +70,23 @@ else
                             <div><dt>QuickBooks balance</dt><dd class="num">@Format.Money(q.Balance)</dd></div>
                         </dl>
                     }
-                    @if (c.AccountId is not null && (c.HasCompletedJob || r is not null || c.LeftReviewInJobTread))
+                    @if (Model.Google.For(c) is { } gm)
+                    {
+                        <section class="cust-review google-review" aria-label="Google review from @c.Name">
+                            <div class="cust-review-head">
+                                <b>Google review</b>
+                                <span class="stars" aria-label="@gm.Review.Stars out of 5 stars">@IndexModel.Stars(gm.Review.Stars)</span>
+                                <span class="muted small">@gm.Review.Reviewer · @gm.Review.Created.ToString("MMM d, yyyy")@(gm.How == "close" ? " · close name match" : "")</span>
+                            </div>
+                            @if (gm.Review.Comment is { } comment) { <p class="review-text">@comment</p> }
+                            @if (gm.Review.Reply is { } reply) { <p class="review-reply"><b>Our reply:</b> @reply</p> }
+                            @if (!c.LeftReviewInJobTread)
+                            {
+                                <p class="muted small">JobTread isn't marked "Left a Review" for this customer yet. The dashboard doesn't change JobTread: if this match is right, update the customer's "Left Review" field in JobTread by hand.</p>
+                            }
+                        </section>
+                    }
+                    @if (c.AccountId is not null && Model.Google.For(c) is null && (c.HasCompletedJob || r is not null || c.LeftReviewInJobTread))
                     {
                         var status = r?.Status is "requested" or "later" or "skip" ? r.Status : "requested";
                         <section class="cust-review" aria-label="Review for @c.Name">
@@ -111,6 +139,7 @@ else
             </details>
         }
     </div>
+    }
 }
 
 @section Scripts {
