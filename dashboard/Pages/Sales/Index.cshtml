@@ -75,10 +75,15 @@
         <a class="pill@(Model.Show == "all" ? " active" : "")" asp-page="/Sales/Index" asp-route-show="all">All jobs</a>
     </div>
     <div class="job-list" style="margin-top:10px">
+        @if (Model.Show != "all" && Model.JobsWithoutRate > 0)
+        {
+            <p class="list-meta muted">@Model.JobsWithoutRate job@(Model.JobsWithoutRate == 1 ? "" : "s") can't owe anything until the salesperson has a commission rate: set rates in the table above, or see <a asp-page="/Sales/Index" asp-route-show="all">All jobs</a>.</p>
+        }
         @if (!Model.ShownCommissions.Any()) { <div class="card empty-state"><p class="muted">Nothing owed right now.</p></div> }
         @foreach (var c in Model.ShownCommissions)
         {
-            <details class="job card emp">
+            var jobPayments = Model.Payments.Where(p => p.JobId == c.JobId).OrderByDescending(p => p.PaidOn).ThenByDescending(p => p.Id).ToList();
+            <details class="job card emp" id="comm-@c.JobId" open="@(Model.Open == c.JobId)">
                 <summary class="emp-row with-chip">
                     <span class="chip">@c.Person.Split(' ')[0]</span>
                     <div class="job-main">
@@ -100,6 +105,22 @@
                             <input name="note" placeholder="Note (e.g. check #, payroll date)" aria-label="Note">
                             <button class="button" type="submit">Record payment</button>
                         </form>
+                    }
+                    @if (Model.Open == c.JobId && Model.Message is not null) { <p class="notice-inline good">@Model.Message</p> }
+                    @if (jobPayments.Count > 0)
+                    {
+                        <table class="data compact" style="margin-top:8px">
+                            <thead><tr><th>Paid</th><th class="num">Amount</th><th>Note</th><th></th></tr></thead>
+                            <tbody>
+                                @foreach (var p in jobPayments)
+                                {
+                                    <tr>
+                                        <td>@Format.Date(p.PaidOn)</td><td class="num">@Format.Money(p.Amount)</td><td class="muted">@p.Note</td>
+                                        <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeletePayment" asp-route-show="@Model.Show" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@p.Id"><input type="hidden" name="jobId" value="@c.JobId"><button class="link-button" type="submit">Delete</button></form> }</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
                     }
                 </div>
             </details>

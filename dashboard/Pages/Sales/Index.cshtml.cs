@@ -23,6 +23,8 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
     public bool CanEdit => database.Available;
     public string? Error { get; private set; }
     [TempData] public string? Message { get; set; }
+    /// <summary>Job id of the commission row to keep open (after recording or deleting a payment there).</summary>
+    [BindProperty(SupportsGet = true)] public string? Open { get; set; }
 
     public List<JobCommission> Commissions { get; private set; } = [];
     public List<PersonCommissions> People { get; private set; } = [];
@@ -104,7 +106,9 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
         }
     }
 
-    public IEnumerable<JobCommission> ShownCommissions => Show == "all" ? Commissions : Commissions.Where(c => c.Owed >= 1 || c.Rule is null);
+    public IEnumerable<JobCommission> ShownCommissions => Show == "all" ? Commissions : Commissions.Where(c => c.Owed >= 1 || c.JobId == Open);
+    /// <summary>Jobs whose salesperson has no commission rate yet (nothing can be owed until it's set).</summary>
+    public int JobsWithoutRate => Commissions.Count(c => c.Rule is null);
 
     public async Task<IActionResult> OnPostRuleAsync(string person, string? percent, string? basis, string? notes, CancellationToken ct)
     {
@@ -129,13 +133,20 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
         await sales.AddPaymentAsync(jobId, jobName, person, Math.Round(a, 2), paidOn ?? LocalClock.Today, note, User(), ct);
         await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "commissions", "pay", $"{person} · {jobName}", new { jobId, amount = a, paidOn, note }, "Done")], ct);
         Message = $"Recorded {Format.Money(a)} paid to {person} for {jobName}.";
-        return RedirectToPage(new { tab = Tab, show = Show });
+        return RedirectToPage(null, null, new { tab = Tab, show = Show, open = jobId }, "comm-" + jobId);
     }
 
-    public async Task<IActionResult> OnPostDeletePaymentAsync(int id, CancellationToken ct)
+    public async Task<IActionResult> OnPostDeletePaymentAsync(int id, string? jobId, CancellationToken ct)
     {
-        if (CanEdit) { await sales.DeletePaymentAsync(id, ct); await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "commissions", "delete-payment", id.ToString(), null, "Done")], ct); }
-        return RedirectToPage(new { tab = Tab, show = Show });
+        if (CanEdit)
+        {
+            await sales.DeletePaymentAsync(id, ct);
+            await changeLog.WriteAsync([ChangeLogWriter.Entry(User(), "commissions", "delete-payment", id.ToString(), null, "Done")], ct);
+            Message = "Payment deleted.";
+        }
+        return string.IsNullOrEmpty(jobId)
+            ? RedirectToPage(new { tab = Tab, show = Show })
+            : RedirectToPage(null, null, new { tab = Tab, show = Show, open = jobId }, "comm-" + jobId);
     }
 
     public async Task<IActionResult> OnPostActivityAsync(DateOnly? date, string? rep, int doors, int leads, int sold, string? soldAmount, string? notes, CancellationToken ct)
