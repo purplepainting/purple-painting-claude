@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Modules/Equipment/starting-list.json" LogicalName="PurpleDashboard.Equipment.starting-list.json" />
+    <EmbeddedResource Include="Modules/Financials/effort-last-round.json" LogicalName="PurpleDashboard.Financials.effort-last-round.json" />
   </ItemGroup>
 
 </Project>

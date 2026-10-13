@@ -1,0 +1,16 @@
+{
+  "_comment": "Average effort rating per field employee from the last spreadsheet round (2026 Q1-Q2 Bonus Ratings, raters Kareem, Kendall, Abraham, Jose; 1-10 scale). Used only to pre-fill the first month's rating screen as a suggestion; nothing is saved until a supervisor submits. Names as in the spreadsheet; matched to JobTread staff by normalized name.",
+  "round": "2026 Q1-Q2",
+  "ratings": {
+    "Alejandro Garcia": 9.00,
+    "Adrian Ramirez Hernandez": 9.25,
+    "Dib Said Dagda": 7.25,
+    "Pedro Palma Manzanarez": 9.25,
+    "Jesus Lobato": 5.50,
+    "Edgar Salazar": 3.75,
+    "Bonerges Enamorado Reyes": 8.00,
+    "Israel Rivas": 8.25,
+    "Luis Carrillo": 7.50,
+    "Kevin Mata": 6.75
+  }
+}

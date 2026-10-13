@@ -3,6 +3,7 @@
 @using PurpleDashboard.Infrastructure
 @using PurpleDashboard.Integrations.JobTread
 @using PurpleDashboard.Modules.People
+@using PurpleDashboard.Modules.Financials
 @{
     Layout = null;
 }
@@ -107,6 +108,52 @@ else if (Model.Member is { } m)
                     }
                 </ul>
                 <p class="muted small num">@Format.Number(Model.RecentJobs.Sum(j => j.Hours)) hrs total on @Model.RecentJobs.Count @(Model.RecentJobs.Count == 1 ? "job" : "jobs")</p>
+            }
+            @if (Model.Bonus is { } bl)
+            {
+                var name = m.Staff.Name;
+                var sm = Model.StatusMonth;
+                var status = bl.Status(name, sm);
+                var why = bl.Eligibility.Why(name, sm);
+                var years = bl.Months.Select(x => x.Year).Distinct().OrderByDescending(x => x).ToList();
+                <h3 class="detail-title">Bonuses</h3>
+                <div class="job-chips">
+                    @if (why is not null) { <span class="chip warn">@why</span> }
+                    else if (!bl.Eligibility.HireDateKnown(name) && bl.Eligibility.HasQuickBooks) { <span class="chip">Hire date unknown</span> }
+                    @if (status.ToMakeUp > 0) { <span class="chip warn">@Format.Money(status.ToMakeUp) to make up</span> }
+                    @if (m.Staff.IsField && why is null && bl.FieldStaff.Any(s => s.MembershipId == m.Staff.MembershipId) && bl.EffortFor(m.Staff, sm).Ratings.Count == 0) { <span class="chip warn">Not rated for @BonusService.Label(sm)</span> }
+                    @if (bl.LockFor(name, sm) is not null) { <span class="chip good">🔒 @BonusService.Label(sm) paid &amp; locked</span> }
+                    <span class="chip">Owed now @Format.Money(status.Owed)</span>
+                </div>
+                @foreach (var y in years)
+                {
+                    var rows = bl.Year(name, y);
+                    <details class="ledger-ytd" open="@(y == years[0])">
+                        <summary class="link-button">@y@(rows.FirstOrDefault()?.Opening is { } op && op != 0 ? (op > 0 ? $" · year-end settlement {y - 1} +{Format.Money(op)}" : $" · carried from {y - 1} {Format.Money(op)}") : "")</summary>
+                        <div class="table-wrap">
+                            <table class="data compact">
+                                <thead><tr><th>Month</th><th class="num">Earned</th><th class="num">Losses</th><th class="num">Net</th><th class="num">YTD net</th><th class="num">Held</th><th class="num">Paid</th><th class="num">Owed</th></tr></thead>
+                                <tbody>
+                                    @foreach (var row in rows)
+                                    {
+                                        var chk = Model.Checks.GetValueOrDefault(row.Month);
+                                        <tr>
+                                            <td>@BonusService.Label(row.Month)@(bl.LockFor(name, row.Month) is not null ? " 🔒" : "")</td>
+                                            <td class="num">@Format.Money(row.Earned)</td>
+                                            <td class="num@(row.Losses < 0 ? " neg" : "")">@Format.Money(row.Losses)</td>
+                                            <td class="num">@Format.Money(row.Net)</td>
+                                            <td class="num">@Format.Money(row.RunningNet)</td>
+                                            <td class="num">@Format.Money(row.Held)</td>
+                                            <td class="num">@Format.Money(row.Paid)@if (chk is not null) { <div class="muted small">check @string.Join(", ", chk.Select(c => "#" + c.Num))</div> }</td>
+                                            <td class="num">@Format.Money(row.Owed)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                }
+                <p class="small"><a href="/financials/bonuses?month=@BonusService.Key(sm)&only=@Uri.EscapeDataString(name)">Full bonus reconcile for @m.Staff.FirstName ›</a></p>
             }
             <p class="muted small">
                 JobTread role: @m.Staff.Role ·

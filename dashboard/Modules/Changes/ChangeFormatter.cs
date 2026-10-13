@@ -228,7 +228,8 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
 
     private static string Lower(string label) => label.StartsWith("QB") || label.StartsWith("PM") ? label : label.ToLowerInvariant();
 
-    // ---- Bonuses: approve { Profit, SupervisorPool, FieldPool, Lines }; paid / unpaid / unapprove (no details) ----
+    // ---- Bonuses: old per-job approve { Profit, SupervisorPool, FieldPool, Lines } / paid / unpaid / unapprove; monthly: pay, pay-from-payroll, delete-payment,
+    //      clawback-add/-edit/-delete, adjust, delete-adjustment, release-retention, undo-release, exclude, include, rate-effort, lock, unlock, rules, migrate ----
 
     private static string? Bonus(string action, JsonObject? d, string? target, List<DetailFact> facts, HashSet<string> used)
     {
@@ -250,6 +251,47 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
             case "paid": return $"Marked the bonus for {job} paid";
             case "unpaid": return $"Marked the bonus for {job} not paid";
             case "unapprove": return $"Took back the bonus approval for {job}";
+            // Monthly bonuses (Oct 2026).
+            case "pay":
+            case "pay-from-payroll":
+            {
+                used.UnionWith(["amount", "paidOn"]);
+                var on = ParseDate(Str(Get(d, "paidOn")));
+                return $"Recorded {Money(Get(d, "amount"))} bonus paid to {target ?? "someone"}{(on is { } o ? " on " + Infrastructure.Format.Date(o) : "")}{(action == "pay-from-payroll" ? " (from the payroll check)" : "")}";
+            }
+            case "delete-payment":
+                used.Add("amount");
+                return $"Deleted a {Money(Get(d, "amount"))} bonus payment to {target ?? "someone"}";
+            case "clawback-add":
+            case "clawback-edit":
+                used.UnionWith(["bonus", "reason", "month"]);
+                return $"{(action == "clawback-add" ? "Added" : "Changed")} a {Money(Get(d, "bonus"))} bonus clawback on {job} ({MonthLabel(Get(d, "month"))}): {Str(Get(d, "reason"))}";
+            case "clawback-delete":
+                used.UnionWith(["reason", "month"]);
+                return $"Deleted the bonus clawback on {job} ({MonthLabel(Get(d, "month"))}: {Str(Get(d, "reason"))})";
+            case "adjust":
+                used.UnionWith(["amount", "reason"]);
+                return $"Adjusted {Possessive(target ?? "someone")} bonus by {Money(Get(d, "amount"))}: {Str(Get(d, "reason"))}";
+            case "delete-adjustment":
+                used.UnionWith(["amount", "reason"]);
+                return $"Deleted a {Money(Get(d, "amount"))} bonus adjustment for {target ?? "someone"}";
+            case "release-retention": return $"Released bonus retention early for {target ?? "everyone"} ({MonthLabel(Get(d, "month"))})";
+            case "undo-release": return $"Undid the early retention release for {target ?? "everyone"}";
+            case "exclude":
+                used.UnionWith(["reason", "month"]);
+                return $"Excluded {target} from {MonthLabel(Get(d, "month"))} bonuses: {Str(Get(d, "reason"))}";
+            case "include": return $"Put {target} back in {MonthLabel(Get(d, "month"))} bonuses";
+            case "rate-effort":
+                return $"Saved {(Get(d, "ratings") as JsonArray)?.Count ?? 0} effort rating(s) for {target}";
+            case "lock":
+                used.UnionWith(["net", "check", "month"]);
+                return $"Paid & locked {Possessive(target ?? "someone")} {MonthLabel(Get(d, "month"))} bonus ({Money(Get(d, "net"))}{(Str(Get(d, "check")) is { Length: > 0 } ck ? ", check " + ck : "")})";
+            case "unlock":
+                used.UnionWith(["reason", "month"]);
+                return $"Unlocked {Possessive(target ?? "someone")} {MonthLabel(Get(d, "month"))} bonus: {Str(Get(d, "reason"))}";
+            case "rules":
+                return $"Changed the bonus rules ({string.Join(", ", (d ?? []).Select(x => Humanize(x.Key)))})";
+            case "migrate": return $"Copied old paid job bonuses into payments ({target})";
             default: return null;
         }
     }
@@ -485,6 +527,8 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
         n is JsonValue v && (v.TryGetValue<decimal>(out var d) || (v.TryGetValue<string>(out var s) && decimal.TryParse(s?.Replace("$", "").Replace(",", ""), NumberStyles.Number, Us, out d))) ? d : null;
 
     private static string Money(JsonNode? n) => Money(Dec(n));
+    /// <summary>"2026-08" → "Aug 2026".</summary>
+    private static string? MonthLabel(JsonNode? n) => Str(n) is { } s && DateOnly.TryParseExact(s + "-01", "yyyy-MM-dd", Us, DateTimeStyles.None, out var d) ? d.ToString("MMM yyyy", Us) : Str(n);
     private static string Money(decimal? d) => d is { } x && x != Math.Round(x) ? x.ToString("$#,##0.00;-$#,##0.00", Us) : Infrastructure.Format.Money(d);
     private static string Paren(string? s) => s is null ? "" : $" ({s})";
     private static string Possessive(string name) => name.EndsWith('s') ? name + "’" : name + "’s";

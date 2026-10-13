@@ -45,7 +45,8 @@ public static class AccessMap
         ["/Settings/Bonuses"] = AccessRule.For(Perm.SettingsBonuses),
         ["/Projects/"] = AccessRule.For(Perm.ProjectsView),
         ["/Scheduling/"] = AccessRule.For(Perm.SchedulingView),
-        ["/Financials/Bonuses"] = AccessRule.For(Perm.BonusesView),
+        // Raters (supervisors, bonuses.rate) open it too, but only see the effort ratings screen.
+        ["/Financials/Bonuses"] = new("Bonuses", Perm.BonusesView, Perm.BonusesRate),
         ["/Financials/"] = AccessRule.For(Perm.FinancialsView),
         ["/Customers/"] = AccessRule.For(Perm.CustomersView),
         ["/Sales/"] = new("Sales & Marketing", Perm.SalesView, Perm.CommissionsView, Perm.AdsView),
@@ -81,8 +82,20 @@ public static class AccessMap
         ["/Sales/Index#Spend"] = AccessRule.For(Perm.AdsEdit),
         ["/Sales/Index#DeleteSpend"] = AccessRule.For(Perm.AdsEdit),
 
-        ["/Financials/Bonuses#Approve"] = AccessRule.For(Perm.BonusesEdit),
-        ["/Financials/Bonuses#Status"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#Pay"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#PayFromPayroll"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#DeletePayment"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#Lock"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#Unlock"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#Adjust"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#DeleteAdjustment"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#Release"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#UndoRelease"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#Clawback"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#DeleteClawback"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#Exclude"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#Rate"] = AccessRule.For(Perm.BonusesRate),
+        ["/Settings/Bonuses#"] = AccessRule.For(Perm.SettingsBonuses),
 
         // Pay fields in this form also need employees.pay.edit (checked in the handler).
         ["/Employees/Index#Save"] = AccessRule.For(Perm.EmployeesEdit),

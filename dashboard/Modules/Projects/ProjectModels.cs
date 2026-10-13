@@ -23,6 +23,8 @@ public sealed record ProjectSummary
     public string? SalesPerson { get; init; }
     public string? HowBidCameIn { get; init; }
     public string? FolderUrl { get; init; }
+    /// <summary>When the job was closed in JobTread (closedOn); null while open. Bonus retention is released then.</summary>
+    public DateOnly? ClosedOn { get; init; }
     public decimal? ApprovedContract { get; init; } // approved customer orders (JobTread projectedPrice)
 
     /// <summary>

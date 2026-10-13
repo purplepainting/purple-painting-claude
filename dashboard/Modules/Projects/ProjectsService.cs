@@ -89,7 +89,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
                         ["nextPage"] = new JsonObject(),
                         ["nodes"] = Json("""
                         {
-                          "id": {}, "name": {}, "number": {}, "actualCost": {}, "projectedPrice": {},
+                          "id": {}, "name": {}, "number": {}, "actualCost": {}, "projectedPrice": {}, "closedOn": {},
                           "location": { "address": {}, "account": { "id": {}, "name": {}, "createdAt": {},
                             "leftReview": { "_": "customFieldValues", "$": { "where": [["customField", "id"], "22PXCpKpiwSy"] }, "nodes": { "value": {} } },
                             "leadSource": { "_": "customFieldValues", "$": { "where": [["customField", "id"], "22PWNYKhTU6S"] }, "nodes": { "value": {} } } } },
@@ -141,6 +141,7 @@ public sealed class ProjectsService(IJobTreadClient jobTread, IMemoryCache cache
             SalesPerson = fields.GetValueOrDefault(JobFields.SalesPerson),
             HowBidCameIn = fields.GetValueOrDefault(JobFields.HowBidCameIn),
             FolderUrl = fields.GetValueOrDefault(JobFields.FolderLink),
+            ClosedOn = job.Str("closedOn") is { Length: >= 10 } closedOn && DateOnly.TryParse(closedOn[..10], System.Globalization.CultureInfo.InvariantCulture, out var closedDate) ? closedDate : null,
             ApprovedContract = job.Dec("projectedPrice"),
             ActualCost = job.Dec("actualCost") ?? 0,
             PendingOrders = job["pendingOrders"].Dec("sum") ?? 0,
