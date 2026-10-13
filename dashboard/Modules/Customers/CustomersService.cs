@@ -66,6 +66,9 @@ public sealed class CustomersService(ProjectsService projects, QuickBooksClient 
         return list;
     }
 
+    /// <summary>QuickBooks customers if they're already cached, else null. Never calls QuickBooks (used by search).</summary>
+    public List<QbCustomer>? CachedQbCustomers() => cache.TryGetValue("customers:qb", out List<QbCustomer>? hit) ? hit : null;
+
     public async Task<Dictionary<string, JobReview>> ReviewsAsync(CancellationToken ct) =>
         database.Available ? await services.GetRequiredService<DashboardDb>().JobReviews.AsNoTracking().ToDictionaryAsync(r => r.JobId, ct) : [];
 

@@ -84,6 +84,7 @@ builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Customers.Custom
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Vendors.DueSoonMetric>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Equipment.LowStockMetric>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Sales.CommissionsOwedMetric>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Search.SearchService>();
 builder.Services.AddSingleton<PurpleDashboard.Infrastructure.MenuNumbers>();
 
 var app = builder.Build();

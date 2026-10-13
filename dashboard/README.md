@@ -48,6 +48,7 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Modules/Projects/` | Projects data: models, preset views, `ProjectsService` (JobTread queries) |
 | `Modules/Scheduling/` | Schedule: `ScheduleService` (read tasks), `SchedulePushService` (write changes to JobTread), `LaborCostService` (actual and estimated labor), job colors and crew levels |
 | `Modules/People/` | `PeopleService` (staff and roles from JobTread), PM colors |
+| `Modules/Search/` | `SearchService`: global search across the module services' cached data. Page and JSON at `Pages/Search/` (`/search?q=`, `/search?handler=suggest&q=`), top bar box in `_Layout` + `wwwroot/js/search.js` |
 | `wwwroot/js/schedule-editor.js` | The schedule editor (draft, drag/tap, review & push) |
 | `Infrastructure/` | Shared helpers: `LocalClock` (Pacific time), `Format` (money, %, dates) |
 | `docs/JOBTREAD.md` | How our JobTread data is structured and how to query it |
