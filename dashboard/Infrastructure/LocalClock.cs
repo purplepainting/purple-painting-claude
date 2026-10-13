@@ -5,7 +5,7 @@ namespace PurpleDashboard.Infrastructure;
 /// </summary>
 public static class LocalClock
 {
-    private static readonly TimeZoneInfo Zone = Find();
+    public static readonly TimeZoneInfo Zone = Find();
 
     public static DateTime Now => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Zone);
     public static DateOnly Today => DateOnly.FromDateTime(Now);

@@ -26,7 +26,7 @@ else
     <p class="list-meta muted">
         @Model.Rules.SupervisorPercent% of job profit to supervisors and @Model.Rules.FieldPercent% to the field, each split by hours on the job ·
         profit = billed (incl. retention) − costs · ready when the job is Completed and fully billed and collected ·
-        <a asp-page="/Financials/Bonuses" asp-route-show="@Model.Show" asp-route-refresh="true">Refresh</a>
+        <a class="refresh-button" asp-page="/Financials/Bonuses" asp-route-show="@Model.Show" asp-route-refresh="true">↻ Refresh</a>
     </p>
 
     <div class="kpis">

@@ -30,7 +30,7 @@ else
         <div class="card kpi"><span class="kpi-label">Owed to us</span><span class="kpi-value num">@Format.Money(Model.All.Sum(c => c.Owes))</span><span class="kpi-sub">@Model.All.Count(c => c.Owes >= 1) customers</span></div>
         <div class="card kpi"><span class="kpi-label">Reviews to request</span><span class="kpi-value num">@Model.All.Sum(c => c.Jobs.Count(j => CustomersService.NeedsReview(j, Model.Reviews)))</span><span class="kpi-sub">completed jobs</span></div>
     </div>
-    <p class="list-meta muted">Jobs from JobTread; balances and contact info from QuickBooks (matched by name) · <a asp-page="/Customers/Index" asp-route-show="@Model.Show" asp-route-q="@Model.Q" asp-route-refresh="true">Refresh</a></p>
+    <p class="list-meta muted">Jobs from JobTread; balances and contact info from QuickBooks (matched by name) · <a class="refresh-button" asp-page="/Customers/Index" asp-route-show="@Model.Show" asp-route-q="@Model.Q" asp-route-refresh="true">↻ Refresh JobTread + QuickBooks</a> @if (PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.DataAsOf is { } qbAsOf) { <span class="muted small">QuickBooks as of @Format.QbAsOf(qbAsOf)</span> }</p>
 
     <div class="job-list">
         @if (!Model.Shown.Any()) { <div class="card empty-state"><p class="muted">No customers here.</p></div> }

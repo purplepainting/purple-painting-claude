@@ -36,6 +36,7 @@ public class IndexModel(PayablesService payables, QuickBooksClient quickBooks, I
 
     public async Task OnGetAsync(bool refresh, CancellationToken ct)
     {
+        if (refresh) PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.ClearCache();
         ViewData["Title"] = "Vendors & Payables";
         ViewData["ModuleName"] = "Vendors & Payables";
         Connected = await quickBooks.GetConnectionAsync(ct) is not null;

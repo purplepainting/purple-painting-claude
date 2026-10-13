@@ -44,7 +44,7 @@ else if (Model.Report is { } r)
     var t = r.Total;
     <p class="list-meta muted">
         @Model.RangeFrom.ToString("MMM d, yyyy") – @Model.RangeTo.ToString("MMM d, yyyy") · @Model.CurrentBasis basis · QuickBooks is the source of truth ·
-        loaded @r.LoadedAt.ToString("h:mm tt") · <a asp-page="/Financials/Index" asp-all-route-data="Model.RouteFor()" asp-route-refresh="true">Refresh</a>
+        loaded @r.LoadedAt.ToString("h:mm tt") · <a class="refresh-button" asp-page="/Financials/Index" asp-all-route-data="Model.RouteFor()" asp-route-refresh="true">↻ Refresh JobTread + QuickBooks</a> @if (PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.DataAsOf is { } qbAsOf) { <span class="muted small">QuickBooks as of @Format.QbAsOf(qbAsOf)</span> }
         @if (Model.RangeFrom < IndexModel.JobTreadStart) { <br><span class="notice-inline warn">JobTread data starts around May 2026, so earlier months only have QuickBooks numbers.</span> }
     </p>
 

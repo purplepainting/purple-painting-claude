@@ -54,7 +54,7 @@ else
 {
     <p class="list-meta muted">
         @Model.Jobs.Count @(Model.Jobs.Count == 1 ? "job" : "jobs") · from JobTread at @Model.LoadedAt.ToString("h:mm tt") ·
-        <a asp-page="/Projects/Index" asp-all-route-data="Model.RouteFor(Model.CurrentView.Key)" asp-route-refresh="true">Refresh</a>
+        <a class="refresh-button" asp-page="/Projects/Index" asp-all-route-data="Model.RouteFor(Model.CurrentView.Key)" asp-route-refresh="true">↻ Refresh</a>
     </p>
 
     @if (Model.Jobs.Count == 0)

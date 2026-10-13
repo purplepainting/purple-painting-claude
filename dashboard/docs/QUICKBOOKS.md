@@ -48,3 +48,10 @@ clicks **Sign in with JobTread** (or, as a backup, pastes their own grant key). 
   JobTread's MCP server (`https://api.jobtread.com/mcp`, tool `query`). Which one is saved per person (`AuthKind`).
 - Tokens (and pasted keys) are saved encrypted in `JobTreadUserKeys`, per Entra user, and refreshed automatically.
 - Code: `Integrations/JobTread/JobTreadOAuth.cs`, `JobTreadUserKeys.cs`, `Pages/Connections/JobTreadCallback.cshtml.cs`.
+
+## How often QuickBooks is read
+
+QuickBooks only needs a daily refresh. `QuickBooksClient` keeps every query and report result until the next 5am
+(Pacific), so the first page that needs it after 5am pulls fresh data and everyone shares it for the day. The
+**Refresh** button on Financials, Job by job, Vendors and Customers drops all QuickBooks data and pulls it again;
+those pages show "QuickBooks as of …". Connecting or disconnecting QuickBooks also clears it.

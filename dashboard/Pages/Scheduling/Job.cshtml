@@ -13,7 +13,7 @@
             @Model.JobType
             @if (Model.ProjectManager is not null) { <span class="pm-tag" style="@Model.Team.PmStyle(Model.ProjectManager)">PM @Model.ProjectManager.Split(' ')[0]</span> }
             · <a href="@JobTreadIds.JobUrl(Model.JobId)" target="_blank" rel="noopener">JobTread ↗</a>
-            · <a asp-page="/Scheduling/Job" asp-route-id="@Model.JobId" asp-route-refresh="true">Refresh</a>
+            · <a class="refresh-button" asp-page="/Scheduling/Job" asp-route-id="@Model.JobId" asp-route-refresh="true">↻ Refresh</a>
         </p>
     </div>
 </div>

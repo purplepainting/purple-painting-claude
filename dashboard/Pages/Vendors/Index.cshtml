@@ -31,7 +31,7 @@ else
         <div class="card kpi"><span class="kpi-label">Due in 14 days</span><span class="kpi-value num">@Format.Money(Model.DueSoon.Sum(b => b.Balance))</span><span class="kpi-sub">@Model.DueSoon.Count() bills</span></div>
         <div class="card kpi"><span class="kpi-label">All open bills</span><span class="kpi-value num">@Format.Money(Model.Bills.Sum(b => b.Balance))</span><span class="kpi-sub">@Model.Bills.Count bills · @Model.Bills.Select(b => b.Vendor).Distinct().Count() vendors</span></div>
     </div>
-    <p class="list-meta muted">From QuickBooks (read only) · <a asp-page="/Vendors/Index" asp-route-view="@Model.View" asp-route-q="@Model.Q" asp-route-refresh="true">Refresh</a></p>
+    <p class="list-meta muted">From QuickBooks (read only) · <a class="refresh-button" asp-page="/Vendors/Index" asp-route-view="@Model.View" asp-route-q="@Model.Q" asp-route-refresh="true">↻ Refresh QuickBooks</a> @if (PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.DataAsOf is { } qbAsOf) { <span class="muted small">QuickBooks as of @Format.QbAsOf(qbAsOf)</span> }</p>
 
     @if (Model.CurrentView == "vendors")
     {

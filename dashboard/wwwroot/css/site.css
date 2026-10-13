@@ -508,3 +508,8 @@ body.navigating .page { opacity: .6; transition: opacity .2s .15s; pointer-event
 body.navigating { cursor: progress; }
 @keyframes nav-progress { from { width: 0; } 10% { width: 35%; } to { width: 92%; } }
 @media (prefers-reduced-motion: reduce) { body.navigating .nav-progress { animation: none; width: 60%; } }
+
+/* Refresh: a small button next to "loaded at" lines. */
+.refresh-button { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0 12px; margin: 2px 0; border-radius: 999px; border: 1px solid var(--border); background: var(--card); color: var(--purple-700); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; vertical-align: middle; }
+@media (hover: hover) { .refresh-button:hover { border-color: var(--purple-600); } }
+.refresh-button:active, .refresh-button.pressed { background: var(--purple-50); }

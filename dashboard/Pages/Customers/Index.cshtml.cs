@@ -35,6 +35,7 @@ public class IndexModel(CustomersService customers, ChangeLogWriter changeLog, D
 
     public async Task OnGetAsync(bool refresh, CancellationToken ct)
     {
+        if (refresh) PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.ClearCache();
         ViewData["Title"] = "Customers";
         ViewData["ModuleName"] = "Customers";
         try
