@@ -20,7 +20,7 @@ Settings → Users & access (needs the local database below).
 To see real JobTread data locally, set the grant key first: `dotnet user-secrets set JOBTREAD_API_KEY <key>`
 (never put it in a file in the repo). Or point at saved sample responses with
 `JobTread__FixtureDirectory=/path/to/folder dotnet run`, where the folder has one `{query name}.json`
-per query (`financials-months`, `projects-list`, `projects-activity`, `projects-detail`, `schedule-week`, `people-staff`, `labor-entries`, `projects-closed`, `sales-leads`, and for pushes `schedule-job-tasks`, `schedule-current`, `schedule-update`, `schedule-create`, `schedule-delete`).
+per query (`financials-months`, `projects-list`, `projects-activity`, `projects-detail`, `schedule-week`, `people-staff`, `labor-entries`, `projects-closed`, `sales-leads`, `bonus-month-yyyy-MM` (one per month from the bonus start month), and for pushes `schedule-job-tasks`, `schedule-current`, `schedule-update`, `schedule-create`, `schedule-delete`).
 
 **QuickBooks locally:** `QuickBooks__FixtureDirectory=/path` serves saved reports (`ProfitAndLoss.json`, `ProfitAndLoss-Customers.json`, `BalanceSheet.json`, `GeneralLedger.json` for ad spend) and queries (`query-{Entity}.json`, e.g. `query-Bill.json`, `query-Customer.json`, `query-Account.json` for the ad accounts) instead of calling Intuit.
 
@@ -54,6 +54,8 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Integrations/Meta/` | Facebook/Instagram ads via the Meta Marketing API (read only; API version constant in `MetaOptions`). Setup: `docs/META.md`. Connections card: `ViewComponents/MetaConnectionViewComponent.cs`; Sales section: `Modules/Sales/MetaAdsService.cs`, `Pages/Sales/_MetaAds.cshtml` |
 | `Modules/Financials/` | Financials: QuickBooks report parsing, account rules (which account counts as wages, burden, job cost, overhead), JobTread vs QuickBooks by month |
 | `Pages/Connections/` | Connections page: JobTread status, your own JobTread key (for pushes), connect QuickBooks, connect Google (pick the Ads account and Business Profile location) |
+| `Modules/Financials/Bonus*.cs` | Monthly bonuses: `BonusRules` (rules + the split formulas + saved rules store), `BonusMonths` (JobTread per job per month), `BonusService` (job months, clawbacks, locks, payments), `BonusLedger` (each person's year, eligibility). `PayrollPayments` reads paychecks from QuickBooks (any pay item's account: bonuses 6114, commissions 6490) |
+| `Pages/Financials/Bonuses.cshtml`, `Pages/Settings/Bonuses.cshtml` | Bonuses page (reconcile, payments, payroll checks, jobs, effort) and Settings → Bonus rules |
 | `Modules/Changes/` | Change log page data: `ChangeLogReader` (filters, paging), `ChangeFormatter` (one summary formatter per area; add one when a new area starts logging), `PersonNames` (email → name) |
 | `Modules/People/TeamDirectory.cs` | Everyone's crew level and PM color (Employees page, then settings, then JobTread role) |
 | `ViewComponents/SideNavViewComponent.cs` | Builds the left menu tiles and their numbers |

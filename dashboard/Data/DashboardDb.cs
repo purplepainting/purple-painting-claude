@@ -17,6 +17,14 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<JobTreadUserKey> JobTreadUserKeys => Set<JobTreadUserKey>();
     public DbSet<JobTreadOAuthClient> JobTreadOAuthClients => Set<JobTreadOAuthClient>();
     public DbSet<BonusPayout> BonusPayouts => Set<BonusPayout>();
+    public DbSet<BonusPayment> BonusPayments => Set<BonusPayment>();
+    public DbSet<BonusClawback> BonusClawbacks => Set<BonusClawback>();
+    public DbSet<EffortRating> EffortRatings => Set<EffortRating>();
+    public DbSet<BonusExclusion> BonusExclusions => Set<BonusExclusion>();
+    public DbSet<BonusRetentionRelease> BonusRetentionReleases => Set<BonusRetentionRelease>();
+    public DbSet<DashboardSetting> DashboardSettings => Set<DashboardSetting>();
+    public DbSet<BonusAdjustment> BonusAdjustments => Set<BonusAdjustment>();
+    public DbSet<PayLock> PayLocks => Set<PayLock>();
     public DbSet<CommissionRule> CommissionRules => Set<CommissionRule>();
     public DbSet<CommissionPayment> CommissionPayments => Set<CommissionPayment>();
     public DbSet<SalesActivity> SalesActivities => Set<SalesActivity>();
@@ -90,6 +98,78 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.Status).HasMaxLength(20);
             e.Property(x => x.ApprovedBy).HasMaxLength(200);
             e.Property(x => x.PaidBy).HasMaxLength(200);
+        });
+        b.Entity<BonusPayment>(e =>
+        {
+            e.HasIndex(x => x.PaidOn);
+            e.Property(x => x.Person).HasMaxLength(200);
+            e.Property(x => x.Amount).HasColumnType("decimal(12,2)");
+            e.Property(x => x.Covers).HasMaxLength(100);
+            e.Property(x => x.JobId).HasMaxLength(32);
+            e.Property(x => x.JobName).HasMaxLength(300);
+            e.Property(x => x.Note).HasMaxLength(500);
+            e.Property(x => x.Source).HasMaxLength(20);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+        });
+        b.Entity<BonusExclusion>(e =>
+        {
+            e.HasIndex(x => new { x.Month, x.Person }).IsUnique();
+            e.Property(x => x.Month).HasMaxLength(7);
+            e.Property(x => x.Person).HasMaxLength(200);
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+        });
+        b.Entity<BonusRetentionRelease>(e =>
+        {
+            e.HasIndex(x => x.Month);
+            e.Property(x => x.Month).HasMaxLength(7);
+            e.Property(x => x.Person).HasMaxLength(200);
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+        });
+        b.Entity<PayLock>(e =>
+        {
+            e.HasIndex(x => new { x.Kind, x.Person, x.Month }).IsUnique();
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.Person).HasMaxLength(200);
+            e.Property(x => x.Month).HasMaxLength(7);
+            e.Property(x => x.Net).HasColumnType("decimal(12,2)");
+            e.Property(x => x.Owed).HasColumnType("decimal(12,2)");
+            e.Property(x => x.Gross).HasColumnType("decimal(12,2)");
+            e.Property(x => x.CheckNum).HasMaxLength(100);
+            e.Property(x => x.LockedBy).HasMaxLength(200);
+        });
+        b.Entity<BonusAdjustment>(e =>
+        {
+            e.HasIndex(x => x.Month);
+            e.Property(x => x.Person).HasMaxLength(200);
+            e.Property(x => x.Month).HasMaxLength(7);
+            e.Property(x => x.Amount).HasColumnType("decimal(12,2)");
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+        });
+        b.Entity<EffortRating>(e =>
+        {
+            e.HasIndex(x => new { x.Month, x.MembershipId, x.RatedBy }).IsUnique();
+            e.Property(x => x.Month).HasMaxLength(7);
+            e.Property(x => x.MembershipId).HasMaxLength(32);
+            e.Property(x => x.Person).HasMaxLength(200);
+            e.Property(x => x.Score).HasColumnType("decimal(5,2)");
+            e.Property(x => x.Notes).HasMaxLength(1000);
+            e.Property(x => x.RatedBy).HasMaxLength(200);
+        });
+        b.Entity<BonusClawback>(e =>
+        {
+            e.HasIndex(x => x.JobId);
+            e.Property(x => x.JobId).HasMaxLength(32);
+            e.Property(x => x.JobName).HasMaxLength(300);
+            e.Property(x => x.Month).HasMaxLength(7);
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.Pool).HasMaxLength(20);
+            e.Property(x => x.Amount).HasColumnType("decimal(12,2)");
+            e.Property(x => x.Reason).HasMaxLength(500);
+            e.Property(x => x.CreatedBy).HasMaxLength(200);
+            e.Property(x => x.UpdatedBy).HasMaxLength(200);
         });
         b.Entity<CommissionRule>(e =>
         {
@@ -340,8 +420,9 @@ public sealed class JobTreadOAuthClient
 }
 
 /// <summary>
-/// A job's bonus once someone approves it: the profit and pools at that moment and each person's share
-/// (LinesJson), then marked paid. Before approval, bonuses are calculated live from JobTread.
+/// Before monthly bonuses (Oct 2026): a job's bonus once someone approved it, with each person's share
+/// (LinesJson), then marked paid. Kept as history. Paid ones were copied into <see cref="BonusPayment"/>
+/// (one per person, Source "migrated") the first time the monthly page loaded; MigratedAt marks that.
 /// </summary>
 public sealed class BonusPayout
 {
@@ -359,6 +440,157 @@ public sealed class BonusPayout
     public string? ApprovedBy { get; set; }
     public DateTime? PaidAt { get; set; }
     public string? PaidBy { get; set; }
+    /// <summary>When this approval was copied into BonusPayments (paid ones) or noted as history (approved, never paid).</summary>
+    public DateTime? MigratedAt { get; set; }
+}
+
+/// <summary>
+/// A bonus paid to someone (usually a Bonus Only payroll check). Counts in the calendar year of <see cref="PaidOn"/>; one dated
+/// in month M+1 settles month M on the reconcile. Not tied to a job; JobId/Covers only note what it was for.
+/// </summary>
+public sealed class BonusPayment
+{
+    public int Id { get; set; }
+    /// <summary>Name as in JobTread (the bonus lines use JobTread names).</summary>
+    public required string Person { get; set; }
+    public decimal Amount { get; set; }
+    public DateOnly PaidOn { get; set; }
+    /// <summary>What it covers, free text (e.g. "Sep 2026 bonus").</summary>
+    public string? Covers { get; set; }
+    public string? JobId { get; set; }
+    public string? JobName { get; set; }
+    public string? Note { get; set; }
+    /// <summary>"manual", "payroll" (Record from payroll) or "migrated" (from an old per-job approval).</summary>
+    public string Source { get; set; } = "manual";
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>
+/// A rater's effort score for a field employee for one month (one per month, person and rater; saving again
+/// replaces it). The plain average of everyone's scores feeds the effort part of the field pool split.
+/// </summary>
+public sealed class EffortRating
+{
+    public int Id { get; set; }
+    /// <summary>"yyyy-MM".</summary>
+    public required string Month { get; set; }
+    /// <summary>JobTread membership id of the person rated.</summary>
+    public required string MembershipId { get; set; }
+    /// <summary>Their JobTread name when rated.</summary>
+    public required string Person { get; set; }
+    /// <summary>Whole number on the Bonuses:EffortScaleMin–Max scale (default 1–10).</summary>
+    public decimal Score { get; set; }
+    public string? Notes { get; set; }
+    /// <summary>The rater (signed-in email). Each rater has their own row; the person's score is the plain average.</summary>
+    public required string RatedBy { get; set; }
+    public DateTime RatedAt { get; set; }
+}
+
+/// <summary>
+/// "Paid &amp; locked": a person's month frozen once it's paid (matched to their payroll check, or recorded and
+/// confirmed). LinesJson is the snapshot of their lines at lock time; later changes to that month's data don't change
+/// it, the difference flows into the next open month as an automatic adjustment. Kind "bonus" (commissions can reuse it).
+/// </summary>
+public sealed class PayLock
+{
+    public int Id { get; set; }
+    public string Kind { get; set; } = "bonus";
+    public required string Person { get; set; }
+    /// <summary>"yyyy-MM".</summary>
+    public required string Month { get; set; }
+    /// <summary>JSON array of { JobId, JobName, Role, Hours, Amount, Clawback } at lock time.</summary>
+    public required string LinesJson { get; set; }
+    /// <summary>Their net for the month at lock time (sum of the lines).</summary>
+    public decimal Net { get; set; }
+    public decimal Owed { get; set; }
+    /// <summary>The payroll check it was matched to, if any.</summary>
+    public string? CheckNum { get; set; }
+    public DateOnly? CheckDate { get; set; }
+    public decimal? Gross { get; set; }
+    public DateTime LockedAt { get; set; }
+    public string? LockedBy { get; set; }
+}
+
+/// <summary>
+/// A manual line on someone's bonus year (waive a negative balance, correct something), with the reason.
+/// Positive adds to their year, negative takes away.
+/// </summary>
+public sealed class BonusAdjustment
+{
+    public int Id { get; set; }
+    public required string Person { get; set; }
+    /// <summary>"yyyy-MM" it counts in.</summary>
+    public required string Month { get; set; }
+    public decimal Amount { get; set; }
+    public required string Reason { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>
+/// A group of dashboard settings edited on the Settings pages, stored as JSON by key (e.g. "bonus-rules").
+/// App settings / appsettings.json are only the defaults until something is saved here.
+/// </summary>
+public sealed class DashboardSetting
+{
+    [System.ComponentModel.DataAnnotations.Key, System.ComponentModel.DataAnnotations.MaxLength(100)]
+    public required string Key { get; set; }
+    public required string Json { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    [System.ComponentModel.DataAnnotations.MaxLength(200)]
+    public string? UpdatedBy { get; set; }
+}
+
+/// <summary>
+/// Bonus retention released early by hand in a month, for one person (or everyone when Person is null): whatever
+/// is held for them at that point is paid out. Otherwise retention is released at year end (or when a job closes,
+/// depending on the Bonuses:RetentionRelease rule).
+/// </summary>
+public sealed class BonusRetentionRelease
+{
+    public int Id { get; set; }
+    /// <summary>"yyyy-MM".</summary>
+    public required string Month { get; set; }
+    public string? Person { get; set; }
+    public string? Reason { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>Someone left out of bonuses for one month by hand (write-up, more than 2 weeks off the schedule, ...).</summary>
+public sealed class BonusExclusion
+{
+    public int Id { get; set; }
+    /// <summary>"yyyy-MM".</summary>
+    public required string Month { get; set; }
+    /// <summary>JobTread name (bonus lines are by name).</summary>
+    public required string Person { get; set; }
+    public required string Reason { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+}
+
+/// <summary>
+/// Bonus taken back on a job in a month (a callback repaint, costs not in JobTread, a job that lost money).
+/// Kind "bonus": Amount is bonus dollars, from Pool ("both", "supervisor", "field"). Kind "cost": Amount is a
+/// cost or loss not in JobTread, and the bonus percentages of it come back from each pool.
+/// </summary>
+public sealed class BonusClawback
+{
+    public int Id { get; set; }
+    public required string JobId { get; set; }
+    public string? JobName { get; set; }
+    /// <summary>"yyyy-MM".</summary>
+    public required string Month { get; set; }
+    public string Kind { get; set; } = "bonus";
+    public string Pool { get; set; } = "both";
+    public decimal Amount { get; set; }
+    public required string Reason { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string? CreatedBy { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public string? UpdatedBy { get; set; }
 }
 
 /// <summary>A salesperson's commission rule. Person = the JobTread "Salesperson" value on jobs.</summary>

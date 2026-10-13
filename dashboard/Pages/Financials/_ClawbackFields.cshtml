@@ -1,0 +1,26 @@
+@model (PurpleDashboard.Data.BonusClawback? Clawback, IReadOnlyList<DateOnly> Months)
+@using PurpleDashboard.Modules.Financials
+@{
+    var c = Model.Clawback;
+    var month = c?.Month ?? BonusService.Key(Model.Months[^1]);
+}
+<label class="field"><span>Month</span>
+    <select name="clawMonth">
+        @foreach (var m in Model.Months.Reverse()) { <option value="@BonusService.Key(m)" selected="@(BonusService.Key(m) == month)">@BonusService.Label(m)</option> }
+    </select>
+</label>
+<label class="field"><span>Amount is</span>
+    <select name="kind">
+        <option value="cost" selected="@(c?.Kind == "cost")">A cost or loss not in JobTread (bonus % of it comes back)</option>
+        <option value="bonus" selected="@(c is null || c.Kind == "bonus")">Bonus dollars to take back</option>
+    </select>
+</label>
+<label class="field"><span>From (bonus dollars)</span>
+    <select name="pool">
+        <option value="both" selected="@(c is null || c.Pool == "both")">Both pools</option>
+        <option value="supervisor" selected="@(c?.Pool == "supervisor")">Supervisors</option>
+        <option value="field" selected="@(c?.Pool == "field")">Field</option>
+    </select>
+</label>
+<label class="field"><span>Amount</span><input name="amount" inputmode="decimal" value="@(c?.Amount.ToString("0.00"))" placeholder="0.00" style="width:110px" required></label>
+<label class="field grow"><span>Reason</span><input name="reason" value="@c?.Reason" placeholder="e.g. callback repaint not in JobTread" required></label>

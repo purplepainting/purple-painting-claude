@@ -1,0 +1,73 @@
+@page "/settings/bonuses"
+@model PurpleDashboard.Pages.Settings.BonusesModel
+@using PurpleDashboard.Infrastructure
+@using PurpleDashboard.Modules.Financials
+@{
+    var r = Model.Rules;
+    var d = Model.Defaults;
+    string Def(object v) => $"Default {v}";
+}
+
+<p class="list-meta muted"><a href="/settings">Settings</a> › Bonus rules ·
+    @(Model.UpdatedAt is { } at ? $"Last changed by {Model.UpdatedBy} on {at.ToLocalTime():MMM d, yyyy h:mm tt}" : "Using the defaults (nothing saved yet)") ·
+    <a href="/financials/bonuses">Bonuses</a> · <a href="/changes?section=bonuses">Change history</a></p>
+
+@if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
+@if (!Model.DatabaseReady) { <div class="card notice warn"><p>The dashboard database isn't available, so the rules can't be changed right now (the defaults are in use).</p></div> }
+else if (!Model.CanEdit) { <div class="card notice"><p>You can see the rules in use; changing them needs the "Bonus rules" permission.</p></div> }
+
+<form method="post" class="card fin-section settings-form">
+    <fieldset disabled="@(!Model.CanEdit)">
+        <h2 class="section-title">Pools</h2>
+        <div class="settings-fields">
+            <label class="field"><span>Supervisors' pool, % of job profit</span><input name="SupervisorPercent" inputmode="decimal" value="@r.SupervisorPercent.ToString("0.##")"><small class="muted">@Def(d.SupervisorPercent + "%")</small></label>
+            <label class="field"><span>Field pool, % of job profit</span><input name="FieldPercent" inputmode="decimal" value="@r.FieldPercent.ToString("0.##")"><small class="muted">@Def(d.FieldPercent + "%")</small></label>
+            <label class="field"><span>Field pool split by hours, % (the rest by effort)</span><input name="HoursShare" inputmode="decimal" value="@r.HoursShare.ToString("0.##")"><small class="muted">Now @r.HoursShare.ToString("0.##")% hours / @r.EffortShare.ToString("0.##")% effort · @Def(d.HoursShare.ToString("0.##") + "/" + d.EffortShare.ToString("0.##"))</small></label>
+            <label class="field"><span>Cap</span>
+                <select name="CapMode">
+                    <option value="hours-share-keep-excess" selected="@(r.CapMode == "hours-share-keep-excess")">@BonusOptions.CapModeLabel("hours-share-keep-excess")</option>
+                    <option value="effort-multiple" selected="@(r.CapMode == "effort-multiple")">@BonusOptions.CapModeLabel("effort-multiple")</option>
+                    <option value="none" selected="@(r.CapMode == "none")">@BonusOptions.CapModeLabel("none")</option>
+                </select><small class="muted">@Def(BonusOptions.CapModeLabel(d.CapMode))</small></label>
+            <label class="field"><span>Effort cap multiple (for "effort part capped")</span><input name="EffortCapMultiple" inputmode="decimal" value="@r.EffortCapMultiple.ToString("0.##")"><small class="muted">@Def(d.EffortCapMultiple.ToString("0.##") + "×")</small></label>
+            <label class="field"><span>People not eligible (probation, left, excluded)</span>
+                <select name="ForfeitMode">
+                    <option value="company" selected="@(r.ForfeitMode != "redistribute")">Their share is kept by the company</option>
+                    <option value="redistribute" selected="@(r.ForfeitMode == "redistribute")">Left out, so the pool goes to everyone else</option>
+                </select><small class="muted">@Def(d.ForfeitMode == "redistribute" ? "redistribute" : "kept by the company")</small></label>
+        </div>
+
+        <h2 class="section-title">Eligibility and effort</h2>
+        <div class="settings-fields">
+            <label class="field"><span>Probation, days after hire date</span><input name="ProbationDays" inputmode="numeric" value="@r.ProbationDays"><small class="muted">@Def(d.ProbationDays) · checked at the end of each month</small></label>
+            <label class="field"><span>Effort scale, 1 to</span><input name="EffortScaleMax" inputmode="numeric" value="@r.EffortScaleMax"><small class="muted">@Def(d.EffortScaleMax)</small></label>
+        </div>
+
+        <h2 class="section-title">Yearly ledger and payment</h2>
+        <div class="settings-fields">
+            <label class="field"><span>Retention held back, %</span><input name="RetentionPercent" inputmode="decimal" value="@r.RetentionPercent.ToString("0.##")"><small class="muted">@Def(d.RetentionPercent + "%")</small></label>
+            <label class="field"><span>Retention released</span>
+                <select name="RetentionRelease">
+                    <option value="year-end" selected="@(r.RetentionRelease != "job-close")">At year end (settlement paid with January)</option>
+                    <option value="job-close" selected="@(r.RetentionRelease == "job-close")">When each job is closed in JobTread</option>
+                </select><small class="muted">Admins can also release early on the Bonuses page</small></label>
+            <label class="field"><span>Negative year-end balance</span>
+                <select name="NegativeCarryOver">
+                    <option value="true" selected="@r.NegativeCarryOver">Carries into next year</option>
+                    <option value="false" selected="@(!r.NegativeCarryOver)">Resets to zero</option>
+                </select><small class="muted">@Def(d.NegativeCarryOver ? "carries over" : "resets")</small></label>
+            <label class="field"><span>When the company loses money in a month</span>
+                <select name="HoldWhenCompanyLoses">
+                    <option value="false" selected="@(!r.HoldWhenCompanyLoses)">Still pay what's owed</option>
+                    <option value="true" selected="@r.HoldWhenCompanyLoses">Hold: nothing payable that month (stays owed)</option>
+                </select><small class="muted">Uses QuickBooks net profit for the month</small></label>
+            <label class="field"><span>Start month</span><input type="month" name="StartMonth" value="@r.StartMonth"><small class="muted">@Def(d.StartMonth) · the last spreadsheet round paid through Jul 26, 2026</small></label>
+            <label class="field"><span>Bonus wage account(s) in QuickBooks</span><input name="BonusAccounts" value="@r.BonusAccounts"><small class="muted">Number or name, comma separated · @Def(d.BonusAccounts) (Bonus Payroll)</small></label>
+        </div>
+
+        @if (Model.CanEdit)
+        {
+            <div class="form-actions"><button class="button" type="submit">Save rules</button><span class="muted small">Each change is logged with before → after. Paid &amp; locked months don't change; differences go into the next open month.</span></div>
+        }
+    </fieldset>
+</form>

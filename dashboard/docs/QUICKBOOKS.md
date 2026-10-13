@@ -49,6 +49,24 @@ clicks **Sign in with JobTread** (or, as a backup, pastes their own grant key). 
 - Tokens (and pasted keys) are saved encrypted in `JobTreadUserKeys`, per Entra user, and refreshed automatically.
 - Code: `Integrations/JobTread/JobTreadOAuth.cs`, `JobTreadUserKeys.cs`, `Pages/Connections/JobTreadCallback.cshtml.cs`.
 
+## Paychecks (bonuses, commissions)
+
+The connection is the Accounting API only (no payroll API), but processed paychecks post to the books: each pay item's
+wage line lands on its expense account. `Modules/Financials/PayrollPayments.cs` reads them for any account:
+
+- Chart of accounts: `select Id, Name, AcctNum, FullyQualifiedName, Classification, AccountType, Active from Account` (fixture `query-Account.json`).
+- `GeneralLedger` report for the period with `account=<ids>` and `columns=tx_date,txn_type,doc_num,name,memo,subt_nat_amount`
+  (fixture `GeneralLedger.json`). Each Data row under the account's section = one paycheck line: date, type (Paycheck),
+  check number (Num), employee (Name, with the QuickBooks employee id when the report gives one), gross amount.
+- Pay item **Bonus** → **6114 Management Payroll:Bonus Payroll** (bonuses are paid as separate "Bonus Only" checks, one
+  per person, once a month). Set on Settings → Bonus rules (default `6114`). Pay item **Commission** → **6490 Sales
+  Commissions Overhead** (`Sales:CommissionAccounts`, default 6490; for the commissions reconcile, not built yet).
+- If no account matches (or it has no lines) and a memo word is given, Paycheck lines whose memo says "Bonus" are used.
+- People are matched to JobTread staff by QuickBooks employee id (`qboEmployeeId` on the membership), then by name.
+- Hire and release dates for bonus probation come from `select Id, HiredDate, ReleasedDate, Active from Employee`
+  (`Modules/People/QbEmployeeStatus.cs`).
+- 6114 is classified as overhead ("Bonuses") in `AccountRules`, not field wages.
+
 ## Accounts used for ad spend (Sales & Marketing → Ads)
 
 `Modules/Sales/QuickBooksAdSpendService.cs` reads ad spend booked under **6400 Marketing & Sales**: one

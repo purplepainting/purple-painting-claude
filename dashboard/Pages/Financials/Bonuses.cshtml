@@ -3,6 +3,20 @@
 @using PurpleDashboard.Infrastructure
 @using PurpleDashboard.Integrations.JobTread
 @using PurpleDashboard.Modules.Financials
+@{
+    var sel = Model.Selected;
+    var key = BonusesModel.Key(sel);
+    var label = BonusesModel.Label(sel);
+    var payLabel = BonusesModel.Label(sel.AddMonths(1));
+    var monthIndex = Model.Months.ToList().IndexOf(sel);
+    DateOnly? prev = monthIndex > 0 ? Model.Months[monthIndex - 1] : null;
+    DateOnly? next = monthIndex >= 0 && monthIndex < Model.Months.Count - 1 ? Model.Months[monthIndex + 1] : null;
+    string Signed(decimal d) => d > 0 ? "+" + Format.Money(d) : Format.Money(d);
+    string Cents(decimal d) => d.ToString("$#,##0.00;-$#,##0.00");
+    bool InlineFor(string id) => Model.Open == id && Model.Message is not null;
+    var r = Model.Rules;
+    var notRatedCount = Model.Ledger?.NotRated(sel).Count ?? 0;
+}
 
 <div class="module-head">
     <div class="pills" role="tablist" aria-label="Financials sections">
@@ -14,122 +28,549 @@
     </div>
 </div>
 
-@if (Model.Message is not null) { <div class="card notice"><p>@Model.Message</p></div> }
-@if (!Model.CanEdit) { <div class="card notice warn"><p>The dashboard database isn't available, so bonuses can be seen but not approved or marked paid.</p></div> }
+<div class="bonus-bar">
+    <div class="schedule-nav">
+        @if (prev is { } pm0) { <a class="button secondary icon" asp-route-month="@BonusesModel.Key(pm0)" asp-route-tab="@Model.Tab" aria-label="Previous month">‹</a> } else { <span class="button secondary icon disabled" aria-hidden="true">‹</span> }
+        <form method="get" class="filters" data-autosubmit>
+            @if (Model.Tab is not null) { <input type="hidden" name="tab" value="@Model.Tab"> }
+            <select name="month" aria-label="Month">
+                @foreach (var m in Model.Months.Reverse()) { <option value="@BonusesModel.Key(m)" selected="@(m == sel)">@BonusesModel.Label(m)</option> }
+            </select>
+        </form>
+        @if (next is { } n) { <a class="button secondary icon" asp-route-month="@BonusesModel.Key(n)" asp-route-tab="@Model.Tab" aria-label="Next month">›</a> } else { <span class="button secondary icon disabled" aria-hidden="true">›</span> }
+    </div>
+    <div class="pills" role="tablist" aria-label="Bonus views">
+        @if (Model.CanView)
+        {
+            <a class="pill@(Model.CurrentTab == "reconcile" ? " active" : "")" asp-route-month="@key">Monthly reconcile</a>
+            <a class="pill@(Model.CurrentTab == "jobs" ? " active" : "")" asp-route-month="@key" asp-route-tab="jobs">Jobs</a>
+        }
+        <a class="pill@(Model.CurrentTab == "effort" ? " active" : "")" asp-route-month="@key" asp-route-tab="effort">Effort &amp; eligibility @if (notRatedCount > 0) { <span class="pill-count">@notRatedCount</span> }</a>
+    </div>
+</div>
+
+@if (Model.Message is not null && Model.Open is null) { <div class="card notice"><p>@Model.Message</p></div> }
+@if (!Model.DbAvailable) { <div class="card notice warn"><p>The dashboard database isn't available, so bonuses can be seen but nothing can be saved.</p></div> }
 
 @if (Model.Error is not null)
 {
     <div class="card notice warn"><strong>Couldn't load bonuses.</strong><p>@Model.Error</p></div>
 }
-else
+else if (Model.Ledger is { } ledger)
 {
-    <p class="list-meta muted">
-        @Model.Rules.SupervisorPercent% of job profit to supervisors and @Model.Rules.FieldPercent% to the field, each split by hours on the job ·
-        profit = billed (incl. retention) − costs · ready when the job is Completed and fully billed and collected ·
-        <a class="refresh-button" asp-page="/Financials/Bonuses" asp-route-show="@Model.Show" asp-route-refresh="true">↻ Refresh</a>
-    </p>
+    <details class="card fin-section bonus-rules">
+        <summary class="section-title">How bonuses are calculated <span class="muted small">(live rules · <a href="/settings/bonuses">change in Settings</a>)</span></summary>
+        <ul class="bonus-rule-list">
+            <li><b>Per job, per month.</b> Profit = customer invoices issued that month (approved and pending, net of retention) − costs that month (time entries by start date + vendor bills by issue date), from JobTread.</li>
+            <li><b>Pools:</b> @r.SupervisorPercent% of the month's profit to supervisors and @r.FieldPercent% to the field. A month that <b>lost</b> money makes the pools negative: each person's share comes off their year's total.</li>
+            <li><b>Field pool split:</b> @r.HoursShare% by share of hours on the job that month, @r.EffortShare% by share of effort score (average of every rater's 1–@r.EffortScaleMax rating that month; not rated = no effort part). @BonusOptions.CapModeLabel(r.CapMode)@(r.CapMode == "effort-multiple" ? $" ({r.EffortCapMultiple:0.#}×)" : "").</li>
+            <li><b>Supervisors' pool:</b> split by each supervisor's hours on the job that month; if no supervisor clocked time on it, it goes to the job's Project Manager.</li>
+            <li><b>Eligibility:</b> no bonus during the first @r.ProbationDays days (hire date in QuickBooks, checked at the end of the month), after leaving, or when excluded for the month. @(r.ForfeitMode == "redistribute" ? "Their hours are left out, so the pool goes to everyone else." : "Shares are worked out as if they were eligible, and their share is kept by the company.")</li>
+            <li><b>Clawbacks</b> (costs not in JobTread, callbacks) are charged to the people on the job by their share of it so far this year.</li>
+            <li><b>Yearly ledger:</b> each person's lines add up over the calendar year, plus and minus. Owed = year-to-date net − @r.RetentionPercent% retention − paid this year, never below zero (nobody pays cash back). Retention is released @(r.RetentionRelease == "job-close" ? "when each job is closed in JobTread" : "in the year-end settlement, paid with January"). A negative year-end balance @(r.NegativeCarryOver ? "carries into next year" : "resets to zero").@(r.HoldWhenCompanyLoses ? " Nothing is payable for a month when the company's QuickBooks net profit is negative." : "")</li>
+            <li>Bonuses start @BonusesModel.Label(ledger.StartMonth). The last spreadsheet round paid through Jul 26, 2026, so <b>Jul 27–31, 2026 isn't covered by either</b>.</li>
+        </ul>
+    </details>
 
-    <div class="kpis">
-        <div class="card kpi"><span class="kpi-label">Ready to approve</span><span class="kpi-value num">@Format.Money(Model.Sum(BonusStatus.Ready))</span><span class="kpi-sub">@Model.Count(BonusStatus.Ready) jobs</span></div>
-        <div class="card kpi"><span class="kpi-label">Approved, not paid</span><span class="kpi-value num">@Format.Money(Model.Sum(BonusStatus.Approved))</span><span class="kpi-sub">@Model.Count(BonusStatus.Approved) jobs</span></div>
-        <div class="card kpi"><span class="kpi-label">Coming (jobs in progress)</span><span class="kpi-value num">@Format.Money(Model.Sum(BonusStatus.Projected))</span><span class="kpi-sub">at today's profit</span></div>
-        <div class="card kpi">
-            <span class="kpi-label">Paid this year</span><span class="kpi-value num">@Format.Money(Model.PaidYtd)</span>
-            <span class="kpi-sub">@(Model.QbBonusesYtd is { } qb ? $"QuickBooks Bonus Payroll: {Format.Money(qb)}" : "QuickBooks not connected")</span>
-        </div>
-    </div>
-    @if (Model.QbBonusesYtd is { } q && Math.Abs(q - Model.PaidYtd) >= 1)
+    @if (Model.CurrentTab == "reconcile")
     {
-        <div class="card notice warn"><p>QuickBooks Bonus Payroll this year (@Format.Money(q)) doesn't match bonuses marked paid here (@Format.Money(Model.PaidYtd)), a difference of @Format.Money(q - Model.PaidYtd). Bonuses paid before the dashboard, or office bonuses, will show up as a difference.</p></div>
-    }
+        var monthEntries = ledger.Entries.Where(e => e.Month == sel).ToList();
+        var jobMonths = ledger.Jobs.Select(j => j.In(sel)).OfType<JobMonthBonus>().ToList();
+        var kept = jobMonths.Sum(m => m.KeptByCompany);
+        var notRated = ledger.NotRated(sel);
 
-    <div class="pills" role="tablist" aria-label="Which bonuses">
-        @foreach (var (key, label) in new[] { ("ready", "Ready"), ("approved", "Approved"), ("projected", "Coming"), ("paid", "Paid"), ("all", "All") })
+        <p class="list-meta muted">
+            Each person's @sel.Year so far, as of the end of @label ·
+            <a class="refresh-button" asp-route-month="@key" asp-route-refresh="true">↻ Refresh JobTread</a> ·
+            <a class="refresh-button" asp-route-month="@key" asp-route-qbRefresh="true">↻ Refresh QuickBooks</a>@(Model.QbAsOf is { } asOf ? $" (as of {Format.QbAsOf(asOf)})" : "")
+        </p>
+
+        <div class="card notice@(Model.CompanyNet < 0 ? " warn" : "")">
+            <p>
+                <b>Company, @label:</b> QuickBooks net profit @(Model.CompanyNet is { } net ? Format.Money(net) : "— (QuickBooks not connected)") ·
+                bonus lines this month @Signed(monthEntries.Sum(e => e.Net)) (earned @Format.Money(monthEntries.Where(e => e.Net > 0).Sum(e => e.Net)), losses @Format.Money(monthEntries.Where(e => e.Net < 0).Sum(e => e.Net)))
+                @if (kept > 0) { <text> · kept by the company @Format.Money(kept) (probation, left, excluded, cap)</text> } else if (kept < 0) { <text> · company carries @Format.Money(-kept) of losses (shares of people not eligible)</text> }
+            </p>
+            @if (Model.CompanyNet < 0) { <p>@(Model.Held ? "The company lost money this month, so nothing is payable for it (the rule in Settings); amounts stay owed." : "The company lost money this month but bonuses are still being paid (Settings: hold when the company loses is off).")</p> }
+        </div>
+        @if (notRated.Count > 0)
         {
-            <a class="pill@((Model.Show ?? "ready") == key ? " active" : "")" asp-page="/Financials/Bonuses" asp-route-show="@(key == "ready" ? null : key)">@label</a>
+            <div class="card notice warn"><p>@notRated.Count field employee@(notRated.Count == 1 ? " isn't" : "s aren't") rated for @label yet (@string.Join(", ", notRated.Select(s => s.Name))). Their effort part is 0 until rated. <a asp-route-month="@key" asp-route-tab="effort">Rate effort</a> before paying.</p></div>
         }
-    </div>
 
-    <div class="job-list" style="margin-top:10px">
-        @if (!Model.Shown.Any()) { <div class="card empty-state"><p class="muted">No bonuses here.</p></div> }
-        @foreach (var b in Model.Shown)
-        {
-            <details class="job card emp">
-                <summary class="emp-row with-chip">
-                    <span class="chip @(b.Status switch { BonusStatus.Ready => "warn", BonusStatus.Paid => "good", BonusStatus.Approved => "active", _ => "" })">@(b.Status == BonusStatus.Projected ? "Coming" : b.Status.ToString())</span>
-                    <div class="job-main">
-                        <div class="job-title">@(b.Number is null ? "" : "#" + b.Number + " ")@b.JobName</div>
-                        <div class="job-sub muted">Profit @Format.Money(b.Profit) @(b.Waiting is { } w ? "· waiting: " + w : "")@(b.ProjectManager is { } pm ? " · PM " + pm : "")</div>
+        <div class="kpis">
+            <div class="card kpi"><span class="kpi-label">Owed now</span><span class="kpi-value num">@Format.Money(Model.Rows.Sum(x => Model.PayableNow(x)))</span><span class="kpi-sub">@Model.Rows.Count(x => x.Owed >= 1) people@(Model.Held ? " · held this month" : "")</span></div>
+            <div class="card kpi"><span class="kpi-label">@label net</span><span class="kpi-value num">@Signed(Model.Rows.Sum(x => x.MonthNet))</span><span class="kpi-sub">all jobs, plus and minus</span></div>
+            <div class="card kpi"><span class="kpi-label">Paid for @label</span><span class="kpi-value num">@Format.Money(Model.PayrollRows.Sum(x => x.Recorded))</span><span class="kpi-sub">recorded, dated in @payLabel</span></div>
+            <div class="card kpi"><span class="kpi-label">Retention held</span><span class="kpi-value num">@Format.Money(Model.Rows.Sum(x => x.Held))</span><span class="kpi-sub">@r.RetentionPercent%, @(r.RetentionRelease == "job-close" ? "until jobs close" : "until the year-end settlement")</span></div>
+        </div>
+
+        <section class="fin-section-plain">
+            <h2 class="section-title">Monthly reconcile · @label</h2>
+            <p class="muted small">Year to date: earned (+) and losses (−) from every job, adjustments, retention held, paid this year → owed now. Open a person for their jobs this month and the year so far.</p>
+            <div class="job-list">
+                @if (Model.Rows.Count == 0) { <div class="card empty-state"><p class="muted">No bonus activity in @sel.Year up to @label.</p></div> }
+                @foreach (var p in Model.Rows)
+                {
+                    var slug = BonusesModel.Slug(p.Name);
+                    var why = ledger.Eligibility.Why(p.Name, sel);
+                    var lk = ledger.LockFor(p.Name, sel);
+                    <details class="job card emp" id="rec-@slug" open="@(Model.Open == "rec-" + slug || Model.Only is not null)">
+                        <summary class="emp-row with-chip">
+                            <span class="chip@(p.Role == BonusPools.Supervisor ? " active" : "")">@(p.Role == BonusPools.Supervisor ? "Sup" : "Field")</span>
+                            <div class="job-main">
+                                <div class="job-title">@p.Name @if (lk is not null) { <span class="small-chip good" title="Paid & locked">🔒 Paid &amp; locked</span> }</div>
+                                <div class="job-sub muted">YTD @Signed(p.YtdEarned) · @Format.Money(p.YtdLosses) losses · held @Format.Money(p.Held) · paid @Format.Money(p.YtdPaid)@(p.ToMakeUp > 0 ? $" · {Format.Money(p.ToMakeUp)} to make up" : "")@(why is not null ? " · " + why : "")</div>
+                            </div>
+                            <span class="emp-rates num"><span>@label @Signed(p.MonthNet)</span><span class="muted">YTD net @Format.Money(p.YtdNet)</span></span>
+                            <span class="emp-hours num"><b>@Format.Money(Model.PayableNow(p))</b></span>
+                            <span class="chevron" aria-hidden="true"></span>
+                        </summary>
+                        <div class="job-detail bonus-detail">
+                            @if (InlineFor("rec-" + slug)) { <p class="notice-inline good">@Model.Message</p> }
+                            <dl class="detail-grid money">
+                                @if (p.Opening != 0) { <div><dt>@(p.Opening > 0 ? $"Year-end settlement {p.Year - 1}" : $"Carried from {p.Year - 1}")</dt><dd class="num">@Signed(p.Opening)</dd></div> }
+                                <div><dt>Earned (+), @p.Year</dt><dd class="num">@Format.Money(p.YtdEarned)</dd></div>
+                                <div><dt>Losses (−)</dt><dd class="num">@Format.Money(p.YtdLosses)</dd></div>
+                                @if (p.YtdAdjustments != 0) { <div><dt>Adjustments</dt><dd class="num">@Signed(p.YtdAdjustments)</dd></div> }
+                                <div><dt>Net, year to date</dt><dd class="num">@Format.Money(p.YtdNet)</dd></div>
+                                <div><dt>Retention held</dt><dd class="num">−@Format.Money(p.Held)@(p.ReleasedYtd > 0 ? $" ({Format.Money(p.ReleasedYtd)} released early)" : "")</dd></div>
+                                <div><dt>Paid, @p.Year</dt><dd class="num">−@Format.Money(p.YtdPaid)</dd></div>
+                                <div><dt>Owed now</dt><dd class="num"><b>@Format.Money(p.Owed)</b>@(Model.Held && p.Owed > 0 ? " (held: company lost money)" : "")</dd></div>
+                                @if (p.ToMakeUp > 0) { <div><dt>To make up</dt><dd class="num">@Format.Money(p.ToMakeUp) <span class="muted small">comes off future bonuses</span></dd></div> }
+                            </dl>
+                            @if (lk is not null)
+                            {
+                                <p class="small">🔒 @label paid &amp; locked @Format.Date(DateOnly.FromDateTime(lk.LockedAt.ToLocalTime())) by @lk.LockedBy: net @Cents(lk.Net)@(lk.CheckNum is { } cn ? $", check {cn}" : "")@(lk.Gross is { } g ? $", gross {Cents(g)}" : "")@(lk.CheckDate is { } cd ? $" on {Format.Date(cd)}" : ""). Later changes to this month go into the next open month as an adjustment.</p>
+                            }
+                            @if (p.Jobs.Count > 0)
+                            {
+                                <div class="table-wrap">
+                                    <table class="data compact">
+                                        <thead><tr><th>@label by job</th><th class="num">Hours</th><th class="num">Share</th><th class="num">Clawback</th><th class="num">Net</th></tr></thead>
+                                        <tbody>
+                                            @foreach (var l in p.Jobs)
+                                            {
+                                                <tr><td>@(l.Job.Number is null ? "" : "#" + l.Job.Number + " ")@l.Job.Name @if (l.Capped) { <span class="small-chip" title="Share capped at their share of hours">capped at hours share</span> }</td><td class="num">@(l.Hours > 0 ? Format.Number(l.Hours) : "—")</td><td class="num">@Cents(l.Amount)</td><td class="num">@(l.Clawback != 0 ? "−" + Cents(l.Clawback) : "—")</td><td class="num@(l.Net < 0 ? " neg" : "")">@Cents(l.Net)</td></tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                            @if (p.JobsYtd.Count > 0)
+                            {
+                                <details class="ledger-ytd">
+                                    <summary class="link-button">@p.Year so far by job (@p.JobsYtd.Count)</summary>
+                                    <div class="table-wrap">
+                                        <table class="data compact">
+                                            <thead><tr><th>Job</th><th class="num">Share</th><th class="num">Clawback</th><th class="num">Net</th></tr></thead>
+                                            <tbody>
+                                                @foreach (var l in p.JobsYtd) { <tr><td>@(l.Job.Number is null ? "" : "#" + l.Job.Number + " ")@l.Job.Name</td><td class="num">@Cents(l.Amount)</td><td class="num">@(l.Clawback != 0 ? "−" + Cents(l.Clawback) : "—")</td><td class="num@(l.Net < 0 ? " neg" : "")">@Cents(l.Net)</td></tr> }
+                                                @foreach (var a in p.Adjustments)
+                                                {
+                                                    <tr>
+                                                        <td>Adjustment · @a.Reason <span class="muted small">(@BonusesModel.Label(DateOnly.ParseExact(a.Month + "-01", "yyyy-MM-dd"))@(a.CreatedBy is "automatic" or "lock" ? "" : ", " + a.CreatedBy))</span>
+                                                            @if (Model.CanEdit && a.Id > 0 && ledger.LockFor(p.Name, DateOnly.ParseExact(a.Month + "-01", "yyyy-MM-dd")) is null) { <form method="post" asp-page-handler="DeleteAdjustment" asp-route-month="@key" style="display:inline" onsubmit="return confirm('Delete this adjustment?')"><input type="hidden" name="id" value="@a.Id"><input type="hidden" name="person" value="@p.Name"><button class="link-button" type="submit">Delete</button></form> }
+                                                        </td>
+                                                        <td></td><td></td><td class="num@(a.Amount < 0 ? " neg" : "")">@Cents(a.Amount)</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </details>
+                            }
+                            @if (Model.CanEdit && Model.CanEdit)
+                            {
+                                <form method="post" asp-page-handler="Adjust" asp-route-month="@key" asp-route-only="@Model.Only" class="inline-form">
+                                    <input type="hidden" name="person" value="@p.Name">
+                                    <label class="field"><span>Adjustment (− takes away)</span><input name="amount" inputmode="decimal" placeholder="e.g. 150 or -75" style="width:150px" required></label>
+                                    <label class="field grow"><span>Reason (required)</span><input name="reason" placeholder="e.g. waive the loss on job 512" required></label>
+                                    <button class="button secondary" type="submit">Add adjustment</button>
+                                </form>
+                                @if (p.Held > 0)
+                                {
+                                    <form method="post" asp-page-handler="Release" asp-route-month="@key" asp-route-only="@Model.Only" class="inline-form" onsubmit="return confirm('Release @Format.Money(p.Held) of retention to @p.Name now?')">
+                                        <input type="hidden" name="person" value="@p.Name">
+                                        <label class="field grow"><span>Release retention early</span><input name="reason" placeholder="Reason (e.g. leaving on good terms)"></label>
+                                        <button class="button secondary" type="submit">Release @Format.Money(p.Held)</button>
+                                    </form>
+                                }
+                            }
+                        </div>
+                    </details>
+                }
+            </div>
+
+            @if (Model.Rows.Count > 0)
+            {
+                <div class="card table-wrap" style="margin-top:10px">
+                    <table class="data">
+                        <thead><tr><th>Pool</th><th class="num">@label net</th><th class="num">YTD net</th><th class="num">Held</th><th class="num">Paid @sel.Year</th><th class="num">Owed now</th></tr></thead>
+                        <tbody>
+                            @foreach (var g in new[] { BonusPools.Supervisor, BonusPools.Field })
+                            {
+                                var rows = Model.Rows.Where(x => x.Role == g).ToList();
+                                <tr><td>@(g == BonusPools.Supervisor ? "Supervisors" : "Field")</td><td class="num">@Signed(rows.Sum(x => x.MonthNet))</td><td class="num">@Format.Money(rows.Sum(x => x.YtdNet))</td><td class="num">@Format.Money(rows.Sum(x => x.Held))</td><td class="num">@Format.Money(rows.Sum(x => x.YtdPaid))</td><td class="num">@Format.Money(rows.Sum(x => Model.PayableNow(x)))</td></tr>
+                            }
+                            <tr class="total"><td>Total</td><td class="num">@Signed(Model.Rows.Sum(x => x.MonthNet))</td><td class="num">@Format.Money(Model.Rows.Sum(x => x.YtdNet))</td><td class="num">@Format.Money(Model.Rows.Sum(x => x.Held))</td><td class="num">@Format.Money(Model.Rows.Sum(x => x.YtdPaid))</td><td class="num">@Format.Money(Model.Rows.Sum(x => Model.PayableNow(x)))</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+
+        <section class="fin-section-plain" id="payments">
+            <h2 class="section-title">Payment reconcile · paying @label <span class="muted small">(payments dated in @payLabel)</span></h2>
+            <p class="muted small">@label's bonus is paid with @payLabel's bonus run. Due = owed at the end of @label@(sel.Month == 12 ? " plus the year-end settlement (retention released)" : ""). Record a payment per person (the amount starts at what's left); the payroll checks below can fill it in for you.</p>
+            <div class="job-list">
+                @foreach (var c in Model.PayrollRows.Where(x => x.Due >= 0.01m || x.Recorded != 0))
+                {
+                    var slug = BonusesModel.Slug(c.Name);
+                    <details class="job card emp" id="pay-@slug" open="@(Model.Open == "pay-" + slug)">
+                        <summary class="emp-row with-chip">
+                            <span class="chip@(c.Lock is not null || c.Remaining < 1 ? " good" : " warn")">@(c.Lock is not null ? "🔒" : c.Remaining < 1 ? "Paid" : "Owed")</span>
+                            <div class="job-main"><div class="job-title">@c.Name</div><div class="job-sub muted">Due @Cents(c.Due) · recorded @Cents(c.Recorded)@(c.Payments.Count > 0 ? $" ({c.Payments.Count} payment{(c.Payments.Count == 1 ? "" : "s")})" : "")</div></div>
+                            <span class="emp-hours num"><b>@Format.Money(c.Remaining)</b></span>
+                            <span class="chevron" aria-hidden="true"></span>
+                        </summary>
+                        <div class="job-detail bonus-detail">
+                            @if (Model.CanEdit && c.Lock is null)
+                            {
+                                <form method="post" asp-page-handler="Pay" asp-route-month="@key" asp-route-only="@Model.Only" class="inline-form">
+                                    <input type="hidden" name="person" value="@c.Name">
+                                    <label class="field"><span>Amount</span><input name="amount" inputmode="decimal" value="@(c.Remaining > 0 ? c.Remaining.ToString("0.00") : "")" placeholder="Amount" style="width:120px" required></label>
+                                    <label class="field"><span>Paid on</span><input type="date" name="paidOn" value="@BonusesModel.DefaultPaidOn(Model.PayMonth).ToString("yyyy-MM-dd")"></label>
+                                    <label class="field"><span>Covers</span><input name="covers" value="@label bonus" style="width:150px"></label>
+                                    <label class="field grow"><span>Note</span><input name="note" placeholder="Check #, payroll date"></label>
+                                    <button class="button" type="submit">Record payment</button>
+                                </form>
+                            }
+                            @if (InlineFor("pay-" + slug)) { <p class="notice-inline good">@Model.Message</p> }
+                            @if (c.Payments.Count > 0)
+                            {
+                                <div class="table-wrap">
+                                    <table class="data compact">
+                                        <thead><tr><th>Paid</th><th class="num">Amount</th><th>Covers</th><th>Note</th><th></th></tr></thead>
+                                        <tbody>
+                                            @foreach (var pay in c.Payments)
+                                            {
+                                                <tr><td>@Format.Date(pay.PaidOn)</td><td class="num">@Cents(pay.Amount)</td><td>@pay.Covers</td><td class="muted">@pay.Note</td>
+                                                    <td>@if (Model.CanEdit && c.Lock is null) { <form method="post" asp-page-handler="DeletePayment" asp-route-month="@key" asp-route-open="pay-@slug" asp-route-only="@Model.Only" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@pay.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+                        </div>
+                    </details>
+                }
+            </div>
+            @{ var allPaid = Model.PayrollRows.SelectMany(x => x.Payments).OrderBy(x => x.PaidOn).ThenBy(x => x.Person).ToList(); }
+            @if (allPaid.Count > 0)
+            {
+                <div class="card table-wrap" style="margin-top:10px">
+                    <table class="data">
+                        <thead><tr><th>Paid</th><th>Person</th><th class="num">Amount</th><th>Covers</th><th>Note</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var pay in allPaid)
+                            {
+                                <tr><td>@Format.Date(pay.PaidOn)</td><td>@pay.Person</td><td class="num">@Cents(pay.Amount)</td><td>@pay.Covers@(pay.JobName is { } jn ? " · " + jn : "")</td><td class="muted">@pay.Note@(pay.Source == "payroll" ? " (from payroll)" : pay.Source == "migrated" ? " (old job approval)" : "")</td>
+                                    <td>@if (Model.CanEdit && ledger.LockFor(pay.Person, sel) is null) { <form method="post" asp-page-handler="DeletePayment" asp-route-month="@key" asp-route-open="payments" asp-route-only="@Model.Only" onsubmit="return confirm('Delete this payment record?')"><input type="hidden" name="id" value="@pay.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
+                            }
+                        </tbody>
+                        <tfoot><tr><td colspan="2">Total</td><td class="num">@Cents(allPaid.Sum(x => x.Amount))</td><td colspan="3"></td></tr></tfoot>
+                    </table>
+                </div>
+            }
+            @if (InlineFor("payments")) { <p class="notice-inline good">@Model.Message</p> }
+        </section>
+
+        <section class="fin-section-plain" id="checks">
+            <h2 class="section-title">Payroll checks · paying @label <span class="muted small">(Bonus Only checks dated in @payLabel)</span></h2>
+            @if (Model.Payroll is { } pr)
+            {
+                @if (!pr.Ok)
+                {
+                    <div class="card notice warn"><p>@pr.Problem</p></div>
+                }
+                else
+                {
+                    <p class="muted small">"Bonus Only" paychecks posted in QuickBooks in @payLabel (@string.Join(", ", pr.Accounts)), gross, matched to people by QuickBooks employee id, then name, and compared with what was due for @label (tolerance $1). Then lock @label: a locked month never changes; later changes to it flow into the next open month as an adjustment.</p>
+                    @if (InlineFor("checks")) { <p class="notice-inline good">@Model.Message</p> }
+                    <div class="card table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Person</th><th class="num">Due</th><th class="num">Recorded here</th><th class="num">Payroll (gross)</th><th>Checks</th><th>Status</th><th></th></tr></thead>
+                            <tbody>
+                                @if (Model.PayrollRows.Count == 0) { <tr><td colspan="7" class="muted">No bonus due for @label and no checks in @payLabel.</td></tr> }
+                                @foreach (var c in Model.PayrollRows)
+                                {
+                                    var slug = BonusesModel.Slug(c.Name);
+                                    <tr id="chk-@slug">
+                                        <td>@c.Name</td>
+                                        <td class="num">@Cents(c.Due)</td>
+                                        <td class="num">@Cents(c.Recorded)</td>
+                                        <td class="num">@Cents(c.Payroll)</td>
+                                        <td class="small">@foreach (var ch in c.Checks) { <div>#@(ch.Num ?? "—") · @Format.Date(ch.Date) · @Cents(ch.Amount)</div> }</td>
+                                        <td><span class="chip @c.Chip">@(c.Lock is not null ? "🔒 " : "")@c.Status</span>@if (c.RecordNote is { } rn) { <div class="muted small">@rn</div> }</td>
+                                        <td class="actions">
+                                            @if (Model.CanEdit && c.Unrecorded > 0 && c.Lock is null)
+                                            {
+                                                var last = c.Checks.OrderByDescending(x => x.Date).First();
+                                                <form method="post" asp-page-handler="PayFromPayroll" asp-route-month="@key" asp-route-only="@Model.Only"><input type="hidden" name="person" value="@c.Name"><input type="hidden" name="amount" value="@c.Unrecorded.ToString("0.00")"><input type="hidden" name="paidOn" value="@last.Date.ToString("yyyy-MM-dd")"><input type="hidden" name="refs" value="@string.Join(", ", c.Checks.Select(x => x.Num).Where(x => x is not null))"><button class="button secondary" type="submit" title="Record @Cents(c.Unrecorded) from the payroll check">Record from payroll</button></form>
+                                            }
+                                            @if (Model.CanEdit && c.CanLock)
+                                            {
+                                                <form method="post" asp-page-handler="Lock" asp-route-month="@key" asp-route-only="@Model.Only"><input type="hidden" name="person" value="@c.Name"><button class="link-button" type="submit">Lock</button></form>
+                                            }
+                                            @if (Model.CanEdit && c.Lock is not null && Model.CanEdit)
+                                            {
+                                                <details class="unlock"><summary class="link-button">Unlock</summary>
+                                                    <form method="post" asp-page-handler="Unlock" asp-route-month="@key" asp-route-only="@Model.Only" class="inline-form"><input type="hidden" name="person" value="@c.Name"><input name="reason" placeholder="Reason (required)" required><button class="button secondary" type="submit">Unlock</button></form>
+                                                </details>
+                                            }
+                                        </td>
+                                    </tr>
+                                    @if (InlineFor("chk-" + slug)) { <tr><td colspan="7"><p class="notice-inline good">@Model.Message</p></td></tr> }
+                                }
+                            </tbody>
+                            <tfoot><tr><td>Total</td><td class="num">@Cents(Model.PayrollRows.Sum(x => x.Due))</td><td class="num">@Cents(Model.PayrollRows.Sum(x => x.Recorded))</td><td class="num">@Cents(Model.PayrollRows.Sum(x => x.Payroll))</td><td colspan="3"></td></tr></tfoot>
+                        </table>
                     </div>
-                    <span class="emp-rates num"><span>Supervisors @Format.Money(b.SupervisorPool)</span><span class="muted">Field @Format.Money(b.FieldPool)</span></span>
-                    <span class="emp-hours num"><b>@Format.Money(b.Total)</b></span>
-                    <span class="chevron" aria-hidden="true"></span>
-                </summary>
-                <div class="job-detail bonus-detail">
-                    <dl class="detail-grid">
-                        <div><dt>Billed (incl. retention)</dt><dd class="num">@Format.Money(b.Billed)</dd></div>
-                        <div><dt>Costs</dt><dd class="num">@Format.Money(b.Costs)</dd></div>
-                        <div><dt>Profit</dt><dd class="num">@Format.Money(b.Profit)</dd></div>
-                        @if (b.Payout is { } p)
-                        {
-                            <div><dt>Approved</dt><dd>@Format.Date(DateOnly.FromDateTime(p.ApprovedAt.ToLocalTime())) by @p.ApprovedBy</dd></div>
-                            @if (p.PaidAt is { } paid) { <div><dt>Paid</dt><dd>@Format.Date(DateOnly.FromDateTime(paid.ToLocalTime())) by @p.PaidBy</dd></div> }
-                        }
-                    </dl>
-                    @if (b.Lines.Count > 0)
+                    @if (Model.CanEdit && Model.PayrollRows.Any(x => x.CanLock))
                     {
+                        <form method="post" asp-page-handler="Lock" asp-route-month="@key" asp-route-only="@Model.Only" class="form-actions" style="margin-top:10px" onsubmit="return confirm('Lock everyone whose check matches (or who is fully paid) for @label?')">
+                            <button class="button" type="submit">Lock @label</button>
+                            <span class="muted small">Locks everyone whose payroll check matches what was due, or who's fully paid. Others stay open.</span>
+                        </form>
+                    }
+                }
+            }
+        </section>
+
+        var releases = ledger.Releases.Where(x => x.Month == key).ToList();
+        @if (releases.Count > 0 || (Model.CanEdit && Model.CanEdit))
+        {
+            <section class="fin-section-plain">
+                <h2 class="section-title">Retention released early · @label</h2>
+                @foreach (var rel in releases)
+                {
+                    <p class="small">@(rel.Person ?? "Everyone") · @rel.Reason · by @rel.CreatedBy
+                        @if (Model.CanEdit) { <form method="post" asp-page-handler="UndoRelease" asp-route-month="@key" style="display:inline"><input type="hidden" name="id" value="@rel.Id"><button class="link-button" type="submit">Undo</button></form> }</p>
+                }
+                @if (Model.CanEdit && Model.CanEdit)
+                {
+                    <form method="post" asp-page-handler="Release" asp-route-month="@key" class="inline-form" onsubmit="return confirm('Release everyone\'s held retention in @label?')">
+                        <label class="field grow"><span>Release everyone's retention now</span><input name="reason" placeholder="Reason"></label>
+                        <button class="button secondary" type="submit">Release all</button>
+                    </form>
+                }
+            </section>
+        }
+
+        @if (ledger.UnpaidApprovals.Count > 0)
+        {
+            <div class="card notice"><p>Before monthly bonuses, @ledger.UnpaidApprovals.Count job bonus@(ledger.UnpaidApprovals.Count == 1 ? " was" : "es were") approved but never marked paid (@string.Join(", ", ledger.UnpaidApprovals.Select(x => $"{x.JobName} {Format.Money(x.SupervisorPool + x.FieldPool)}"))). They're kept as history; those jobs now count month by month. Old approvals that were paid show as payments.</p></div>
+        }
+    }
+    else if (Model.CurrentTab == "jobs")
+    {
+        var shown = Model.All ? ledger.Jobs : ledger.Jobs.Where(j => j.In(sel) is not null).ToList();
+        <div class="pills" role="tablist" aria-label="Which jobs">
+            <a class="pill@(!Model.All ? " active" : "")" asp-route-month="@key" asp-route-tab="jobs">Active in @label</a>
+            <a class="pill@(Model.All ? " active" : "")" asp-route-month="@key" asp-route-tab="jobs" asp-route-all="true">All jobs</a>
+        </div>
+        <div class="job-list" style="margin-top:10px">
+            @if (!shown.Any()) { <div class="card empty-state"><p class="muted">No job activity in @label.</p></div> }
+            @foreach (var j in shown)
+            {
+                var jm = j.In(sel);
+                var people = j.People.ToList();
+                <details class="job card emp" id="job-@j.JobId" open="@(Model.Open == "job-" + j.JobId)">
+                    <summary class="emp-row with-chip">
+                        <span class="chip@(jm is null ? "" : jm.Profit < 0 ? " warn" : " good")">@(jm is null ? "—" : jm.Profit < 0 ? "Loss" : "Profit")</span>
+                        <div class="job-main">
+                            <div class="job-title">@(j.Number is null ? "" : "#" + j.Number + " ")@j.Name</div>
+                            <div class="job-sub muted">@(j.ProjectManager is { } pm ? "PM " + pm + " · " : "")@(j.Stage ?? "")@(j.ClosedOn is { } co ? " · closed " + Format.Date(co) : "") · @j.Months.Count month@(j.Months.Count == 1 ? "" : "s")@(j.Clawbacks.Count > 0 ? $" · {j.Clawbacks.Count} clawback{(j.Clawbacks.Count == 1 ? "" : "s")}" : "")</div>
+                        </div>
+                        <span class="emp-rates num"><span>@label profit @(jm is null ? "—" : Format.Money(jm.Profit))</span><span class="muted">all months @Format.Money(j.Profit)</span></span>
+                        <span class="emp-hours num"><b>@Signed(jm?.People.Sum(x => x.Net) ?? 0)</b></span>
+                        <span class="chevron" aria-hidden="true"></span>
+                    </summary>
+                    <div class="job-detail bonus-detail">
+                        @if (InlineFor("job-" + j.JobId)) { <p class="notice-inline good">@Model.Message</p> }
                         <div class="table-wrap">
-                            <table class="data">
-                                <thead><tr><th>Person</th><th>Pool</th><th class="num">Hours</th><th class="num">Bonus</th></tr></thead>
+                            <table class="data compact bonus-months">
+                                <thead>
+                                    <tr><th>Month</th><th class="num">Income</th><th class="num">Costs</th><th class="num">Profit</th><th class="num">Sup. pool</th><th class="num">Field pool</th><th class="num">Clawbacks</th><th class="num">Kept by co.</th>
+                                        @foreach (var (name, role) in people) { <th class="num" title="@role">@name</th> }
+                                    </tr>
+                                </thead>
                                 <tbody>
-                                    @foreach (var l in b.Lines)
+                                    @foreach (var m in j.Months)
                                     {
-                                        <tr><td>@l.Name</td><td>@l.Role</td><td class="num">@(l.Hours > 0 ? Format.Number(l.Hours) : "—")</td><td class="num">@Format.Money(l.Amount)</td></tr>
+                                        <tr class="@(m.Month == sel ? "row-current" : "")">
+                                            <td>@BonusesModel.Label(m.Month)</td>
+                                            <td class="num">@Format.Money(m.Income)</td><td class="num">@Format.Money(m.Costs)</td>
+                                            <td class="num@(m.Profit < 0 ? " neg" : "")">@Format.Money(m.Profit)</td>
+                                            <td class="num@(m.SupervisorPool < 0 ? " neg" : "")">@Cents(m.SupervisorPool)</td><td class="num@(m.FieldPool < 0 ? " neg" : "")">@Cents(m.FieldPool)</td>
+                                            <td class="num">@(m.Clawbacks != 0 ? "−" + Cents(m.Clawbacks) : "—")</td>
+                                            <td class="num">@(m.KeptByCompany != 0 ? Cents(m.KeptByCompany) : "—")</td>
+                                            @foreach (var (name, role) in people)
+                                            {
+                                                var e = m.People.FirstOrDefault(x => x.Name == name && x.Role == role);
+                                                <td class="num@(e?.Net < 0 ? " neg" : "")">@(e is null ? "—" : Cents(e.Net))@(e?.Capped == true ? "*" : "")</td>
+                                            }
+                                        </tr>
                                     }
                                 </tbody>
+                                <tfoot>
+                                    <tr><td>Total</td><td class="num">@Format.Money(j.Months.Sum(m => m.Income))</td><td class="num">@Format.Money(j.Months.Sum(m => m.Costs))</td><td class="num">@Format.Money(j.Profit)</td>
+                                        <td class="num">@Cents(j.Months.Sum(m => m.SupervisorPool))</td><td class="num">@Cents(j.Months.Sum(m => m.FieldPool))</td><td class="num">@(j.ClawedBack != 0 ? "−" + Cents(j.ClawedBack) : "—")</td><td class="num">@Cents(j.Months.Sum(m => m.KeptByCompany))</td>
+                                        @foreach (var (name, role) in people) { <td class="num">@Cents(j.Entries.Where(x => x.Name == name && x.Role == role).Sum(x => x.Net))</td> }
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
-                    }
-                    else if (b.Status == BonusStatus.Projected)
-                    {
-                        <p class="muted small">The split by person is worked out when the job is ready (completed and paid).</p>
-                    }
-                    @if (Model.CanEdit)
-                    {
-                        <div class="form-actions">
-                            @if (b.Status == BonusStatus.Ready)
-                            {
-                                <form method="post" asp-page-handler="Approve" asp-route-show="@Model.Show"><input type="hidden" name="jobId" value="@b.JobId"><button class="button" type="submit">Approve @Format.Money(b.Total)</button></form>
-                                <span class="muted small">Locks these amounts in.</span>
-                            }
-                            @if (b.Status == BonusStatus.Approved)
-                            {
-                                <form method="post" asp-page-handler="Status" asp-route-show="@Model.Show"><input type="hidden" name="jobId" value="@b.JobId"><input type="hidden" name="action" value="paid"><button class="button" type="submit">Mark paid</button></form>
-                                <form method="post" asp-page-handler="Status" asp-route-show="@Model.Show" onsubmit="return confirm('Undo the approval? It goes back to being calculated from JobTread.')"><input type="hidden" name="jobId" value="@b.JobId"><input type="hidden" name="action" value="unapprove"><button class="link-button" type="submit">Undo approval</button></form>
-                            }
-                            @if (b.Status == BonusStatus.Paid)
-                            {
-                                <form method="post" asp-page-handler="Status" asp-route-show="@Model.Show" onsubmit="return confirm('Mark as not paid?')"><input type="hidden" name="jobId" value="@b.JobId"><input type="hidden" name="action" value="unpaid"><button class="link-button" type="submit">Mark not paid</button></form>
-                            }
-                            <a class="link-button" href="@JobTreadIds.JobUrl(b.JobId)" target="_blank" rel="noopener">JobTread ↗</a>
-                        </div>
-                    }
-                </div>
-            </details>
-        }
-    </div>
-
-    @if (Model.People.Count > 0)
-    {
-        <section class="card fin-section" style="margin-top:12px">
-            <h2 class="section-title">By person</h2>
-            <div class="table-wrap">
-                <table class="data">
-                    <thead><tr><th>Person</th><th>Pool</th><th class="num">Ready</th><th class="num">Approved</th><th class="num">Paid this year</th></tr></thead>
-                    <tbody>
-                        @foreach (var p in Model.People)
+                        @if (j.Entries.Any(x => x.Capped)) { <p class="muted small">* capped at their share of hours (the excess stays with the company).</p> }
+                        @foreach (var m in j.Months.Where(m => m.Notes.Count > 0 || m.Forfeited.Count > 0 || m.Excluded.Count > 0))
                         {
-                            <tr><td>@p.Name</td><td>@p.Role</td><td class="num">@Format.Money(p.Ready)</td><td class="num">@Format.Money(p.Approved)</td><td class="num">@Format.Money(p.PaidYtd)</td></tr>
+                            <div class="small"><b>@BonusesModel.Label(m.Month):</b>
+                                @foreach (var f in m.Forfeited) { <span>@f.Name's @f.Role.ToLowerInvariant() share @Cents(f.Amount) kept by the company (@f.Why). </span> }
+                                @foreach (var x in m.Excluded.Where(x => m.Forfeited.All(f => f.Name != x.Name))) { <span>@x.Name not eligible (@x.Why). </span> }
+                                @foreach (var note in m.Notes) { <span>@note </span> }
+                            </div>
+                        }
+                        @if (j.UnassignedField != 0 || j.UnassignedSupervisor != 0) { <p class="muted small">Waiting for someone to clock time: supervisors @Cents(j.UnassignedSupervisor), field @Cents(j.UnassignedField).</p> }
+
+                        <h3 class="detail-title">Clawbacks</h3>
+                        @if (j.Clawbacks.Count == 0) { <p class="muted small">None. Use a clawback for costs that aren't in JobTread or a callback: it's charged to the people on the job by their share of it so far this year.</p> }
+                        @foreach (var c in j.Clawbacks)
+                        {
+                            <details class="clawback">
+                                <summary><b>@BonusesModel.Label(DateOnly.ParseExact(c.Month + "-01", "yyyy-MM-dd"))</b> · @c.Reason · @(c.Kind == "cost" ? $"cost {Format.Money(c.Amount)} → bonus" : $"bonus from {(c.Pool == "both" ? "both pools" : c.Pool == "supervisor" ? "supervisors" : "field")}") −@Cents(Model.ClawbackTotal(c)) <span class="muted small">by @c.CreatedBy</span> <span class="link-button">Edit</span></summary>
+                                @if (Model.CanEdit)
+                                {
+                                    <form method="post" asp-page-handler="Clawback" asp-route-month="@key" asp-route-all="@(Model.All ? true : null)" class="inline-form">
+                                        <input type="hidden" name="id" value="@c.Id"><input type="hidden" name="jobId" value="@j.JobId"><input type="hidden" name="jobName" value="@j.Name">
+                                        <partial name="_ClawbackFields" model="@((c, Model.Months))" />
+                                        <button class="button secondary" type="submit">Save</button>
+                                    </form>
+                                    <form method="post" asp-page-handler="DeleteClawback" asp-route-month="@key" asp-route-all="@(Model.All ? true : null)" onsubmit="return confirm('Delete this clawback?')"><input type="hidden" name="id" value="@c.Id"><input type="hidden" name="jobId" value="@j.JobId"><button class="link-button" type="submit">Delete</button></form>
+                                }
+                            </details>
+                        }
+                        @if (Model.CanEdit)
+                        {
+                            <details class="clawback" open="@(Model.Open == "job-" + j.JobId && Model.Message?.StartsWith("Enter") == true)">
+                                <summary class="link-button">+ Add clawback</summary>
+                                <form method="post" asp-page-handler="Clawback" asp-route-month="@key" asp-route-all="@(Model.All ? true : null)" class="inline-form">
+                                    <input type="hidden" name="jobId" value="@j.JobId"><input type="hidden" name="jobName" value="@j.Name">
+                                    <partial name="_ClawbackFields" model="@(((PurpleDashboard.Data.BonusClawback?)null, Model.Months))" />
+                                    <button class="button" type="submit">Add clawback</button>
+                                </form>
+                            </details>
+                        }
+                        <div class="form-actions"><a class="link-button" href="@JobTreadIds.JobUrl(j.JobId)" target="_blank" rel="noopener">JobTread ↗</a></div>
+                    </div>
+                </details>
+            }
+        </div>
+    }
+    else
+    {
+        var toRate = ledger.ToRate(sel).OrderBy(s => s.Name).ToList();
+        var locked = ledger.AnyLocked(sel);
+        var canRate = Model.CanRate && !locked;
+        <section class="fin-section-plain" id="rate">
+            <h2 class="section-title">Effort ratings · @label</h2>
+            <p class="muted small">
+                Every rater scores every field employee @r.EffortScaleMin–@r.EffortScaleMax (whole numbers) for the month; the person's score is the plain average of the scores given (blanks skipped).
+                It drives the @r.EffortShare% effort part of the field pool. Raters: supervisors (and admins).
+                @(locked ? $"{label} has paid & locked bonuses, so its ratings are read-only." : canRate ? $"You're rating as {Model.RaterName}." : "You can see the averages; only supervisors can rate.")
+            </p>
+            @if (InlineFor("rate")) { <p class="notice-inline good">@Model.Message</p> }
+            <form method="post" asp-page-handler="Rate" asp-route-month="@key">
+                <div class="card table-wrap">
+                    <table class="data">
+                        <thead><tr><th>Field employee</th>@if (canRate) { <th>Your score</th><th>Your notes</th> }<th class="num">Average</th><th class="num">Raters</th><th></th></tr></thead>
+                        <tbody>
+                            @if (toRate.Count == 0) { <tr><td colspan="6" class="muted">No eligible field employees for @label.</td></tr> }
+                            @foreach (var s in toRate)
+                            {
+                                var score = ledger.EffortFor(s, sel);
+                                var mine = score.Ratings.FirstOrDefault(x => x.RatedBy == Model.RaterKey);
+                                var suggestion = mine is null ? ledger.Suggestion(s, sel) : null;
+                                <tr>
+                                    <td>@s.Name</td>
+                                    @if (canRate)
+                                    {
+                                        var preset = mine is not null ? (int)mine.Score : suggestion is { } sg ? (int)Math.Round(sg.Score, MidpointRounding.AwayFromZero) : (int?)null;
+                                        <td>
+                                            <input type="hidden" name="membershipId" value="@s.MembershipId">
+                                            <select name="score" aria-label="Score for @s.Name">
+                                                <option value="">—</option>
+                                                @for (var i = r.EffortScaleMin; i <= r.EffortScaleMax; i++) { <option value="@i" selected="@(preset == i)">@i</option> }
+                                            </select>
+                                            @if (suggestion is { } sug) { <div class="muted small">from @sug.Source: @sug.Score.ToString("0.0#")</div> }
+                                        </td>
+                                        <td><input name="notes" value="@mine?.Notes" aria-label="Notes for @s.Name" style="width:100%;min-width:140px"></td>
+                                    }
+                                    <td class="num">@(score.Average is { } avg ? avg.ToString("0.0#") : "—")</td>
+                                    <td class="num">@score.Ratings.Count</td>
+                                    <td>@if (score.Ratings.Count == 0) { <span class="chip warn">Not rated</span> } else if (score.Spread >= r.EffortSpreadFlag) { <span class="chip warn" title="Raters' scores are @score.Spread apart">Spread @score.Spread.ToString("0")</span> }</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (canRate && toRate.Count > 0)
+                {
+                    <div class="form-actions" style="margin-top:10px"><button class="button" type="submit">Save my ratings</button><span class="muted small">Pre-filled scores are only suggestions until you save. Saving again replaces your scores.</span></div>
+                }
+            </form>
+        </section>
+
+        <section class="fin-section-plain">
+            <h2 class="section-title">Eligibility · @label</h2>
+            <p class="muted small">No bonus while on probation (the first @r.ProbationDays days after the QuickBooks hire date, checked at the end of the month), after leaving (QuickBooks), or when excluded here for the month (write-up, off the schedule more than 2 weeks, ...). @(r.ForfeitMode == "redistribute" ? "Their hours are left out, so the pool goes to everyone else." : "Their share is worked out as if they were eligible and kept by the company.")</p>
+            @{
+                var names = ledger.Jobs.SelectMany(j => j.In(sel)?.People.Select(x => x.Name).Concat(j.In(sel)!.Excluded.Select(x => x.Name)) ?? [])
+                    .Concat(ledger.FieldStaff.Select(s => s.Name)).Concat(ledger.Eligibility.Exclusions.Where(x => x.Month == key).Select(x => x.Person))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x).ToList();
+            }
+            <div class="card table-wrap">
+                <table class="data">
+                    <thead><tr><th>Person</th><th>Hire date</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var name in names)
+                        {
+                            var why = ledger.Eligibility.Why(name, sel);
+                            var manual = ledger.Eligibility.Manual(name, sel);
+                            var slug = BonusesModel.Slug(name);
+                            var hired = ledger.Eligibility.Qb(name)?.HiredDate;
+                            <tr id="ex-@slug">
+                                <td>@name</td>
+                                <td>@(hired is { } h ? h.ToString("M/d/yyyy") : "—")</td>
+                                <td>
+                                    @if (why is not null) { <span class="chip warn">@why</span> }
+                                    else if (!ledger.Eligibility.HireDateKnown(name)) { <span class="chip">Hire date unknown</span> <span class="muted small">counted as eligible</span> }
+                                    else { <span class="chip good">Eligible</span> }
+                                    @if (InlineFor("ex-" + slug)) { <div class="notice-inline good">@Model.Message</div> }
+                                </td>
+                                <td>
+                                    @if (Model.CanEdit && manual is not null)
+                                    {
+                                        <form method="post" asp-page-handler="Exclude" asp-route-month="@key"><input type="hidden" name="person" value="@name"><input type="hidden" name="include" value="true"><button class="link-button" type="submit">Include again</button></form>
+                                    }
+                                    else if (Model.CanEdit && why is null)
+                                    {
+                                        <details class="unlock"><summary class="link-button">Exclude from @label</summary>
+                                            <form method="post" asp-page-handler="Exclude" asp-route-month="@key" class="inline-form"><input type="hidden" name="person" value="@name"><input name="reason" placeholder="Reason (required)" required><button class="button secondary" type="submit">Exclude</button></form>
+                                        </details>
+                                    }
+                                </td>
+                            </tr>
                         }
                     </tbody>
                 </table>

@@ -121,6 +121,17 @@ Projects list activity (one call per 100 jobs, three grouped aliases on `organiz
 
 Where-clause note: a single condition is passed bare (`"where": [["job","id"], "in", [...]]`), not wrapped in another array.
 
+## Bonuses by month
+
+`Modules/Financials/BonusMonths.cs`, one request per calendar month (Pacific), three grouped aliases on `organization`:
+
+- `inv`: `documents` where `type = customerInvoice`, `status in [approved, pending]`, `issueDate` in the month, grouped by `job.id`, `job.name`, `job.number` → `amount: sum price` (net of retention).
+- `bill`: same with `type = vendorBill` → `amount: sum cost`.
+- `time`: `timeEntries` where `startedAt` in the month (UTC bounds of Pacific midnights), grouped by job and `user.id`, `user.name` → `sum cost`, `sum minutes`.
+
+`size: 100` with `nextPage`; an alias with more groups is paged on its own (`bonus-month-yyyy-MM-{alias}-more`). No nested lists, so no 413.
+Retention released later is billed on its own invoice, so it lands in the month it's invoiced.
+
 ## Time entries
 
 `timeEntries` fields: `startedAt`, `endedAt` (UTC timestamps), `minutes`, `cost`, `hourlyRate`, `isApproved`, `type`, `user`, `job`, `costItem`, `notes`.
