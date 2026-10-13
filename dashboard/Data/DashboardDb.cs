@@ -13,6 +13,7 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<EmployeeProfile> EmployeeProfiles => Set<EmployeeProfile>();
     public DbSet<ChangeLogEntry> ChangeLog => Set<ChangeLogEntry>();
     public DbSet<QuickBooksConnection> QuickBooksConnections => Set<QuickBooksConnection>();
+    public DbSet<GoogleConnection> GoogleConnections => Set<GoogleConnection>();
     public DbSet<JobTreadUserKey> JobTreadUserKeys => Set<JobTreadUserKey>();
     public DbSet<JobTreadOAuthClient> JobTreadOAuthClients => Set<JobTreadOAuthClient>();
     public DbSet<BonusPayout> BonusPayouts => Set<BonusPayout>();
@@ -45,6 +46,18 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.RealmId).HasMaxLength(40);
             e.Property(x => x.CompanyName).HasMaxLength(200);
             e.Property(x => x.ConnectedBy).HasMaxLength(200);
+        });
+        b.Entity<GoogleConnection>(e =>
+        {
+            e.Property(x => x.Email).HasMaxLength(200);
+            e.Property(x => x.Scopes).HasMaxLength(1000);
+            e.Property(x => x.ConnectedBy).HasMaxLength(200);
+            e.Property(x => x.AdsCustomerId).HasMaxLength(20);
+            e.Property(x => x.AdsLoginCustomerId).HasMaxLength(20);
+            e.Property(x => x.AdsCustomerName).HasMaxLength(200);
+            e.Property(x => x.BusinessAccount).HasMaxLength(100);
+            e.Property(x => x.BusinessLocation).HasMaxLength(100);
+            e.Property(x => x.BusinessLocationTitle).HasMaxLength(200);
         });
         b.Entity<JobTreadUserKey>(e =>
         {
@@ -200,6 +213,34 @@ public sealed class QuickBooksConnection
     public DateTime ConnectedAt { get; set; }
     public string? ConnectedBy { get; set; }
     public string? Scopes { get; set; }
+}
+
+/// <summary>
+/// The company Google account the dashboard is connected to (one row): it owns the Google Ads account and the
+/// Google Business Profile. The refresh token is encrypted with ASP.NET Data Protection. Read only: the dashboard
+/// never changes ads or the profile.
+/// </summary>
+public sealed class GoogleConnection
+{
+    public int Id { get; set; }
+    /// <summary>The Google account that approved the connection.</summary>
+    public required string Email { get; set; }
+    public required string RefreshTokenProtected { get; set; }
+    /// <summary>Scopes Google says were granted (space separated); the person can untick some on Google's page.</summary>
+    public string? Scopes { get; set; }
+    public DateTime ConnectedAt { get; set; }
+    public string? ConnectedBy { get; set; }
+
+    /// <summary>The Google Ads account read for Sales &amp; Marketing (10 digits, no dashes).</summary>
+    public string? AdsCustomerId { get; set; }
+    /// <summary>The manager account the Ads calls go through (login-customer-id), or null for direct access.</summary>
+    public string? AdsLoginCustomerId { get; set; }
+    public string? AdsCustomerName { get; set; }
+
+    /// <summary>Business Profile account ("accounts/123") and location ("locations/456") reviews are read from.</summary>
+    public string? BusinessAccount { get; set; }
+    public string? BusinessLocation { get; set; }
+    public string? BusinessLocationTitle { get; set; }
 }
 
 /// <summary>

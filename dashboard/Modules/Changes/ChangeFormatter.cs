@@ -324,6 +324,9 @@ public sealed class ChangeFormatter(IReadOnlyDictionary<string, string> crewName
 
     private static string? Connection(string action, JsonObject? d, string? target, HashSet<string> used) => action switch
     {
+        "connect" when target == "Google" => Str(Get(d, "email")) is { } email ? Done(used, "email", $"Connected Google ({email})") : "Connected Google",
+        "google-ads-account" => $"Picked Google Ads account {target}",
+        "google-location" => $"Picked Business Profile location {target}",
         "connect" => Str(Get(d, "CompanyName")) is { } company ? Done(used, "CompanyName", $"Connected QuickBooks ({company})") : "Connected QuickBooks",
         "disconnect" => $"Disconnected {target ?? "QuickBooks"}",
         "link-jobtread" => target is null ? "Linked a JobTread key" : $"Linked a JobTread key (as {target})",

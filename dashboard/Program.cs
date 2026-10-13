@@ -53,6 +53,19 @@ builder.Services.Configure<PurpleDashboard.Integrations.QuickBooks.QuickBooksOpt
 });
 builder.Services.AddHttpClient<PurpleDashboard.Integrations.QuickBooks.QuickBooksClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
+// Google (read only): Google Ads + Business Profile reviews through one company Google account. See docs/GOOGLE.md.
+builder.Services.Configure<PurpleDashboard.Integrations.Google.GoogleOptions>(o =>
+{
+    o.ClientId = builder.Configuration["GOOGLE_CLIENT_ID"];
+    o.ClientSecret = builder.Configuration["GOOGLE_CLIENT_SECRET"];
+    o.AdsDeveloperToken = builder.Configuration["GOOGLE_ADS_DEVELOPER_TOKEN"];
+    o.AdsLoginCustomerId = builder.Configuration["GOOGLE_ADS_LOGIN_CUSTOMER_ID"];
+    o.RedirectUri = builder.Configuration["GOOGLE_REDIRECT_URI"];
+    if (builder.Configuration["Google:AdsChannel"] is { Length: > 0 } channel) o.AdsChannel = channel;
+    if (builder.Environment.IsDevelopment()) o.FixtureDirectory = builder.Configuration["Google:FixtureDirectory"];
+});
+builder.Services.AddHttpClient<PurpleDashboard.Integrations.Google.GoogleClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
+
 // Modules
 builder.Services.AddScoped<ChangeLogWriter>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Changes.ChangeLogReader>();
@@ -78,6 +91,8 @@ builder.Services.Configure<PurpleDashboard.Modules.Financials.BonusOptions>(buil
 builder.Services.AddScoped<PurpleDashboard.Modules.Financials.BonusService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Financials.JobReconciliationService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Sales.SalesService>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Sales.GoogleAdsService>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Customers.GoogleReviewsService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Equipment.EquipmentService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Vendors.PayablesService>();
 builder.Services.AddScoped<PurpleDashboard.Modules.Customers.CustomersService>();
