@@ -64,7 +64,7 @@
                         @if (c.AdAccountId is null) { <option value="">Pick one…</option> }
                         @foreach (var a in Model.Accounts)
                         {
-                            <option value="@a.Id" selected="@(a.Id == c.AdAccountId)">@a.Name@(a.Business is { } b ? $" · {b}" : "")@(a.Active ? "" : " (inactive)") · @a.Id.Replace("act_", "")</option>
+                            <option value="@a.Id" selected="@(a.Id == c.AdAccountId)">@(a.Name == a.Id || a.Name == a.Id.Replace("act_", "") ? "Ad account" : a.Name)@(a.Business is { } b ? $" · {b}" : "")@(a.Active ? "" : " (inactive)") · @a.Id.Replace("act_", "")</option>
                         }
                     </select>
                 </label>
