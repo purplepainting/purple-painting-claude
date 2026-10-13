@@ -5,12 +5,13 @@
 @using PurpleDashboard.Pages.Scheduling
 @{
     var weekStart = LocalClock.WeekStart(Model.Today);
+    var monthStart = new DateOnly(Model.Today.Year, Model.Today.Month, 1);
 }
 
 <div class="module-head schedule-head">
     <div class="schedule-nav">
         <a class="button secondary icon" asp-page="/Scheduling/Index" asp-all-route-data="Model.Route(Model.Previous)" aria-label="Previous">‹</a>
-        <a class="button secondary" asp-page="/Scheduling/Index" asp-all-route-data="Model.Route(Model.IsDay ? Model.Today : weekStart)">Today</a>
+        <a class="button secondary" asp-page="/Scheduling/Index" asp-all-route-data="Model.Route(Model.IsDay ? Model.Today : Model.IsMonth ? monthStart : weekStart)">Today</a>
         <a class="button secondary icon" asp-page="/Scheduling/Index" asp-all-route-data="Model.Route(Model.Next)" aria-label="Next">›</a>
         <h1 class="schedule-title">@Model.Heading</h1>
     </div>
@@ -20,11 +21,11 @@
             <a class="@(Model.Supervisors ? "active" : "")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(who: "supervisors")'>Management</a>
         </div>
         <div class="segmented" role="group" aria-label="Range">
-            <a class="@(Model.IsDay ? "active" : "")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(Model.IsDay ? Model.From : (Model.Today >= Model.From && Model.Today <= Model.To ? Model.Today : Model.From), "day")'>Day</a>
-            <a class="@(Model.IsDay ? "" : "active")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(LocalClock.WeekStart(Model.From), "week")'>Week</a>
-            <span class="disabled" title="Coming later">Month</span>
+            <a class="@(Model.IsDay ? "active" : "")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(Model.IsDay ? Model.From : Model.FocusDay, "day")'>Day</a>
+            <a class="@(Model.IsDay || Model.IsMonth ? "" : "active")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(LocalClock.WeekStart(Model.FocusDay), "week")'>Week</a>
+            <a class="@(Model.IsMonth ? "active" : "")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(new DateOnly(Model.FocusDay.Year, Model.FocusDay.Month, 1), "month")'>Month</a>
         </div>
-        @if (!Model.IsDay)
+        @if (!Model.IsDay && !Model.IsMonth)
         {
             <div class="segmented" role="group" aria-label="Rows">
                 <a class="@(Model.ByPerson ? "" : "active")" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(by: "job")'>By job</a>
@@ -46,19 +47,107 @@ else
 {
     <div id="schedule-view">
         <p class="list-meta muted">
-            @Model.Tasks.Select(t => t.JobId).Distinct().Count() jobs · @Model.Tasks.SelectMany(t => t.People).Distinct().Count() people · from JobTread at @Model.LoadedAt.ToString("h:mm tt") ·
+            @Model.SummaryTasks.Select(t => t.JobId).Distinct().Count() jobs · @Model.SummaryTasks.SelectMany(t => t.People).Distinct().Count() people · from JobTread at @Model.LoadedAt.ToString("h:mm tt") ·
             <a class="refresh-button" asp-page="/Scheduling/Index" asp-all-route-data="Model.Route()" asp-route-refresh="true">↻ Refresh</a>
         </p>
 
         <div class="legend">
-            <span class="legend-item">Each job has its own color.</span>
-            <span class="legend-item"><span class="pchip lvl-foreman">Foreman</span><span class="pchip lvl-painter">Painter</span><span class="pchip lvl-helper">Helper</span><span class="pchip lvl-supervisor lvl-admin">Admin</span><span class="pchip lvl-supervisor lvl-office">Office</span><span class="pchip lvl-supervisor lvl-sales">Sales</span></span>
-            <span class="legend-item"><span class="pchip lvl-painter no-show">Didn't clock in</span><span class="pchip lvl-painter unscheduled">Not scheduled</span> (past days)</span>
+            @if (Model.IsMonth)
+            {
+                <span class="legend-item">Each job has its own color. Tap a job for its timeline, or a date to open that day.</span>
+            }
+            else
+            {
+                <span class="legend-item">Each job has its own color.</span>
+                <span class="legend-item"><span class="pchip lvl-foreman">Foreman</span><span class="pchip lvl-painter">Painter</span><span class="pchip lvl-helper">Helper</span><span class="pchip lvl-supervisor lvl-admin">Admin</span><span class="pchip lvl-supervisor lvl-office">Office</span><span class="pchip lvl-supervisor lvl-sales">Sales</span></span>
+                <span class="legend-item"><span class="pchip lvl-painter no-show">Didn't clock in</span><span class="pchip lvl-painter unscheduled">Not scheduled</span> (past days)</span>
+            }
         </div>
 
         @if (Model.Tasks.Count == 0)
         {
-            <div class="card empty-state"><p class="muted">No @(Model.Supervisors ? "management" : "crew") tasks in JobTread for this @(Model.IsDay ? "day" : "week").</p></div>
+            <div class="card empty-state"><p class="muted">No @(Model.Supervisors ? "management" : "crew") tasks in JobTread for this @(Model.IsDay ? "day" : Model.IsMonth ? "month" : "week").</p></div>
+        }
+        else if (Model.IsMonth)
+        {
+            var selected = Model.FocusDay;
+            <div class="card month-card" data-month>
+                <table class="month-grid">
+                    <thead>
+                        <tr>
+                            @foreach (var name in new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" })
+                            {
+                                <th scope="col">@name</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var week = Model.From; week <= Model.To; week = week.AddDays(7))
+                        {
+                            <tr>
+                                @for (var i = 0; i < 7; i++)
+                                {
+                                    var day = week.AddDays(i);
+                                    var jobs = Model.MonthJobs[day];
+                                    // Show every job when one more fits in place of the "+1 more" line.
+                                    var shown = jobs.Count > IndexModel.MonthCellJobs + 1 ? IndexModel.MonthCellJobs : jobs.Count;
+                                    <td class="month-cell@(Model.InMonth(day) ? "" : " other-month")@(day == Model.Today ? " today" : "")@(day == selected ? " selected" : "")" data-day="@day.ToString("yyyy-MM-dd")">
+                                        <a class="month-date" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(day, "day")' title="Open @day.ToString("dddd, MMM d")" aria-label="@day.ToString("dddd, MMMM d"): @(jobs.Count == 1 ? "1 job" : $"{jobs.Count} jobs")"><span class="month-num">@day.Day</span></a>
+                                        @if (jobs.Count > 0)
+                                        {
+                                            <div class="month-jobs">
+                                                @foreach (var j in jobs.Take(shown))
+                                                {
+                                                    <a class="month-job@(j.Done ? " done" : "")" style="@Model.Colors.Style(j.Job.JobId)" href="/scheduling/job/@j.Job.JobId" title="@j.Job.JobName: @string.Join(", ", j.TaskNames) · @(j.People == 0 ? "unassigned" : $"{j.People} people")">@j.Job.JobName</a>
+                                                }
+                                                @if (jobs.Count > shown)
+                                                {
+                                                    <a class="month-more" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(day, "day")'>+@(jobs.Count - shown) more</a>
+                                                }
+                                            </div>
+                                            <span class="month-dots" aria-hidden="true">
+                                                @foreach (var j in jobs.Take(6))
+                                                {
+                                                    <span class="swatch" style="@Model.Colors.Style(j.Job.JobId)"></span>
+                                                }
+                                                @if (jobs.Count > 6) { <span class="month-count">+@(jobs.Count - 6)</span> }
+                                            </span>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @* Phones: the grid shows dots; the tapped day's jobs are listed here (site.js switches days without a reload). *@
+            <div class="month-days">
+                @foreach (var day in Model.Days)
+                {
+                    var jobs = Model.MonthJobs[day];
+                    <section class="month-day@(day == selected ? " selected" : "")" data-day="@day.ToString("yyyy-MM-dd")">
+                        <h2 class="@(day == Model.Today ? "today" : "")">
+                            <span>@day.ToString("dddd, MMM d")@(day == Model.Today ? " · Today" : "")</span>
+                            <a class="month-open" asp-page="/Scheduling/Index" asp-all-route-data='Model.Route(day, "day")'>Open day ›</a>
+                        </h2>
+                        @if (jobs.Count == 0)
+                        {
+                            <p class="muted">Nothing scheduled.</p>
+                        }
+                        @foreach (var j in jobs)
+                        {
+                            <a class="card month-day-job@(j.Done ? " done" : "")" style="@Model.Colors.Style(j.Job.JobId)" href="/scheduling/job/@j.Job.JobId">
+                                <span class="month-day-top">
+                                    <span class="block-title"><span class="swatch"></span> @j.Job.JobName</span>
+                                    @if (j.Job.ProjectManager is not null) { <span class="pm-tag" style="@Model.Team.PmStyle(j.Job.ProjectManager)">PM @j.Job.ProjectManager.Split(' ')[0]</span> }
+                                </span>
+                                <span class="month-day-tasks muted">@string.Join(" · ", j.TaskNames) · @(j.People == 0 ? "Unassigned" : j.People == 1 ? "1 person" : $"{j.People} people")</span>
+                            </a>
+                        }
+                    </section>
+                }
+            </div>
         }
         else
         {
@@ -233,4 +322,8 @@ else
 
 @section Scripts {
     <script src="~/js/schedule-editor.js" asp-append-version="true"></script>
+    @if (Model.IsMonth)
+    {
+        <script src="~/js/site.js" asp-append-version="true"></script>
+    }
 }

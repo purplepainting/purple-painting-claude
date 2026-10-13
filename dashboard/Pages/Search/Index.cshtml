@@ -1,0 +1,49 @@
+@page "/search"
+@model PurpleDashboard.Pages.Search.IndexModel
+@using PurpleDashboard.Modules.Search
+
+<div class="module-head search-page-form">
+    <form class="filters" method="get" action="/search" role="search">
+        <input type="search" name="q" value="@Model.Q" placeholder="Jobs, customers, people, equipment, vendors" aria-label="Search everything" autocomplete="off" autofocus="@(string.IsNullOrWhiteSpace(Model.Q))">
+        <button class="button secondary" type="submit">Search</button>
+    </form>
+</div>
+
+@if (string.IsNullOrWhiteSpace(Model.Q) || Model.Q.Trim().Length < SearchService.MinLength)
+{
+    <p class="list-meta muted">Type at least @SearchService.MinLength characters: a job name or number, customer, address, person, piece of equipment or vendor. On a computer, press <kbd>/</kbd> on any page to search from the top bar.</p>
+}
+else
+{
+    <p class="list-meta muted">
+        @(Model.Results.Any ? $"{Model.Results.Groups.Sum(g => g.Total)} matches for “{Model.Results.Query}”" : $"Nothing found for “{Model.Results.Query}”.")
+        @if (Model.Results.Skipped.Count > 0) { <text>· Not searched (not connected or still loading): @string.Join(", ", Model.Results.Skipped)</text> }
+    </p>
+    <div class="search-page">
+        @foreach (var g in Model.Results.Groups)
+        {
+            <section class="card search-section">
+                <h2 class="section-title">@g.Label <span class="muted">@g.Total</span></h2>
+                <ul class="search-list">
+                    @foreach (var h in g.Hits)
+                    {
+                        <li class="search-hit">
+                            <a class="search-hit-main" href="@h.Url">
+                                <span class="search-hit-title">@h.Title</span>
+                                @if (h.Sub is not null) { <span class="search-hit-sub">@h.Sub</span> }
+                            </a>
+                            @if (h.ExternalUrl is not null) { <a class="search-hit-ext" href="@h.ExternalUrl" target="_blank" rel="noopener">JobTread ↗</a> }
+                        </li>
+                    }
+                </ul>
+                @if (g.Total > g.Hits.Count)
+                {
+                    <p class="small muted search-more">
+                        Showing @g.Hits.Count of @g.Total.
+                        @if (g.MoreUrl is not null) { <a href="@g.MoreUrl">See all in @g.Label</a> } else { <text>Add another word to narrow it down.</text> }
+                    </p>
+                }
+            </section>
+        }
+    </div>
+}

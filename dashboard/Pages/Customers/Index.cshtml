@@ -28,7 +28,7 @@ else
     <div class="kpis">
         <div class="card kpi"><span class="kpi-label">Customers</span><span class="kpi-value num">@Model.All.Count</span><span class="kpi-sub">open jobs + last 12 months</span></div>
         <div class="card kpi"><span class="kpi-label">Owed to us</span><span class="kpi-value num">@Format.Money(Model.All.Sum(c => c.Owes))</span><span class="kpi-sub">@Model.All.Count(c => c.Owes >= 1) customers</span></div>
-        <div class="card kpi"><span class="kpi-label">Reviews to request</span><span class="kpi-value num">@Model.All.Sum(c => c.Jobs.Count(j => CustomersService.NeedsReview(j, Model.Reviews)))</span><span class="kpi-sub">completed jobs</span></div>
+        <div class="card kpi"><span class="kpi-label">Reviews to request</span><span class="kpi-value num">@Model.All.Count(c => CustomersService.NeedsReview(c, Model.Reviews))</span><span class="kpi-sub">customers with a completed job</span></div>
     </div>
     <p class="list-meta muted">Jobs from JobTread; balances and contact info from QuickBooks (matched by name) · <a class="refresh-button" asp-page="/Customers/Index" asp-route-show="@Model.Show" asp-route-q="@Model.Q" asp-route-refresh="true">↻ Refresh JobTread + QuickBooks</a> @if (PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.DataAsOf is { } qbAsOf) { <span class="muted small">QuickBooks as of @Format.QbAsOf(qbAsOf)</span> }</p>
 
@@ -36,12 +36,14 @@ else
         @if (!Model.Shown.Any()) { <div class="card empty-state"><p class="muted">No customers here.</p></div> }
         @foreach (var c in Model.Shown)
         {
+            var chip = Model.ReviewChip(c);
+            var r = c.AccountId is { } accountId ? Model.Reviews.GetValueOrDefault(accountId) : null;
             <details class="job card emp">
                 <summary class="emp-row">
                     <span class="avatar" aria-hidden="true">@string.Concat(c.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0])))</span>
                     <div class="job-main">
                         <div class="job-title">@c.Name</div>
-                        <div class="job-sub muted">@c.Jobs.Count @(c.Jobs.Count == 1 ? "job" : "jobs") · billed @Format.Money(c.Billed)@(c.Qb is null ? " · not in QuickBooks" : "")</div>
+                        <div class="job-sub muted">@c.Jobs.Count @(c.Jobs.Count == 1 ? "job" : "jobs") · billed @Format.Money(c.Billed)@(c.Qb is null ? " · not in QuickBooks" : "")@if (chip is { } ch) { <span class="chip cust-review-chip @ch.Css" title="@ch.Title">@ch.Label</span> }</div>
                     </div>
                     <span class="emp-rates num"><span class="@(c.Owes >= 1 ? "neg" : "muted")">@(c.Owes >= 1 ? "Owes " + Format.Money(c.Owes) : "Paid up")</span><span class="muted">@(c.LastActivity is { } d ? "Last " + Format.Date(d) : "")</span></span>
                     <span class="chevron" aria-hidden="true"></span>
@@ -56,9 +58,43 @@ else
                             <div><dt>QuickBooks balance</dt><dd class="num">@Format.Money(q.Balance)</dd></div>
                         </dl>
                     }
+                    @if (c.AccountId is not null && (c.HasCompletedJob || r is not null || c.LeftReviewInJobTread))
+                    {
+                        var status = r?.Status is "requested" or "later" or "skip" ? r.Status : "requested";
+                        <section class="cust-review" aria-label="Review for @c.Name">
+                            <div class="cust-review-head">
+                                <b>Review</b>
+                                @if (chip is { } rc) { <span class="chip @rc.Css" title="@rc.Title">@rc.Label</span> }
+                                <span class="muted small">One per customer@(c.Jobs.Count > 1 ? $", covers all {c.Jobs.Count} jobs" : "")</span>
+                            </div>
+                            @if (c.LeftReviewInJobTread)
+                            {
+                                <p class="muted small">Marked "Left a Review" on the customer in JobTread. Change it there if that's wrong.</p>
+                            }
+                            else
+                            {
+                            <form method="post" asp-page-handler="Review" asp-route-show="@Model.Show" asp-route-q="@Model.Q" class="inline-form">
+                                <input type="hidden" name="accountId" value="@c.AccountId"><input type="hidden" name="customerName" value="@c.Name">
+                                <label class="field"><span>Status</span>
+                                    <select name="status">
+                                        <option value="requested" selected="@(status == "requested")">Requested</option>
+                                        <option value="later" selected="@(status == "later")">Ask later</option>
+                                        <option value="skip" selected="@(status == "skip")">Not asking</option>
+                                    </select>
+                                </label>
+                                <label class="field"><span>Asked for</span>
+                                    <select name="platform"><option value="">—</option>@foreach (var p in CustomersService.Platforms) { <option selected="@(r?.Platform == p)">@p</option> }</select>
+                                </label>
+                                <label class="field grow"><span>Notes</span><input name="notes" value="@r?.Notes"></label>
+                                <button class="button secondary" type="submit" disabled="@(!Model.CanEdit)">Save</button>
+                            </form>
+                            <p class="muted small">When they leave the review, mark "Left a Review" on the customer in JobTread; it shows here automatically.</p>
+                            @if (!Model.CanEdit) { <p class="muted small">Saving needs the dashboard database.</p> }
+                            }
+                        </section>
+                    }
                     @foreach (var j in c.Jobs)
                     {
-                        Model.Reviews.TryGetValue(j.Id, out var r);
                         <div class="cust-job">
                             <div class="cust-job-head">
                                 <b>#@j.Number @j.Name</b>
@@ -68,30 +104,6 @@ else
                                     @if (j.FolderUrl is not null) { <a class="link-button" href="@j.FolderUrl" target="_blank" rel="noopener">SharePoint ↗</a> }
                                 </span>
                             </div>
-                            @if (j.IsCompleted || r is not null)
-                            {
-                                <form method="post" asp-page-handler="Review" asp-route-show="@Model.Show" asp-route-q="@Model.Q" class="inline-form">
-                                    <input type="hidden" name="jobId" value="@j.Id"><input type="hidden" name="jobName" value="@j.Name">
-                                    @if (r is null && j.CustomerLeftReview == true)
-                                    {
-                                        <span class="chip good" title="JobTread customer field &quot;Left Review&quot;">Left a review (JobTread)</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="chip @(r?.Status == "received" ? "good" : r is null ? "warn" : "")">@IndexModel.ReviewLabel(r)</span>
-                                    }
-                                    <select name="status" aria-label="Review status">
-                                        <option value="requested" selected="@(r?.Status is null or "requested")">Requested</option>
-                                        <option value="received" selected="@(r?.Status == "received")">Received</option>
-                                        <option value="later" selected="@(r?.Status == "later")">Ask later</option>
-                                        <option value="skip" selected="@(r?.Status == "skip")">Not asking</option>
-                                    </select>
-                                    <select name="platform" aria-label="Platform"><option value="">Platform</option>@foreach (var p in CustomersService.Platforms) { <option selected="@(r?.Platform == p)">@p</option> }</select>
-                                    <select name="rating" aria-label="Rating"><option value="">Stars</option>@for (var s = 5; s >= 1; s--) { <option value="@s" selected="@(r?.Rating == s)">@s ★</option> }</select>
-                                    <input name="notes" value="@r?.Notes" placeholder="Notes" aria-label="Notes">
-                                    <button class="button secondary" type="submit" disabled="@(!Model.CanEdit)">Save</button>
-                                </form>
-                            }
                         </div>
                     }
                     @if (c.Jobs.Count == 0) { <p class="muted small">No JobTread jobs in the last 12 months; owes money in QuickBooks.</p> }

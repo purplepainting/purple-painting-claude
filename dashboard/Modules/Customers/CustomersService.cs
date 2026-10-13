@@ -12,9 +12,15 @@ namespace PurpleDashboard.Modules.Customers;
 /// <summary>A QuickBooks customer: what they owe and how to reach them.</summary>
 public sealed record QbCustomer(string Id, string Name, decimal Balance, string? Email, string? Phone, string? Address);
 
-/// <summary>A customer as the dashboard sees it: JobTread jobs plus the QuickBooks balance (matched by name).</summary>
-public sealed record CustomerView(string Name, IReadOnlyList<ProjectSummary> Jobs, QbCustomer? Qb)
+/// <summary>
+/// A customer as the dashboard sees it: JobTread jobs plus the QuickBooks balance (matched by name).
+/// AccountId is the JobTread customer account (null for QuickBooks-only customers).
+/// </summary>
+public sealed record CustomerView(string Name, IReadOnlyList<ProjectSummary> Jobs, QbCustomer? Qb, string? AccountId = null)
 {
+    public bool HasCompletedJob => Jobs.Any(j => j.IsCompleted);
+    /// <summary>JobTread's "Left Review" customer field says they left one.</summary>
+    public bool LeftReviewInJobTread => Jobs.Any(j => j.CustomerLeftReview == true);
     public decimal Billed => Jobs.Sum(j => j.Billed);
     public decimal Contract => Jobs.Sum(j => j.Contract ?? 0);
     public decimal Owes => Qb?.Balance ?? Jobs.Sum(j => j.Unpaid);
@@ -23,7 +29,7 @@ public sealed record CustomerView(string Name, IReadOnlyList<ProjectSummary> Job
 
 /// <summary>
 /// Customers: JobTread jobs (open, plus closed in the last year) grouped by customer, QuickBooks balances
-/// and contact info matched by name, and review status per finished job (dashboard database).
+/// and contact info matched by name, and review status per customer (dashboard database; one review per customer, however many jobs).
 /// </summary>
 public sealed class CustomersService(ProjectsService projects, QuickBooksClient quickBooks, IServiceProvider services, DatabaseStatus database, IMemoryCache cache)
 {
@@ -37,8 +43,13 @@ public sealed class CustomersService(ProjectsService projects, QuickBooksClient 
         var qb = await QbCustomersAsync(refresh, ct);
         var qbByName = qb.GroupBy(c => Key(c.Name)).ToDictionary(g => g.Key, g => g.First());
 
-        var views = jobs.GroupBy(j => string.IsNullOrWhiteSpace(j.Customer) ? "(no customer)" : j.Customer!.Trim(), StringComparer.OrdinalIgnoreCase)
-            .Select(g => new CustomerView(g.Key, g.OrderByDescending(j => j.Number).ToList(), qbByName.GetValueOrDefault(Key(g.Key))))
+        // Grouped by JobTread customer account (by name when a job has no account id).
+        var views = jobs.GroupBy(j => j.CustomerId ?? "name:" + (string.IsNullOrWhiteSpace(j.Customer) ? "(no customer)" : j.Customer!.Trim().ToLowerInvariant()))
+            .Select(g =>
+            {
+                var name = g.Select(j => j.Customer?.Trim()).FirstOrDefault(n => !string.IsNullOrEmpty(n)) ?? "(no customer)";
+                return new CustomerView(name, g.OrderByDescending(j => j.Number).ToList(), qbByName.GetValueOrDefault(Key(name)), g.First().CustomerId);
+            })
             .ToList();
 
         // QuickBooks customers who owe money but have no recent JobTread job still show.
@@ -66,15 +77,20 @@ public sealed class CustomersService(ProjectsService projects, QuickBooksClient 
         return list;
     }
 
-    public async Task<Dictionary<string, JobReview>> ReviewsAsync(CancellationToken ct) =>
-        database.Available ? await services.GetRequiredService<DashboardDb>().JobReviews.AsNoTracking().ToDictionaryAsync(r => r.JobId, ct) : [];
+    /// <summary>QuickBooks customers if they're already cached, else null. Never calls QuickBooks (used by search).</summary>
+    public List<QbCustomer>? CachedQbCustomers() => cache.TryGetValue("customers:qb", out List<QbCustomer>? hit) ? hit : null;
 
-    public async Task SaveReviewAsync(string jobId, string? jobName, string status, string? platform, int? rating, string? notes, string user, CancellationToken ct)
+    /// <summary>Review status per customer, by JobTread account id.</summary>
+    public async Task<Dictionary<string, CustomerReview>> ReviewsAsync(CancellationToken ct) =>
+        database.Available ? await services.GetRequiredService<DashboardDb>().CustomerReviews.AsNoTracking().ToDictionaryAsync(r => r.AccountId, ct) : [];
+
+    /// <summary>Saves the customer's review status in the dashboard database only (nothing is written to JobTread).</summary>
+    public async Task SaveReviewAsync(string accountId, string? customerName, string status, string? platform, int? rating, string? notes, string user, CancellationToken ct)
     {
         var db = services.GetRequiredService<DashboardDb>();
-        var r = await db.JobReviews.FirstOrDefaultAsync(x => x.JobId == jobId, ct);
-        if (r is null) db.JobReviews.Add(r = new JobReview { JobId = jobId, Status = status });
-        r.JobName = jobName;
+        var r = await db.CustomerReviews.FirstOrDefaultAsync(x => x.AccountId == accountId, ct);
+        if (r is null) db.CustomerReviews.Add(r = new CustomerReview { AccountId = accountId, Status = status });
+        r.CustomerName = customerName;
         if (status == "requested" && r.Status != "requested") r.RequestedOn = LocalClock.Today;
         if (status == "received" && r.Status != "received") r.ReceivedOn = LocalClock.Today;
         r.Status = status;
@@ -87,11 +103,11 @@ public sealed class CustomersService(ProjectsService projects, QuickBooksClient 
     }
 
     /// <summary>
-    /// Completed jobs with no review requested yet (and not marked "later" or "skip"), skipping customers
-    /// JobTread already marks "Left a Review" (that field is per customer, not per job).
+    /// A customer needs a review request when they have at least one completed job, JobTread doesn't mark them
+    /// "Left a Review", and there's no review status for them in the dashboard yet (any status, including "later" or "skip").
     /// </summary>
-    public static bool NeedsReview(ProjectSummary j, IReadOnlyDictionary<string, JobReview> reviews) =>
-        j.IsCompleted && !reviews.ContainsKey(j.Id) && j.CustomerLeftReview != true;
+    public static bool NeedsReview(CustomerView c, IReadOnlyDictionary<string, CustomerReview> reviews) =>
+        c.AccountId is not null && c.HasCompletedJob && !c.LeftReviewInJobTread && !reviews.ContainsKey(c.AccountId);
 
     private static string Key(string name) => new string(name.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
 

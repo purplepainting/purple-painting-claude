@@ -1,0 +1,141 @@
+@page "/changes"
+@model PurpleDashboard.Pages.Changes.IndexModel
+@using PurpleDashboard.Modules.Changes
+
+<div class="module-head">
+    <div class="pills" role="tablist" aria-label="Date range">
+        @foreach (var d in IndexModel.DayOptions)
+        {
+            var active = Model.CurrentDays == d;
+            <a class="pill@(active ? " active" : "")" asp-page="/Changes/Index" asp-all-route-data="Model.Route(days: d)" aria-current="@(active ? "page" : null)">Last @d days</a>
+        }
+    </div>
+    @if (Model.Database.Available)
+    {
+        <form class="filters" method="get" data-autosubmit>
+            @if (Model.CurrentDays != 30) { <input type="hidden" name="days" value="@Model.CurrentDays"> }
+            <select name="section" aria-label="Area">
+                <option value="">All areas</option>
+                @foreach (var a in Model.Areas)
+                {
+                    <option value="@a" selected="@(a == Model.Section)">@ChangeFormatter.AreaLabel(a)</option>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.Section) && !Model.Areas.Contains(Model.Section)) { <option value="@Model.Section" selected>@ChangeFormatter.AreaLabel(Model.Section)</option> }
+            </select>
+            <select name="person" aria-label="Person">
+                <option value="">Everyone</option>
+                @foreach (var (value, name) in Model.People)
+                {
+                    <option value="@value" selected="@(value == Model.Person)">@name</option>
+                }
+                @if (!string.IsNullOrWhiteSpace(Model.Person) && !Model.People.Any(p => p.Value == Model.Person)) { <option value="@Model.Person" selected>@Model.Names.Name(Model.Person)</option> }
+            </select>
+            <input type="search" name="q" value="@Model.Q" placeholder="Search job, task, person or item" aria-label="Search changes">
+            <button class="button secondary" type="submit">Search</button>
+            @if (Model.Filtered) { <a class="link-button" asp-page="/Changes/Index" asp-route-days="@(Model.CurrentDays == 30 ? null : Model.CurrentDays)">Clear</a> }
+        </form>
+    }
+</div>
+
+@if (!Model.Database.Available)
+{
+    <div class="card notice warn">
+        <strong>The change log isn't available right now.</strong>
+        <p>
+            @if (!Model.Database.Configured) { <text>The dashboard database isn't connected yet, so there's no change log to show.</text> }
+            else { <text>The dashboard database couldn't be reached. The change log shows here once it's back.</text> }
+        </p>
+    </div>
+}
+else if (Model.Error is not null)
+{
+    <div class="card notice warn"><strong>Couldn't load the change log.</strong><p>@Model.Error</p></div>
+}
+else
+{
+    <p class="list-meta muted">
+        @if (Model.Total == 0) { <text>No changes</text> }
+        else if (Model.Total == 1) { <text>1 change</text> }
+        else
+        {
+            var first = (Model.CurrentPage - 1) * ChangeLogReader.PageSize + 1;
+            <text>@(Model.Total > ChangeLogReader.PageSize ? $"{first}–{first + Model.Rows.Count - 1} of {Model.Total:N0}" : $"{Model.Total}") changes</text>
+        }
+        in the last @Model.CurrentDays days · newest first · read only
+    </p>
+
+    @if (Model.Rows.Count == 0)
+    {
+        <div class="card notice">
+            <p>@(Model.Filtered ? "Nothing matches these filters." : "Nobody has changed anything in this time.") Changes show up here when someone pushes the schedule, saves an employee, records a bonus, commission, sundry or review, or connects an app.</p>
+        </div>
+    }
+    else
+    {
+        <div class="job-list chg-list">
+            @foreach (var r in Model.Rows)
+            {
+                var e = r.Entry;
+                var who = Model.Names.Name(e.User);
+                <details class="job card chg" id="chg-@e.Id">
+                    <summary class="chg-row">
+                        <span class="chg-when muted" title="@IndexModel.Exact(e.At)"><time datetime="@DateTime.SpecifyKind(e.At, DateTimeKind.Utc).ToString("o")">@IndexModel.Relative(e.At)</time></span>
+                        <span class="chg-who" title="@e.User">@who</span>
+                        <span class="chg-area"><span class="chip">@r.AreaLabel</span></span>
+                        <span class="chg-text">
+                            <span class="chg-summary">@r.Summary</span>
+                            @if (r.Note is not null) { <span class="chg-note@(r.ResultClass == "good" ? " muted" : " neg")">@r.Note</span> }
+                        </span>
+                        <span class="chip @r.ResultClass chg-result">@r.ResultLabel</span>
+                        <span class="chevron" aria-hidden="true"></span>
+                    </summary>
+                    <div class="chg-detail">
+                        @if (r.Diffs.Count > 0)
+                        {
+                            <div class="table-wrap">
+                                <table class="data chg-diff">
+                                    <thead><tr><th></th><th>Before</th><th>After</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var d in r.Diffs)
+                                        {
+                                            <tr class="@(d.Changed ? "changed" : "same")"><th scope="row">@d.Label</th><td>@d.Before</td><td>@d.After</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        @if (r.Facts.Count > 0)
+                        {
+                            <dl class="detail-grid">
+                                @foreach (var f in r.Facts)
+                                {
+                                    <div><dt>@f.Label</dt><dd>@f.Value</dd></div>
+                                }
+                            </dl>
+                        }
+                        else if (r.Diffs.Count == 0)
+                        {
+                            <p class="muted small">No more details were recorded for this change.</p>
+                        }
+                        <p class="chg-meta muted small">
+                            @who@(e.User is not null && e.User != who ? $" ({e.User})" : "") · @IndexModel.Exact(e.At) · @ChangeFormatter.Humanize(e.Action)
+                            @if (r.Link is not null) { <text> · </text><a href="@r.Link">Open @r.AreaLabel</a> }
+                        </p>
+                    </div>
+                </details>
+            }
+        </div>
+
+        @if (Model.CurrentPage > 1 || Model.HasOlder)
+        {
+            <nav class="chg-pager" aria-label="More changes">
+                @if (Model.CurrentPage > 1) { <a class="button secondary" asp-page="/Changes/Index" asp-all-route-data="Model.Route(Model.CurrentPage - 1)">← Newer</a> }
+                @if (Model.HasOlder) { <a class="button secondary" asp-page="/Changes/Index" asp-all-route-data="Model.Route(Model.CurrentPage + 1)">Older →</a> }
+            </nav>
+        }
+    }
+}
+
+@section Scripts {
+    <script src="~/js/site.js" asp-append-version="true"></script>
+}

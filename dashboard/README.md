@@ -39,6 +39,7 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Integrations/QuickBooks/` | QuickBooks Online connection (read only). Setup: `docs/QUICKBOOKS.md` |
 | `Modules/Financials/` | Financials: QuickBooks report parsing, account rules (which account counts as wages, burden, job cost, overhead), JobTread vs QuickBooks by month |
 | `Pages/Connections/` | Connections page: JobTread status, your own JobTread key (for pushes), connect QuickBooks |
+| `Modules/Changes/` | Change log page data: `ChangeLogReader` (filters, paging), `ChangeFormatter` (one summary formatter per area; add one when a new area starts logging), `PersonNames` (email → name) |
 | `Modules/People/TeamDirectory.cs` | Everyone's crew level and PM color (Employees page, then settings, then JobTread role) |
 | `ViewComponents/SideNavViewComponent.cs` | Builds the left menu tiles and their numbers |
 | `Pages/Shared/_Icon.cshtml` | Line icons used on menu tiles |
@@ -51,6 +52,7 @@ For a local SQLite file: `ConnectionStrings__Dashboard="Data Source=/tmp/dashboa
 | `Modules/Hiring/` | Hiring (Employees → Hiring): `HiringService` (candidates, interview days, bookings, files), `TextTemplates` (English/Spanish texts), `InterviewSheet` (sheet answers), `HiringLists` (stages, positions, tools, checklists, SharePoint links) |
 | `Pages/Employees/Interviews/` | Hiring pages: candidates and days (`Index`), one day (`Day`), one candidate (`Candidate`), interview sheet (`Sheet`) |
 | `wwwroot/js/hiring.js` | Hiring: copy buttons, checkboxes that save in place |
+| `Modules/Search/` | `SearchService`: global search across the module services' cached data. Page and JSON at `Pages/Search/` (`/search?q=`, `/search?handler=suggest&q=`), top bar box in `_Layout` + `wwwroot/js/search.js` |
 | `wwwroot/js/schedule-editor.js` | The schedule editor (draft, drag/tap, review & push) |
 | `Infrastructure/` | Shared helpers: `LocalClock` (Pacific time), `Format` (money, %, dates) |
 | `docs/JOBTREAD.md` | How our JobTread data is structured and how to query it |

@@ -24,12 +24,14 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
     public DbSet<InventoryMovement> InventoryMovements => Set<InventoryMovement>();
     public DbSet<EquipmentItem> Equipment => Set<EquipmentItem>();
     public DbSet<EquipmentEvent> EquipmentEvents => Set<EquipmentEvent>();
+    /// <summary>No longer used (reviews are per customer now, see CustomerReviews). Kept so the table and its rows stay.</summary>
     public DbSet<JobReview> JobReviews => Set<JobReview>();
     public DbSet<HiringCandidate> HiringCandidates => Set<HiringCandidate>();
     public DbSet<HiringEvent> HiringEvents => Set<HiringEvent>();
     public DbSet<InterviewDay> InterviewDays => Set<InterviewDay>();
     public DbSet<InterviewBooking> InterviewBookings => Set<InterviewBooking>();
     public DbSet<CandidateDocument> CandidateDocuments => Set<CandidateDocument>();
+    public DbSet<CustomerReview> CustomerReviews => Set<CustomerReview>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -194,6 +196,15 @@ public sealed class DashboardDb(DbContextOptions<DashboardDb> options) : DbConte
             e.Property(x => x.ContentType).HasMaxLength(100);
             e.Property(x => x.Kind).HasMaxLength(40);
             e.Property(x => x.UploadedBy).HasMaxLength(200);
+        });
+        b.Entity<CustomerReview>(e =>
+        {
+            e.HasIndex(x => x.AccountId).IsUnique();
+            e.Property(x => x.AccountId).HasMaxLength(32);
+            e.Property(x => x.CustomerName).HasMaxLength(300);
+            e.Property(x => x.Status).HasMaxLength(20);
+            e.Property(x => x.Platform).HasMaxLength(40);
+            e.Property(x => x.UpdatedBy).HasMaxLength(200);
         });
         b.Entity<ChangeLogEntry>(e =>
         {
@@ -430,7 +441,10 @@ public sealed class EquipmentEvent
     public string? By { get; set; }
 }
 
-/// <summary>Review status for a finished job (dashboard-owned).</summary>
+/// <summary>
+/// Review status for a finished job. No longer used: reviews are tracked per customer (CustomerReview).
+/// The table is kept so earlier rows aren't lost (they only have a job id, so they can't be moved to a customer in SQL).
+/// </summary>
 public sealed class JobReview
 {
     public int Id { get; set; }
@@ -547,6 +561,27 @@ public sealed class CandidateDocument
     public required string Kind { get; set; }
     public DateTime UploadedAt { get; set; }
     public string? UploadedBy { get; set; }
+}
+
+/// <summary>
+/// Review status for a customer (dashboard-owned). One review per customer, even with several jobs.
+/// Keyed by the JobTread customer account id. Not written back to JobTread's "Left Review" field.
+/// </summary>
+public sealed class CustomerReview
+{
+    public int Id { get; set; }
+    public required string AccountId { get; set; }
+    public string? CustomerName { get; set; }
+    /// <summary>"requested", "received", "later", "skip".</summary>
+    public required string Status { get; set; }
+    /// <summary>Google, Yelp, Facebook, Houzz, Nextdoor, Other.</summary>
+    public string? Platform { get; set; }
+    public int? Rating { get; set; }
+    public string? Notes { get; set; }
+    public DateOnly? RequestedOn { get; set; }
+    public DateOnly? ReceivedOn { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public string? UpdatedBy { get; set; }
 }
 
 /// <summary>Audit log: who changed what, and the result (schedule pushes, employee edits).</summary>

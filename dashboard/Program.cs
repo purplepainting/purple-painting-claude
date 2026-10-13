@@ -55,6 +55,7 @@ builder.Services.AddHttpClient<PurpleDashboard.Integrations.QuickBooks.QuickBook
 
 // Modules
 builder.Services.AddScoped<ChangeLogWriter>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Changes.ChangeLogReader>();
 builder.Services.AddScoped<JobTreadUserKeys>();
 builder.Services.AddHostedService<JobTreadChangeWatcher>();
 builder.Services.AddHttpClient<JobTreadOAuth>(c => c.Timeout = TimeSpan.FromSeconds(30));
@@ -85,6 +86,7 @@ builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Customers.Custom
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Vendors.DueSoonMetric>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Equipment.LowStockMetric>();
 builder.Services.AddScoped<ITileMetric, PurpleDashboard.Modules.Sales.CommissionsOwedMetric>();
+builder.Services.AddScoped<PurpleDashboard.Modules.Search.SearchService>();
 builder.Services.AddSingleton<PurpleDashboard.Infrastructure.MenuNumbers>();
 
 var app = builder.Build();

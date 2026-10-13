@@ -21,7 +21,7 @@ public partial class IndexModel(
     CurrentUser me,
     ILogger<IndexModel> logger) : PageModel
 {
-    /// <summary>"week" (default) or "day".</summary>
+    /// <summary>"week" (default), "day" or "month".</summary>
     [BindProperty(SupportsGet = true)] public string? Mode { get; set; }
     /// <summary>"job" (default) or "person".</summary>
     [BindProperty(SupportsGet = true)] public string? By { get; set; }
@@ -32,11 +32,19 @@ public partial class IndexModel(
     [BindProperty(SupportsGet = true)] public DateOnly? Date { get; set; }
 
     public bool IsDay => Mode == "day";
+    public bool IsMonth => Mode == "month";
+
+    /// <summary>Tasks counted in the summary line: in Month, only the month itself (not the spill-over days of the grid).</summary>
+    public IEnumerable<ScheduleTask> SummaryTasks => IsMonth
+        ? Tasks.Where(t => t.Start <= Anchor.AddMonths(1).AddDays(-1) && t.End >= Anchor)
+        : Tasks;
     public bool ByPerson => By == "person";
     public bool Supervisors => Who == "supervisors";
     public DateOnly Today { get; } = LocalClock.Today;
     public DateOnly From { get; private set; }
     public DateOnly To { get; private set; }
+    /// <summary>First of the month shown (month view), else the first day shown.</summary>
+    public DateOnly Anchor { get; private set; }
     public IReadOnlyList<DateOnly> Days { get; private set; } = [];
     public IReadOnlyList<ScheduleTask> Tasks { get; private set; } = [];
     public IReadOnlyList<ScheduleRow> Rows { get; private set; } = [];
@@ -91,8 +99,19 @@ public partial class IndexModel(
         ViewData["ModuleName"] = "Scheduling";
 
         var date = Date ?? Today;
-        From = IsDay ? date : LocalClock.WeekStart(date);
-        To = IsDay ? date : From.AddDays(6);
+        if (IsMonth)
+        {
+            // Whole Monday–Sunday weeks that overlap the month.
+            Anchor = new DateOnly(date.Year, date.Month, 1);
+            From = LocalClock.WeekStart(Anchor);
+            To = LocalClock.WeekStart(Anchor.AddMonths(1).AddDays(-1)).AddDays(6);
+        }
+        else
+        {
+            From = IsDay ? date : LocalClock.WeekStart(date);
+            To = IsDay ? date : From.AddDays(6);
+            Anchor = From;
+        }
 
         IReadOnlyList<StaffMember> staff;
         IReadOnlyList<ScheduleTask> weekTasks;
@@ -102,6 +121,7 @@ public partial class IndexModel(
             Team = await directory.GetAsync(ct);
             staff = Team.Staff;
             var weekStart = LocalClock.WeekStart(From);
+            // One query for the whole month grid (paged 25 at a time, like a week).
             weekTasks = IsDay ? await schedule.GetTasksAsync(weekStart, weekStart.AddDays(6), refresh, ct) : Tasks;
         }
         catch (Exception e) when (e is JobTreadException or HttpRequestException or TaskCanceledException)
@@ -118,11 +138,18 @@ public partial class IndexModel(
         Tasks = Tasks.Where(t => IsSupervisorTask(t) == Supervisors).ToList();
         Colors = new JobColors(weekTasks.Where(t => IsSupervisorTask(t) == Supervisors).Select(t => t.JobId));
 
-        // Weekends only appear when something is scheduled on them.
+        // Weekends only appear when something is scheduled on them (the month grid always has all seven days).
         Days = Enumerable.Range(0, To.DayNumber - From.DayNumber + 1)
             .Select(From.AddDays)
-            .Where(d => IsDay || d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) || Tasks.Any(t => t.Covers(d)))
+            .Where(d => IsDay || IsMonth || d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) || Tasks.Any(t => t.Covers(d)))
             .ToList();
+
+        if (IsMonth)
+        {
+            // Read only, no labor costs: just which jobs have work each day.
+            MonthJobs = Days.ToDictionary(d => d, JobsOn);
+            return;
+        }
 
         Rows = ByPerson ? RowsByPerson() : RowsByJob();
         await LoadCostsAsync(ct);
@@ -177,6 +204,19 @@ public partial class IndexModel(
             return StatusCode(502, new { error = "Couldn't load this job's tasks from JobTread." });
         }
     }
+
+    /// <summary>Month view: the jobs with work each day, most people first.</summary>
+    public Dictionary<DateOnly, IReadOnlyList<MonthJob>> MonthJobs { get; private set; } = [];
+
+    /// <summary>Jobs per month cell before "+N more".</summary>
+    public const int MonthCellJobs = 4;
+
+    private IReadOnlyList<MonthJob> JobsOn(DateOnly day) => Tasks
+        .Where(t => t.Covers(day) && !IsMarkedForDeletion(t))
+        .GroupBy(t => t.JobId)
+        .Select(g => new MonthJob(g.First(), g.Select(t => ShortName(t.Name)).Distinct().ToList(), g.SelectMany(t => t.People).Distinct().Count(), g.All(t => t.Completed)))
+        .OrderByDescending(j => j.People).ThenBy(j => j.Job.JobName, StringComparer.OrdinalIgnoreCase)
+        .ToList();
 
     [GeneratedRegex("^[A-Za-z0-9]{1,32}$")]
     private static partial Regex JobIdPattern();
@@ -356,18 +396,39 @@ public partial class IndexModel(
         var t => t,
     };
 
-    public Dictionary<string, string?> Route(DateOnly? date = null, string? mode = null, string? by = null, string? who = null) => new()
+    public Dictionary<string, string?> Route(DateOnly? date = null, string? mode = null, string? by = null, string? who = null)
     {
-        ["who"] = (who ?? Who) == "supervisors" ? "supervisors" : null,
-        ["date"] = (date ?? From) == LocalClock.WeekStart(Today) && (mode ?? Mode) != "day" ? null : (date ?? From).ToString("yyyy-MM-dd"),
-        ["mode"] = (mode ?? Mode) == "day" ? "day" : null,
-        ["by"] = (by ?? By) == "person" ? "person" : null,
-    };
+        var m = mode ?? Mode;
+        var d = date ?? Anchor;
+        var isDefault = m switch
+        {
+            "day" => false,
+            "month" => d == new DateOnly(Today.Year, Today.Month, 1),
+            _ => d == LocalClock.WeekStart(Today),
+        };
+        return new()
+        {
+            ["who"] = (who ?? Who) == "supervisors" ? "supervisors" : null,
+            ["date"] = isDefault ? null : d.ToString("yyyy-MM-dd"),
+            ["mode"] = m is "day" or "month" ? m : null,
+            ["by"] = (by ?? By) == "person" ? "person" : null,
+        };
+    }
 
-    public DateOnly Previous => IsDay ? From.AddDays(-1) : From.AddDays(-7);
-    public DateOnly Next => IsDay ? From.AddDays(1) : From.AddDays(7);
+    /// <summary>Is the day inside the month being shown (month view grids include days from the months either side)?</summary>
+    public bool InMonth(DateOnly day) => day.Year == Anchor.Year && day.Month == Anchor.Month;
 
-    public string Heading => IsDay
+    /// <summary>The day to keep when switching view: today if it's in the period shown, else the period's first day.</summary>
+    public DateOnly FocusDay => IsMonth
+        ? (InMonth(Today) ? Today : Anchor)
+        : Today >= From && Today <= To ? Today : From;
+
+    public DateOnly Previous => IsMonth ? Anchor.AddMonths(-1) : IsDay ? From.AddDays(-1) : From.AddDays(-7);
+    public DateOnly Next => IsMonth ? Anchor.AddMonths(1) : IsDay ? From.AddDays(1) : From.AddDays(7);
+
+    public string Heading => IsMonth
+        ? Anchor.ToString("MMMM yyyy")
+        : IsDay
         ? From.ToString("dddd, MMMM d")
         : From.Month == To.Month ? $"{From:MMM d} – {To.Day}" : $"{From:MMM d} – {To:MMM d}";
 
@@ -386,5 +447,8 @@ public partial class IndexModel(
     [GeneratedRegex(@"^(Day\s*\d+\s*\([^)]*\)|(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s*[\d./]+)\s*[—–-]\s*", RegexOptions.IgnoreCase)]
     private static partial Regex DatePrefix();
 }
+
+/// <summary>One job's work on one day, for a month cell: its task names, how many people, all done.</summary>
+public sealed record MonthJob(ScheduleTask Job, IReadOnlyList<string> TaskNames, int People, bool Done);
 
 public sealed record ScheduleRow(string Title, string? Subtitle, string? ColorStyle, string? ProjectManager, string? JobId, IReadOnlyDictionary<DateOnly, IReadOnlyList<ScheduleTask>> Cells);

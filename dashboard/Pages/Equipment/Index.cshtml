@@ -60,7 +60,7 @@
             <h2 class="section-title">@group.Key</h2>
             @foreach (var i in group)
             {
-                <details class="job card emp">
+                <details class="job card emp" id="item-@i.Id">
                     <summary class="emp-row">
                         <span class="chip @(EquipmentService.IsLow(i) ? "warn" : "good")">@IndexModel.Qty(i.OnHand)</span>
                         <div class="job-main">
@@ -176,7 +176,7 @@ else if (Model.CurrentTab == "equipment")
             <h2 class="section-title">@group.Key <span class="muted">@group.Count()</span></h2>
             @foreach (var g in group)
             {
-                <details class="job card emp">
+                <details class="job card emp" id="gear-@g.Id">
                     <summary class="emp-row">
                         <span class="chip @IndexModel.ConditionCss(g.Condition)">@g.Condition</span>
                         <div class="job-main">
