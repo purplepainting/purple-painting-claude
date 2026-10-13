@@ -217,10 +217,12 @@ else if (Model.CurrentTab == "ads")
     var totalContract = Model.Sources.Sum(s => s.Contract);
     var g = Model.Google;
     var apiNames = string.Join(" and ", Model.ApiChannels.Select(a => a.Channel));
+    var qbReady = Model.Booked?.Ready == true;
+    var spendFrom = string.Join(" · ", Model.CountedSpend.GroupBy(s => SalesService.SourceLabel(s.ApiSource)).OrderByDescending(gr => gr.Sum(s => s.Amount)).Select(gr => $"{gr.Key} {Format.Money(gr.Sum(s => s.Amount))}"));
     if (Model.Error is null)
     {
         <div class="kpis">
-            <div class="card kpi"><span class="kpi-label">Ad spend</span><span class="kpi-value num">@Format.Money(totalSpend)</span><span class="kpi-sub">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy")@(Model.ApiChannels.Count > 0 ? $" · {apiNames} from the API" : "")</span></div>
+            <div class="card kpi"><span class="kpi-label">Ad spend</span><span class="kpi-value num">@Format.Money(totalSpend)</span><span class="kpi-sub">@Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy")@(spendFrom.Length > 0 ? $" · {spendFrom}" : "")</span></div>
             <div class="card kpi"><span class="kpi-label">Jobs sold (open + last year)</span><span class="kpi-value num">@Model.Sources.Sum(s => s.Jobs)</span></div>
             <div class="card kpi"><span class="kpi-label">Contract value</span><span class="kpi-value num">@Format.Money(totalContract)</span></div>
             @if (Model.JtLeads is { } jl)
@@ -247,7 +249,7 @@ else if (Model.CurrentTab == "ads")
         @if (g is { Ready: false })
         {
             <p class="muted">@g.Problem @if (g.ProblemKind != "not-configured") { <a href="/connections">Open Connections</a> }</p>
-            <p class="muted small">Until then, enter Google Ads spend by hand below like any other channel.</p>
+            <p class="muted small">Until then, Google Ads spend comes from what's booked in QuickBooks (6420 Google Advertising Lead Gen)@(qbReady ? "" : " once QuickBooks is connected, or add it by hand below").</p>
         }
         else if (g?.Report is { } report)
         {
@@ -301,7 +303,7 @@ else if (Model.CurrentTab == "ads")
     {
     <section class="card fin-section">
         <h2 class="section-title">Ads → revenue by lead source</h2>
-        <p class="muted small">Jobs sold (open + last year) by the customer's <b>Lead Source</b> in JobTread. The website form sets it from the ad click (Google Ad, Meta, NextDoor), otherwise it's set by hand. Google Ad and Google count as Google Ads, Meta as Facebook/Instagram. Spend: @(Model.ApiChannels.Count > 0 ? $"{string.Join("; ", Model.ApiChannels.Select(a => $"{a.Channel} from the {(a.Api == "Meta" ? "Meta Marketing" : a.Api)} API"))}; other channels are entered by hand." : "entered by hand.") Platform leads are what the ad platform reports. <b>JT leads</b> are new JobTread customer accounts created @Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy") with that Lead Source. <b>Close rate</b> is how many of those new accounts already have a sold job.</p>
+        <p class="muted small">Jobs sold (open + last year) by the customer's <b>Lead Source</b> in JobTread. The website form sets it from the ad click (Google Ad, Meta, NextDoor), otherwise it's set by hand. Google Ad and Google count as Google Ads, Meta as Facebook/Instagram. <b>Spend</b>, per channel and month: @(Model.ApiChannels.Count > 0 ? $"{string.Join("; ", Model.ApiChannels.Select(a => $"{a.Channel} from the {(a.Api == "Meta" ? "Meta Marketing" : a.Api)} API"))}; " : "")@(qbReady ? "otherwise what's booked in QuickBooks (see Platform vs QuickBooks below); spend not in QuickBooks can be added by hand." : "other channels as entered by hand.") Platform leads are what the ad platform reports. <b>JT leads</b> are new JobTread customer accounts created @Model.From.ToString("MMM yyyy") – @Model.To.ToString("MMM yyyy") with that Lead Source. <b>Close rate</b> is how many of those new accounts already have a sold job.</p>
         @if (Model.JtLeads is { Untagged: > 0 } untagged)
         {
             <p class="muted small">@untagged.Untagged.ToString("#,0") of @untagged.Total.ToString("#,0") new customer accounts in this period have no Lead Source in JobTread, so they aren't in any row. Sold jobs whose customer has no Lead Source are listed at the bottom by "How bid came in".</p>
@@ -309,7 +311,7 @@ else if (Model.CurrentTab == "ads")
         @if (Model.ReplacedSpend.Count > 0)
         {
             var rs = Model.ReplacedSpend.Values.ToList();
-            <p class="notice-inline warn small">@rs.Count hand-entered @(rs.Count == 1 ? "row isn't" : "rows aren't") counted (@string.Join(", ", rs.OrderBy(r => r.Row.Month).Select(r => $"{r.Row.Channel} {r.Row.Month}"))): the API has that channel and month, so the API figure is used instead, never both (see "Spend entered").</p>
+            <p class="notice-inline warn small">@rs.Count hand-entered @(rs.Count == 1 ? "row isn't" : "rows aren't") counted (@string.Join(", ", rs.OrderBy(r => r.Row.Month).Select(r => $"{r.Row.Channel} {r.Row.Month}"))): @(rs.All(r => r.ApiName == QuickBooksAdSpendService.SourceName) ? "QuickBooks has spend booked for that channel and month" : "an API or QuickBooks has that channel and month"), so that figure is used instead, never both (see "Spend entered").</p>
         }
         <div class="table-wrap">
             <table class="data">
@@ -317,26 +319,111 @@ else if (Model.CurrentTab == "ads")
                 <tbody>
                     @foreach (var s in Model.Sources)
                     {
-                        <tr class="@(s.NoLeadSource ? "muted" : "")"><td>@s.Source@if (s.FromApi) { <span class="chip good api-chip" title="Spend and leads from the @s.ApiSource API">API</span> }</td><td class="num">@s.Jobs</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Leads is { } l ? Format.Number(l) : "—")</td><td class="num">@(s.JtLeads?.ToString("#,0") ?? "—")</td><td class="num">@(s.CostPerJtLead is { } cpl ? Format.Money(cpl) : "—")</td><td class="num" title="@(s.CloseRate is not null ? $"{s.WonLeads} of {s.JtLeads} new accounts have a sold job" : "")">@(s.CloseRate is { } cr ? Format.Percent(100m * cr) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
+                        var isQb = s.ApiSource == QuickBooksAdSpendService.SourceName;
+                        <tr class="@(s.NoLeadSource ? "muted" : "")"><td>@s.Source@if (s.FromApi) { <span class="chip @(isQb ? "" : "good") api-chip" title="@(isQb ? "Spend booked in QuickBooks" : $"Spend and leads from the {s.ApiSource} API")">@(isQb ? "QB" : "API")</span> }</td><td class="num">@s.Jobs</td><td class="num">@Format.Money(s.Contract)</td><td class="num">@(s.Spend > 0 ? Format.Money(s.Spend) : "—")</td><td class="num">@(s.Leads is { } l ? Format.Number(l) : "—")</td><td class="num">@(s.JtLeads?.ToString("#,0") ?? "—")</td><td class="num">@(s.CostPerJtLead is { } cpl ? Format.Money(cpl) : "—")</td><td class="num" title="@(s.CloseRate is not null ? $"{s.WonLeads} of {s.JtLeads} new accounts have a sold job" : "")">@(s.CloseRate is { } cr ? Format.Percent(100m * cr) : "—")</td><td class="num">@(s.Spend > 0 ? (s.Contract / s.Spend).ToString("$0.00") : "—")</td></tr>
                     }
                 </tbody>
             </table>
         </div>
     </section>
 
+    <section class="card fin-section" id="reconcile">
+        <div class="gads-head">
+            <h2 class="section-title">Platform vs QuickBooks</h2>
+            @if (qbReady)
+            {
+                <span class="chip good">From QuickBooks</span>
+                <span class="gads-refresh"><a class="refresh-button" asp-page="/Sales/Index" asp-route-tab="ads" asp-route-period="@Model.Period" asp-route-qbrefresh="true" asp-fragment="reconcile">↻ Refresh</a>@if (PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.DataAsOf is { } qbAsOf) { <span class="muted small"> QuickBooks as of @Format.QbAsOf(qbAsOf)</span> }</span>
+            }
+            else
+            {
+                <span class="chip warn">@(Model.Booked?.State is BookedAdSpendState.Error ? "Needs attention" : "Not connected")</span>
+            }
+        </div>
+        @if (!qbReady)
+        {
+            <p class="muted">@Model.Booked?.Problem @if (Model.Booked?.State is not BookedAdSpendState.NotSetUp) { <a href="/connections">Open Connections</a> }</p>
+        }
+        else
+        {
+            var booked = Model.Booked!;
+            var flagged = Model.Reconcile.Count(r => r.Flag);
+            <p class="muted small">Ad spend booked in QuickBooks under 6400 Marketing &amp; Sales (@(booked.Accounts.Count > 0 ? string.Join(", ", booked.Accounts) : "no ad accounts found")), per channel and month, next to what the ad platform reports. 6410 is split by vendor (Facebook/Meta, Nextdoor, Yelp…; anything else is "Other advertising"). <b>Counted</b> is the figure used above: the platform when it's connected, else QuickBooks, else entered by hand. Difference = platform − QuickBooks.</p>
+            @if (booked.Problem is not null) { <p class="notice-inline warn small">@booked.Problem</p> }
+            @if (flagged > 0)
+            {
+                <p class="notice-inline warn small">@flagged @(flagged == 1 ? "month differs" : "months differ") by more than @Format.Money(SalesService.ReconcileMinDollars) and @((SalesService.ReconcileMinShare * 100).ToString("0"))% between the platform and QuickBooks (flagged below).</p>
+            }
+            @if (Model.ReplacedBooked.Count > 0)
+            {
+                <p class="muted small">QuickBooks figures for @string.Join(" and ", Model.ReplacedBooked.Select(r => r.Line.Channel).Distinct()) (@Format.Money(Model.ReplacedBooked.Sum(r => r.Line.Amount)) in this period) are shown for checking only; the platform's figure is counted, never both.</p>
+            }
+            <div class="table-wrap">
+                <table class="data reconcile">
+                    <thead><tr><th>Month</th><th>Channel</th><th class="num">Platform reported</th><th class="num">Booked in QuickBooks</th><th class="num">Difference</th><th class="num">Counted</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in Model.Reconcile)
+                        {
+                            <tr class="@(r.Flag ? "flagged" : "")">
+                                <td>@MonthLabel(r.Month)@if (r.Month == LocalClock.Today.ToString("yyyy-MM")) { <span class="muted small recon-src">so far</span> }</td>
+                                <td>@r.Channel</td>
+                                <td class="num">@(r.PlatformAmount is { } pa ? Format.Money(pa) : "—")@if (r.Platform is not null) { <span class="muted small recon-src">@r.Platform</span> } else { <span class="muted small recon-src">@(string.Equals(r.Channel, Model.GoogleChannel, StringComparison.OrdinalIgnoreCase) || string.Equals(r.Channel, MetaAdsService.Channel, StringComparison.OrdinalIgnoreCase) ? "not connected" : "no API")</span> }</td>
+                                <td class="num">@(r.Booked is { } b ? Format.Money(b) : "—")</td>
+                                <td class="num">@if (r.Difference is { } d) { <span class="@(r.Flag ? "chip warn" : "")">@(d > 0 ? "+" : "")@Format.Money(d)</span> } else { <span>—</span> }</td>
+                                <td class="num">@Format.Money(r.Counted)<span class="muted small recon-src">@r.CountedFrom</span></td>
+                            </tr>
+                        }
+                        @if (Model.Reconcile.Count == 0) { <tr><td colspan="6" class="muted">No ad spend booked in QuickBooks or reported by a platform in this period.</td></tr> }
+                    </tbody>
+                </table>
+            </div>
+            <details class="recon-more">
+                <summary>Why platform and QuickBooks differ</summary>
+                <ul class="muted small">
+                    <li><b>Billing timing.</b> Google and Meta charge the card when spend reaches a threshold or at month end, so a charge dated the 1st–3rd is often last month's clicks. It shows as one month high and the next low; over a few months they even out.</li>
+                    <li><b>Card charge booked to the wrong account.</b> A Google charge categorized under 6410 (or Meta under 6420, or either under office expenses or a general credit card account). Google charges in 6410 are counted as Google Ads here; ones in non-ad accounts aren't seen at all.</li>
+                    <li><b>Not booked yet.</b> Bank-feed transactions still waiting to be categorized in QuickBooks, especially this month (marked "so far").</li>
+                    <li><b>Credits and refunds.</b> Platform credits (invalid clicks, promo credits) lower QuickBooks but not always the platform's reported spend.</li>
+                    <li><b>Tax and fees.</b> Sales tax or card fees on ad charges make QuickBooks a little higher.</li>
+                </ul>
+            </details>
+            var inPeriod = booked.Lines.Where(l => string.CompareOrdinal(l.Month, Model.From.ToString("yyyy-MM")) >= 0 && string.CompareOrdinal(l.Month, Model.To.ToString("yyyy-MM")) <= 0).OrderByDescending(l => l.Date).ToList();
+            @if (inPeriod.Count > 0)
+            {
+                <details class="recon-more">
+                    <summary>QuickBooks lines in this period (@inPeriod.Count)</summary>
+                    <div class="table-wrap">
+                        <table class="data">
+                            <thead><tr><th>Date</th><th>Account</th><th>Vendor</th><th>Channel</th><th class="num">Amount</th></tr></thead>
+                            <tbody>
+                                @foreach (var l in inPeriod)
+                                {
+                                    <tr><td>@Format.Date(l.Date)</td><td>@l.Account</td><td>@(l.Vendor ?? l.Memo ?? "—")</td><td>@l.Channel</td><td class="num">@Format.Money(l.Amount)</td></tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            }
+        }
+    </section>
+
     @if (Model.CanEdit)
     {
         <section class="card fin-section">
-            <h2 class="section-title">Enter monthly spend</h2>
-            <form method="post" asp-page-handler="Spend" asp-route-period="@Model.Period" class="inline-form wrap">
-                <label class="field"><span>Month</span><input type="month" name="month" value="@LocalClock.Today.ToString("yyyy-MM")" required></label>
-                <label class="field"><span>Channel</span><input name="channel" list="channels" required placeholder="e.g. Facebook"></label>
-                <datalist id="channels">@foreach (var s in Model.Sources.Where(s => !s.NoLeadSource)) { <option value="@s.Source"></option> }</datalist>
-                <label class="field"><span>Amount</span><input name="amount" inputmode="decimal" required style="width:120px"></label>
-                <label class="field"><span>Leads (optional)</span><input type="number" name="leads" min="0" style="width:110px"></label>
-                <button class="button" type="submit">Save</button>
-            </form>
-            <p class="muted small">Use the channel names in the table above (JobTread's Lead Source; "Nextdoor", "Google Ads", "Facebook/Instagram" and their usual spellings line up automatically). Saving the same month and channel again replaces it.@(Model.ApiChannels.Count > 0 ? $" {apiNames} {(Model.ApiChannels.Count == 1 ? "comes" : "come")} from the API for the last 12 months; no need to enter {(Model.ApiChannels.Count == 1 ? "it" : "them")}. Nextdoor and other channels without an API stay manual." : "")</p>
+            <details class="recon-more spend-add" open="@(!qbReady && Model.ApiChannels.Count == 0)">
+                <summary>Add spend not in QuickBooks</summary>
+                <p class="muted small">Only for spend that isn't booked in QuickBooks@(Model.ApiChannels.Count > 0 ? $" and doesn't come from an API ({apiNames})" : "") (e.g. paid on a personal card). A month and channel QuickBooks already has isn't counted twice: QuickBooks wins.</p>
+                <form method="post" asp-page-handler="Spend" asp-route-period="@Model.Period" class="inline-form wrap">
+                    <label class="field"><span>Month</span><input type="month" name="month" value="@LocalClock.Today.ToString("yyyy-MM")" required></label>
+                    <label class="field"><span>Channel</span><input name="channel" list="channels" required placeholder="e.g. Nextdoor"></label>
+                    <datalist id="channels">@foreach (var s in Model.Sources.Where(s => !s.NoLeadSource)) { <option value="@s.Source"></option> }</datalist>
+                    <label class="field"><span>Amount</span><input name="amount" inputmode="decimal" required style="width:120px"></label>
+                    <label class="field"><span>Leads (optional)</span><input type="number" name="leads" min="0" style="width:110px"></label>
+                    <button class="button" type="submit">Save</button>
+                </form>
+                <p class="muted small">Use the channel names in the table above (JobTread's Lead Source; "Nextdoor", "Google Ads", "Facebook/Instagram" and their usual spellings line up automatically). Saving the same month and channel again replaces it.</p>
+            </details>
         </section>
     }
 
@@ -351,7 +438,8 @@ else if (Model.CurrentTab == "ads")
                         @foreach (var s in Model.Spend)
                         {
                             var r = Model.ReplacedSpend.GetValueOrDefault(s.Id);
-                            <tr class="@(r is not null ? "replaced" : "")"><td>@s.Month</td><td>@s.Channel@if (r is not null) { <span class="chip warn api-chip" title="@r.ApiName API for @s.Month: @Format.Money(r.ApiAmount)">Not counted · API: @Format.Money(r.ApiAmount)</span> }</td><td class="num">@Format.Money(s.Amount)</td><td class="num">@(s.Leads?.ToString() ?? "—")</td>
+                            var by = r is null ? "" : r.ApiName == QuickBooksAdSpendService.SourceName ? "QuickBooks" : "API";
+                            <tr class="@(r is not null ? "replaced" : "")"><td>@s.Month</td><td>@s.Channel@if (r is not null) { <span class="chip warn api-chip" title="@SalesService.SourceLabel(r.ApiName) for @s.Month: @Format.Money(r.ApiAmount)">Not counted · @by: @Format.Money(r.ApiAmount)</span> }</td><td class="num">@Format.Money(s.Amount)</td><td class="num">@(s.Leads?.ToString() ?? "—")</td>
                                 <td>@if (Model.CanEdit) { <form method="post" asp-page-handler="DeleteSpend" asp-route-period="@Model.Period" onsubmit="return confirm('Delete?')"><input type="hidden" name="id" value="@s.Id"><button class="link-button" type="submit">Delete</button></form> }</td></tr>
                         }
                     </tbody>

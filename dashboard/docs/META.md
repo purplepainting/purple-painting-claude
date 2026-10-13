@@ -99,7 +99,7 @@ All calls are `GET` (plus a report job if needed) with `appsecret_proof`:
 Meta spend is fed into the existing ads view as the channel **Facebook/Instagram**, next to hand-entered spend rows.
 For every month the API covers (the last 12), Meta's number **replaces** a hand-entered row for the same channel and
 month (Facebook/Instagram, Facebook, Instagram, Meta, Facebook Ads…). Both are never counted. The page notes which
-manual rows weren't counted, and marks them "Not counted · API: $X" in the Spend entered table (the same mechanism as Google Ads: `SalesService.MergeApiSpend`). Older months still use
+manual rows weren't counted, and marks them "Not counted · API: $X" in the Spend entered table (the same mechanism as Google Ads: `SalesService.MergeApiSpend`). Spend booked in QuickBooks for Meta (6410, vendor Facebook/Meta) is then shown only in "Platform vs QuickBooks", not counted. Older months still use
 hand-entered rows.
 
 ## Nextdoor

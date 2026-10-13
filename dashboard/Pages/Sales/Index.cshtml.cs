@@ -10,7 +10,7 @@ using PurpleDashboard.Modules.Sales;
 
 namespace PurpleDashboard.Pages.Sales;
 
-public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsService metaAds, JobTreadLeadsService jtLeads, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
+public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsService metaAds, QuickBooksAdSpendService qbAds, JobTreadLeadsService jtLeads, ChangeLogWriter changeLog, DatabaseStatus database, CurrentUser me, ILogger<IndexModel> logger) : PageModel
 {
     /// <summary>"commissions" (default), "doors", "ads".</summary>
     [BindProperty(SupportsGet = true)] public string? Tab { get; set; }
@@ -44,6 +44,14 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
     public Dictionary<int, ReplacedSpend> ReplacedSpend { get; private set; } = [];
     /// <summary>API channels feeding the ads view right now, e.g. ("Google Ads", "Google Ads API"), ("Facebook/Instagram", "Meta").</summary>
     public List<(string Channel, string Api)> ApiChannels { get; private set; } = [];
+    /// <summary>Ad spend booked in QuickBooks (6410/6420/6430/6440 by default), last 12 months. Null on other tabs.</summary>
+    public BookedAdSpend? Booked { get; private set; }
+    /// <summary>Platform reported vs booked in QuickBooks per channel and month in the period.</summary>
+    public List<ReconcileRow> Reconcile { get; private set; } = [];
+    /// <summary>QuickBooks booked lines not counted because an API covers that channel and month.</summary>
+    public List<ReplacedLine> ReplacedBooked { get; private set; } = [];
+    /// <summary>Refresh link in the reconcile section: drop cached QuickBooks data.</summary>
+    [BindProperty(SupportsGet = true)] public bool QbRefresh { get; set; }
     public GoogleAdsView? Google { get; private set; }
     public List<AdsMonth> GoogleMonths { get; private set; } = [];
     public List<AdsCampaign> GoogleCampaigns { get; private set; } = [];
@@ -89,14 +97,21 @@ public class IndexModel(SalesService sales, GoogleAdsService googleAds, MetaAdsS
                 Meta = await metaAds.LoadAsync(From, To, refresh || MetaRefresh, ct);
                 Spend = await sales.SpendAsync(fromMonth, toMonth, ct);
 
-                // API channels replace hand-entered rows for the same channel and month (never both).
+                if (QbRefresh) PurpleDashboard.Integrations.QuickBooks.QuickBooksClient.ClearCache();
+                Booked = await qbAds.GetAsync(googleAds.Channel, ct);
+
+                // One source per channel and month: platform API, else QuickBooks booked, else entered by hand (never two).
                 var apis = new List<ApiSpendSource>();
                 if (Google.Ready) apis.Add(SalesService.GoogleSpendSource(GoogleMonths, googleAds.Channel));
                 if (Meta.Report is { } metaReport) apis.Add(MetaAdsService.SpendSource(metaReport));
                 ApiChannels = apis.Select(a => (a.Channel, a.ApiName)).ToList();
-                var merged = SalesService.MergeApiSpend(Spend, apis, fromMonth, toMonth);
+                var bookedMonths = Booked.Ready ? Booked.Months : null;
+                var sources = bookedMonths is null ? apis : [.. apis, .. QuickBooksAdSpendService.SpendSources(Booked, googleAds.Channel)];
+                var merged = SalesService.MergeApiSpend(Spend, sources, fromMonth, toMonth);
                 CountedSpend = merged.Lines;
                 ReplacedSpend = merged.Replaced.ToDictionary(r => r.Row.Id);
+                ReplacedBooked = merged.ReplacedLines;
+                Reconcile = SalesService.Reconcile(apis, bookedMonths, CountedSpend, fromMonth, toMonth, googleAds.Channel);
                 var jobs = (await sales.SoldJobsAsync(refresh, ct)).Where(j => j.ApprovedContract > 0).ToList();
                 // New JobTread customer accounts by Lead Source, over the same whole months as the spend.
                 JtLeads = await jtLeads.GetAsync(new DateOnly(From.Year, From.Month, 1), To, refresh, ct);

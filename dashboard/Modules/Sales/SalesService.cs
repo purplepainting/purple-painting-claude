@@ -23,7 +23,7 @@ public sealed record PersonCommissions(string Person, CommissionRule? Rule, int 
 /// A lead source row: jobs sold to customers whose JobTread account has this Lead Source (mapped to a spend channel by
 /// <see cref="SalesService.ChannelFor"/>), spend and platform-reported leads for that channel, and new JobTread customer
 /// accounts in the period with this Lead Source (JtLeads). WonLeads = of those new accounts, how many have a sold job.
-/// ApiSource = the API the spend came from ("Google Ads", "Meta"), null when entered by hand.
+/// ApiSource = where the spend came from ("Google Ads", "Meta" APIs, or "QuickBooks" booked spend), null when entered by hand.
 /// NoLeadSource = jobs whose customer has no Lead Source, grouped by the job's "How bid came in" instead.
 /// </summary>
 public sealed record LeadSource(string Source, int Jobs, decimal Contract, decimal Spend, decimal? Leads = null, string? ApiSource = null,
@@ -35,7 +35,7 @@ public sealed record LeadSource(string Source, int Jobs, decimal Contract, decim
     public decimal? CloseRate => JtLeads > 0 ? (decimal)WonLeads / JtLeads.Value : null;
 }
 
-/// <summary>One month of spend for a channel: entered by hand (AdSpends) or from an ad platform API (ApiSource: "Google Ads", "Meta").</summary>
+/// <summary>One month of spend for a channel: entered by hand (AdSpends), from an ad platform API (ApiSource: "Google Ads", "Meta") or booked in QuickBooks (ApiSource: "QuickBooks").</summary>
 public sealed record SpendLine(string Month, string Channel, decimal Amount, decimal? Leads, string? ApiSource = null)
 {
     public bool FromApi => ApiSource is not null;
@@ -50,8 +50,28 @@ public sealed record ApiSpendSource(string ApiName, string Channel, Func<string,
 /// <summary>A hand-entered row not counted because an API covers that channel and month; ApiAmount = the API's figure for it.</summary>
 public sealed record ReplacedSpend(AdSpend Row, string ApiName, decimal ApiAmount);
 
-/// <summary>Spend for a period with API channels merged in. Replaced = hand-entered rows not counted because an API covers them.</summary>
-public sealed record MergedSpend(List<SpendLine> Lines, List<ReplacedSpend> Replaced);
+/// <summary>A source line (e.g. QuickBooks booked spend) not counted because a higher-priority source (an ad platform API) covers that channel and month.</summary>
+public sealed record ReplacedLine(SpendLine Line, string ApiName, decimal ApiAmount);
+
+/// <summary>
+/// Spend for a period with API and QuickBooks channels merged in. Replaced = hand-entered rows not counted because a source
+/// covers them; ReplacedLines = source lines (QuickBooks) not counted because a higher-priority source (API) covers them.
+/// </summary>
+public sealed record MergedSpend(List<SpendLine> Lines, List<ReplacedSpend> Replaced, List<ReplacedLine> ReplacedLines);
+
+/// <summary>
+/// One channel and month on the reconcile view: what the ad platform reported (null when no platform covers it), what's
+/// booked in QuickBooks (null when QuickBooks isn't read), and what the ads view counts (and from where).
+/// </summary>
+public sealed record ReconcileRow(string Month, string Channel, string? Platform, decimal? PlatformAmount, decimal? Booked, decimal Counted, string CountedFrom)
+{
+    /// <summary>Platform − QuickBooks, when both are known.</summary>
+    public decimal? Difference => PlatformAmount is { } p && Booked is { } b ? p - b : null;
+
+    /// <summary>Worth a look: the difference is over $25 and over 5% of the platform figure (or of QuickBooks when the platform shows $0).</summary>
+    public bool Flag => Difference is { } d && Math.Abs(d) > SalesService.ReconcileMinDollars
+        && Math.Abs(d) > SalesService.ReconcileMinShare * (PlatformAmount is > 0 ? PlatformAmount.Value : Math.Abs(Booked ?? 0));
+}
 
 /// <summary>
 /// Sales &amp; Marketing: commissions per salesperson (rules and payments in the dashboard database, jobs and
@@ -234,24 +254,90 @@ public sealed class SalesService(ProjectsService projects, PurpleDashboard.Modul
     }
 
     /// <summary>
-    /// Spend for months from..to: each API channel (Google Ads, Facebook/Instagram) from its API, every other channel as
-    /// entered. A hand-entered row for a channel and month an API covers isn't counted (never both, so nothing is double
-    /// counted); it's returned in Replaced with the API's figure. Without API sources everything entered counts.
+    /// Spend for months from..to, one source per channel and month, in priority order: the ad platform APIs (Google Ads,
+    /// Facebook/Instagram) for the months they cover, then QuickBooks booked spend (<see cref="QuickBooksAdSpendService.SpendSources"/>)
+    /// for channel-months with bookings, then hand-entered rows. <paramref name="apis"/> is in that priority order. A line or
+    /// row for a channel and month a higher source covers isn't counted (never both, so nothing is double counted): hand-entered
+    /// rows come back in Replaced, source lines (QuickBooks under an API) in ReplacedLines, each with the winning source's figure.
+    /// Without sources everything entered counts.
     /// </summary>
     public static MergedSpend MergeApiSpend(IEnumerable<AdSpend> manual, IEnumerable<ApiSpendSource> apis, string fromMonth, string toMonth)
     {
         bool InRange(string month) => string.CompareOrdinal(month, fromMonth) >= 0 && string.CompareOrdinal(month, toMonth) <= 0;
         var sources = apis.ToList();
+        ApiSpendSource? Winner(string month, string channel, int before) => sources.Take(before).FirstOrDefault(a => a.Covers(month) && a.IsSameChannel(channel));
+        static decimal AmountOf(ApiSpendSource a, string month) => a.Months.Where(m => m.Month == month).Sum(m => m.Amount);
+
         var lines = new List<SpendLine>();
         var replaced = new List<ReplacedSpend>();
+        var replacedLines = new List<ReplacedLine>();
         foreach (var s in manual)
         {
-            var api = sources.FirstOrDefault(a => a.Covers(s.Month) && a.IsSameChannel(s.Channel.Trim()));
+            var api = Winner(s.Month, s.Channel.Trim(), sources.Count);
             if (api is null) lines.Add(new SpendLine(s.Month, s.Channel.Trim(), s.Amount, s.Leads));
-            else replaced.Add(new ReplacedSpend(s, api.ApiName, api.Months.Where(m => m.Month == s.Month).Sum(m => m.Amount)));
+            else replaced.Add(new ReplacedSpend(s, api.ApiName, AmountOf(api, s.Month)));
         }
-        lines.AddRange(sources.SelectMany(a => a.Months).Where(m => InRange(m.Month)));
-        return new MergedSpend(lines, replaced);
+        for (var i = 0; i < sources.Count; i++)
+        {
+            foreach (var m in sources[i].Months.Where(m => InRange(m.Month)))
+            {
+                var higher = Winner(m.Month, m.Channel, i);
+                if (higher is null) lines.Add(m);
+                else replacedLines.Add(new ReplacedLine(m, higher.ApiName, AmountOf(higher, m.Month)));
+            }
+        }
+        return new MergedSpend(lines, replaced, replacedLines);
+    }
+
+    public const decimal ReconcileMinDollars = 25m;
+    public const decimal ReconcileMinShare = 0.05m;
+
+    /// <summary>Display name of a spend source: "Google Ads API", "Meta API", "QuickBooks", or "Entered by hand" (null).</summary>
+    public static string SourceLabel(string? apiSource) => apiSource switch
+    {
+        null => "Entered by hand",
+        QuickBooksAdSpendService.SourceName => "QuickBooks",
+        var a => a + " API",
+    };
+
+    /// <summary>
+    /// Platform reported vs booked in QuickBooks per channel and month (from..to): a row for every month an API covers (its
+    /// figure next to QuickBooks' for the same channel) and every channel-month with QuickBooks bookings but no platform.
+    /// <paramref name="booked"/> is QuickBooks' per channel and month (null when QuickBooks isn't read); <paramref name="counted"/>
+    /// is the merged spend, for the Counted column. Newest month first, then channels by spend.
+    /// </summary>
+    public static List<ReconcileRow> Reconcile(IEnumerable<ApiSpendSource> platforms, IReadOnlyList<SpendLine>? booked, IEnumerable<SpendLine> counted, string fromMonth, string toMonth, string googleChannel)
+    {
+        var cmp = StringComparer.OrdinalIgnoreCase;
+        var months = new List<string>();
+        if (DateOnly.TryParseExact(fromMonth + "-01", "yyyy-MM-dd", out var m0) && DateOnly.TryParseExact(toMonth + "-01", "yyyy-MM-dd", out var m1))
+            for (var m = m0; m <= m1; m = m.AddMonths(1)) months.Add(m.ToString("yyyy-MM"));
+        var countedList = counted.ToList();
+        (decimal Amount, string From) Counted(string month, string channel)
+        {
+            var c = countedList.Where(l => l.Month == month && cmp.Equals(ChannelFor(l.Channel, googleChannel), channel)).ToList();
+            var from = string.Join(" + ", c.Select(l => SourceLabel(l.ApiSource)).Distinct());
+            return (c.Sum(l => l.Amount), from.Length == 0 ? "—" : from);
+        }
+
+        var rows = new List<ReconcileRow>();
+        var platformList = platforms.ToList();
+        foreach (var month in months)
+        {
+            foreach (var p in platformList.Where(p => p.Covers(month)))
+            {
+                decimal? b = booked is null ? null : booked.Where(l => l.Month == month && p.IsSameChannel(l.Channel)).Sum(l => l.Amount);
+                var (amount, from) = Counted(month, p.Channel);
+                rows.Add(new ReconcileRow(month, p.Channel, SourceLabel(p.ApiName), p.Months.Where(x => x.Month == month).Sum(x => x.Amount), b, amount, from));
+            }
+            foreach (var g in (booked ?? []).Where(l => l.Month == month && !platformList.Any(p => p.Covers(month) && p.IsSameChannel(l.Channel))).GroupBy(l => l.Channel, cmp))
+            {
+                var (amount, from) = Counted(month, g.Key);
+                rows.Add(new ReconcileRow(month, g.Key, null, null, g.Sum(l => l.Amount), amount, from));
+            }
+        }
+        var channelOrder = rows.GroupBy(r => r.Channel, cmp).OrderByDescending(g => g.Sum(r => Math.Max(r.PlatformAmount ?? 0, r.Booked ?? 0))).Select(g => g.Key).ToList();
+        return rows.OrderByDescending(r => r.Month).ThenBy(r => channelOrder.FindIndex(c => cmp.Equals(c, r.Channel))).ToList();
     }
 
     /// <summary>Row name for sold jobs whose customer account has no Lead Source: grouped by the job's "How bid came in".</summary>
@@ -275,7 +361,7 @@ public sealed class SalesService(ProjectsService projects, PurpleDashboard.Modul
             .ToDictionary(g => g.Key, g => (Jobs: g.Count(), Contract: g.Sum(j => j.Contract ?? 0)), cmp);
         var noSource = jobList.Where(j => j.CustomerLeadSource is null).Select(KeyOf).ToHashSet(cmp);
         var spendBy = spend.GroupBy(s => ChannelFor(s.Channel, googleChannel), cmp).ToDictionary(g => g.Key,
-            g => (Amount: g.Sum(s => s.Amount), Leads: g.Any(s => s.Leads is not null) ? g.Sum(s => s.Leads ?? 0) : (decimal?)null, Api: g.Select(s => s.ApiSource).FirstOrDefault(a => a is not null)),
+            g => (Amount: g.Sum(s => s.Amount), Leads: g.Any(s => s.Leads is not null) ? g.Sum(s => s.Leads ?? 0) : (decimal?)null, Api: g.Select(s => s.ApiSource).Where(a => a is not null).OrderBy(a => a == QuickBooksAdSpendService.SourceName).FirstOrDefault()),
             cmp);
         var leadsBy = (jtLeads?.BySource ?? new Dictionary<string, int>())
             .GroupBy(kv => ChannelFor(kv.Key, googleChannel), cmp).ToDictionary(g => g.Key, g => g.Sum(kv => kv.Value), cmp);
