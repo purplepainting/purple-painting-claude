@@ -54,7 +54,7 @@ h2 { font-size: 17px; font-weight: 700; }
 .shell { display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr); min-height: 100vh; }
 .sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; background: var(--purple-900); color: #fff; padding: calc(14px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 14px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; min-height: var(--touch); padding: 0 6px; color: #fff; text-decoration: none; font-weight: 700; }
-.logo { width: 34px; height: 34px; border-radius: var(--radius-sm); background: var(--purple-600); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; }
+.logo { width: 34px; height: 34px; border-radius: var(--radius-sm); background: #fff; flex: none; object-fit: contain; }
 .sidenav { display: grid; gap: 6px; }
 .navtile { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 8px 10px; border-radius: 12px; color: #fff; text-decoration: none; border: 1px solid transparent; }
 @media (hover: hover) { .navtile:hover { background: rgba(255,255,255,.07); } }
