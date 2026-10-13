@@ -461,6 +461,11 @@ table.data tr.burden-row td:first-child { padding-left: 24px; }
 .cust-job { border-top: 1px solid var(--border); padding-top: 10px; display: grid; gap: 4px; }
 .cust-job-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
 .cust-links { margin-left: auto; display: flex; gap: 4px; }
+.cust-review { border: 1px solid var(--border); border-radius: 10px; background: var(--purple-50); padding: 10px 12px; }
+.cust-review-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.cust-review .inline-form select, .cust-review .inline-form input { min-height: 44px; }
+.cust-review-chip { margin-left: 8px; vertical-align: 1px; }
+@media (max-width: 760px) { .cust-review .inline-form .field.grow { flex-basis: 100%; } }
 .connection-head { flex-wrap: wrap; } .connection-head h2 { margin-right: auto; }
 
 /* Job timeline */
