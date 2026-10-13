@@ -343,7 +343,7 @@ public sealed class MetaClient(
 
     private async Task<List<MetaAdAccount>> LoadAdAccountsAsync(string token, CancellationToken ct)
     {
-        return (await AllPagesAsync("me/adaccounts?fields=id,name,account_status,currency,business{name}&limit=200", token, ct)).Select(ToAccount).ToList();
+        return (await AllPagesAsync("me/adaccounts?fields=id,name,account_status,currency&limit=200", token, ct)).Select(ToAccount).ToList();
     }
 
     private async Task<List<MetaAdAccount>> AdAccountsFromFixtureAsync(CancellationToken ct) =>
