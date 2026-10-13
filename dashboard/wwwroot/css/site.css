@@ -67,7 +67,12 @@ h2 { font-size: 17px; font-weight: 700; }
 .navtile-sub { font-size: 12px; color: var(--purple-100); opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .navtile.is-soon .navtile-name { opacity: .75; }
 .navtile-metric { font-size: 15px; font-weight: 600; color: #fff; background: rgba(255,255,255,.12); border-radius: 999px; padding: 2px 9px; }
-.sidebar-user { margin-top: auto; padding: 8px 6px 0; font-size: 12px; color: var(--purple-100); border-top: 1px solid rgba(255,255,255,.12); overflow-wrap: anywhere; }
+.sidebar-user { margin-top: auto; padding: 10px 2px 0; font-size: 13px; color: var(--purple-100); border-top: 1px solid rgba(255,255,255,.12); display: flex; align-items: center; gap: 8px; }
+.sidebar-user-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); color: #fff !important; text-decoration: none !important; font-weight: 600; font-size: 13px; flex: none; }
+.settings-button svg { width: 18px; height: 18px; }
+@media (hover: hover) { .settings-button:hover { background: rgba(255,255,255,.08); } }
+.settings-button.active, .settings-button.pressed, .settings-button:active { background: rgba(255,255,255,.16); border-color: rgba(217,204,232,.5); }
 .scrim { display: none; }
 
 .topbar { position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--border); padding-top: env(safe-area-inset-top); }
@@ -873,3 +878,12 @@ table.data.unmatched td { white-space: nowrap; }
   .meta-kpis .kpi { padding: 10px 12px; }
 }
 .notice-inline.good { color: var(--good-text); margin: 8px 0 0; font-weight: 600; }
+
+/* Settings page */
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.settings-tile { display: flex; gap: 14px; align-items: flex-start; padding: 16px; text-decoration: none; color: inherit; }
+.settings-tile .tile-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--purple-50); color: var(--purple-700); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.settings-tile .tile-icon svg { width: 22px; height: 22px; }
+.settings-tile b { display: block; margin-bottom: 2px; }
+@media (hover: hover) { a.settings-tile:hover { border-color: var(--purple-600); } }
+.settings-tile.danger .tile-icon { background: #FBEAEA; color: #B91C1C; }
