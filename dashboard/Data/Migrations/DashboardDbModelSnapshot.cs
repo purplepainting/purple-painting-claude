@@ -199,6 +199,63 @@ namespace PurpleDashboard.Data.Migrations
                     b.ToTable("BonusExclusions");
                 });
 
+            modelBuilder.Entity("PurpleDashboard.Data.BonusJobExclusion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("JobId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("JobName")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobId")
+                        .IsUnique();
+
+                    b.ToTable("BonusJobExclusions");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            CreatedAt = new DateTime(2026, 10, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedBy = "kareem@purplepainting.net",
+                            JobId = "22PX9MaHxFt8",
+                            JobName = "Goleta Valley Cottage Hospital",
+                            Reason = "Paid out in the spreadsheet bonus round; QuickBooks catch-up costs and old billing were added in August"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            CreatedAt = new DateTime(2026, 10, 13, 0, 0, 0, 0, DateTimeKind.Utc),
+                            CreatedBy = "kareem@purplepainting.net",
+                            JobId = "22PXjg7k8Eu3",
+                            JobName = "1509 Shoreline Dr",
+                            Reason = "Paid out in the spreadsheet bonus round; QuickBooks catch-up costs were added in August"
+                        });
+                });
+
             modelBuilder.Entity("PurpleDashboard.Data.BonusPayment", b =>
                 {
                     b.Property<int>("Id")

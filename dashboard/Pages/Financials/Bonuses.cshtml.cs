@@ -6,6 +6,7 @@ using PurpleDashboard.Data;
 using PurpleDashboard.Infrastructure;
 using PurpleDashboard.Integrations.JobTread;
 using PurpleDashboard.Integrations.QuickBooks;
+using PurpleDashboard.Modules.Changes;
 using PurpleDashboard.Modules.Financials;
 using PurpleDashboard.Modules.People;
 
@@ -50,6 +51,8 @@ public class BonusesModel(
     [TempData] public string? Message { get; set; }
     /// <summary>QuickBooks net profit for the month (null when QuickBooks isn't connected).</summary>
     public decimal? CompanyNet { get; private set; }
+    /// <summary>QuickBooks net profit for the month with bonus payroll added back: what the pools should be 20% of.</summary>
+    public decimal? CompanyNetBeforeBonuses { get; private set; }
     public bool Held => Rules.HoldWhenCompanyLoses && CompanyNet < 0;
     public DateTime? QbAsOf => QuickBooksClient.DataAsOf;
 
@@ -57,6 +60,9 @@ public class BonusesModel(
     public static string Key(DateOnly m) => BonusService.Key(m);
     public static string Label(DateOnly m) => BonusService.Label(m);
     public string RaterKey => me.Email ?? me.DisplayName ?? "unknown";
+    /// <summary>Raters are stored by email; this shows them by name.</summary>
+    public PersonNames RaterNames => raterNames ??= new PersonNames(me.Email, me.DisplayName, new Dictionary<string, string>(), Staff);
+    private PersonNames? raterNames;
     public decimal PayableNow(PersonReconcile r) => Held ? 0 : r.Owed;
     public decimal ClawbackTotal(BonusClawback c) => bonuses.ClawbackTotal(c);
 
@@ -120,6 +126,7 @@ public class BonusesModel(
             if (await quickBooks.GetConnectionAsync(ct) is null) return;
             var report = await financials.GetAsync(Selected, Selected.AddMonths(1).AddDays(-1), "Accrual", false, ct);
             CompanyNet = report.Total.QbNet;
+            CompanyNetBeforeBonuses = report.Total.QbNetBeforeBonuses;
         }
         catch (Exception e) when (e is QuickBooksException or JobTreadException or HttpRequestException or TaskCanceledException)
         {
@@ -301,6 +308,16 @@ public class BonusesModel(
         await bonuses.SetExclusionAsync(person, Selected, include ? null : reason, User(), ct);
         Message = include ? $"{person} counts for {Label(Selected)} bonuses again." : $"{person} is excluded from {Label(Selected)} bonuses: {reason!.Trim()}.";
         return Back("effort", "ex-" + Slug(person));
+    }
+
+    public async Task<IActionResult> OnPostLeaveOutJobAsync(string jobId, string? jobName, string? reason, bool include, CancellationToken ct)
+    {
+        if (!await StartAsync(ct)) return Back("jobs", null);
+        var name = string.IsNullOrWhiteSpace(jobName) ? jobId : jobName.Trim();
+        if (!include && string.IsNullOrWhiteSpace(reason)) { Message = "Say why the job is left out (e.g. paid out in the spreadsheet round)."; return Back("jobs", "job-" + jobId); }
+        await bonuses.SetJobExclusionAsync(jobId, jobName, include ? null : reason, User(), ct);
+        Message = include ? $"{name} counts toward bonuses again." : $"{name} is left out of bonuses: {reason!.Trim()}.";
+        return Back("jobs", "left-out");
     }
 
     public async Task<IActionResult> OnPostRateAsync(List<string> membershipId, List<string?> score, List<string?> notes, CancellationToken ct)

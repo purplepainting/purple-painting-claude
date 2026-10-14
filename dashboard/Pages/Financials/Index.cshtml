@@ -59,6 +59,17 @@ else if (Model.Report is { } r)
         </div>
 
         <section class="card fin-section">
+            <h2 class="section-title">Does JobTread match QuickBooks?</h2>
+            <p class="muted small">JobTread's burdened rates carry wages, payroll taxes, comp, insurance and overhead, so profit on JobTread's jobs should come out the same as QuickBooks net profit before bonuses (bonuses are paid out of that profit, 20%). Internal jobs (office work, time off, shop labor) are left out of JobTread's side: QuickBooks already books them as overhead. What's left over is timing (invoices and bills dated in a different month) or rates that are off.</p>
+            <div class="kpis">
+                <div class="card kpi"><span class="kpi-label">JobTread job profit</span><span class="kpi-value num@(t.JtJobProfit < 0 ? " neg" : "")">@Format.Money(t.JtJobProfit)</span><span class="kpi-sub num">invoices − bills − time at burdened rates</span></div>
+                <div class="card kpi"><span class="kpi-label">QuickBooks net before bonuses</span><span class="kpi-value num@(t.QbNetBeforeBonuses < 0 ? " neg" : "")">@Format.Money(t.QbNetBeforeBonuses)</span><span class="kpi-sub num">net @Format.Money(t.QbNet) + bonuses @Format.Money(t.QbBonuses)</span></div>
+                <div class="card kpi"><span class="kpi-label">Delta (JT − QB)</span><span class="kpi-value num@(Math.Abs(t.NetDelta) >= 1000 ? " neg" : "")">@IndexModel.Signed(t.NetDelta)</span><span class="kpi-sub num">@IndexModel.Pct(Math.Abs(t.NetDelta), t.QbIncome) of revenue · @(t.NetDelta > 0 ? "JobTread shows more profit" : t.NetDelta < 0 ? "JobTread shows less profit" : "a match")</span></div>
+                <div class="card kpi"><span class="kpi-label">Bonuses at 20%</span><span class="kpi-value num">@Format.Money(t.JtJobProfit * 0.2m)</span><span class="kpi-sub num">vs @Format.Money(t.QbNetBeforeBonuses * 0.2m) on QuickBooks · @IndexModel.Signed(t.NetDelta * 0.2m)</span></div>
+            </div>
+        </section>
+
+        <section class="card fin-section">
             <h2 class="section-title">JobTread vs QuickBooks</h2>
             <div class="table-wrap">
                 <table class="data">
@@ -68,6 +79,13 @@ else if (Model.Report is { } r)
                         <tr><td>Field labor <span class="muted small">(JT burdened time vs QB wages + burden)</span></td><td class="num">@Format.Money(t.JtLaborCost)</td><td class="num">@Format.Money(t.QbLabor)</td><td class="num">@IndexModel.Gap(t.QbLabor, t.JtLaborCost)</td></tr>
                         <tr><td>Job costs <span class="muted small">(JT bills vs QB materials, jobsite)</span></td><td class="num">@Format.Money(t.JtBills)</td><td class="num">@Format.Money(t.QbJobCosts)</td><td class="num">@IndexModel.Gap(t.QbJobCosts, t.JtBills)</td></tr>
                         <tr class="total"><td>Gross profit</td><td class="num">@Format.Money(t.JtGrossProfit) <span class="muted">(@IndexModel.Pct(t.JtGrossProfit, t.JtInvoiced))</span></td><td class="num">@Format.Money(t.QbGrossProfit) <span class="muted">(@IndexModel.Pct(t.QbGrossProfit, t.QbIncome))</span></td><td class="num">@IndexModel.Gap(t.QbGrossProfit, t.JtGrossProfit)</td></tr>
+                        @if (t.JtSkippedInvoiced != 0 || t.JtSkippedBills != 0)
+                        {
+                            <tr><td>Catch-up documents left out <span class="muted small">(GVCH pay apps and QB Historical Catch-Up bills dated Aug 2026 by mistake; in QuickBooks in earlier months)</span></td><td class="num">invoices −@Format.Money(t.JtSkippedInvoiced) · bills −@Format.Money(t.JtSkippedBills)</td><td class="num muted">earlier months</td><td class="num"></td></tr>
+                        }
+                        <tr><td>Internal jobs <span class="muted small">(JT time and bills on office work, time off, shop labor: overhead in QB)</span></td><td class="num">−@Format.Money(t.JtInternalLabor + t.JtInternalBills)</td><td class="num muted">in overhead</td><td class="num"></td></tr>
+                        <tr><td>Overhead <span class="muted small">(not bonuses; JT carries it in the burdened rates)</span></td><td class="num muted">in rates</td><td class="num">@Format.Money(t.QbOverhead - t.QbBonuses)</td><td class="num"></td></tr>
+                        <tr class="total"><td>Profit before bonuses <span class="muted small">(JT job profit vs QB net + bonuses)</span></td><td class="num">@Format.Money(t.JtJobProfit)</td><td class="num">@Format.Money(t.QbNetBeforeBonuses)</td><td class="num">@IndexModel.Gap(t.QbNetBeforeBonuses, t.JtJobProfit)</td></tr>
                         <tr><td>Field hours / cost per hour</td><td class="num">@Format.Number(t.JtHours) hrs · @IndexModel.PerHour(t.JtCostPerHour)</td><td class="num">@IndexModel.PerHour(t.QbCostPerHour)</td><td class="num">@(t.QbCostPerHour is { } q && t.JtCostPerHour is { } j ? IndexModel.PerHour(q - j) : "—")</td></tr>
                     </tbody>
                 </table>
@@ -89,7 +107,7 @@ else if (Model.Report is { } r)
             <h2 class="section-title">By month</h2>
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>Month</th><th class="num">QB revenue</th><th class="num">JT invoiced</th><th class="num">QB labor</th><th class="num">JT labor</th><th class="num">QB job costs</th><th class="num">JT bills</th><th class="num">QB overhead</th><th class="num">QB net</th></tr></thead>
+                    <thead><tr><th>Month</th><th class="num">QB revenue</th><th class="num">JT invoiced</th><th class="num">QB labor</th><th class="num">JT labor</th><th class="num">QB job costs</th><th class="num">JT bills</th><th class="num">QB overhead</th><th class="num">QB net</th><th class="num">JT job profit</th><th class="num">QB net before bonuses</th><th class="num">Delta (JT − QB)</th></tr></thead>
                     <tbody>
                         @foreach (var m in r.Months)
                         {
@@ -100,6 +118,9 @@ else if (Model.Report is { } r)
                                 <td class="num">@Format.Money(m.QbJobCosts)</td><td class="num muted">@Format.Money(m.JtBills)</td>
                                 <td class="num">@Format.Money(m.QbOverhead)</td>
                                 <td class="num@(m.QbNet < 0 ? " neg" : "")">@Format.Money(m.QbNet)</td>
+                                <td class="num muted">@Format.Money(m.JtJobProfit)</td>
+                                <td class="num">@Format.Money(m.QbNetBeforeBonuses)</td>
+                                <td class="num@(Math.Abs(m.NetDelta) >= 1000 ? " neg" : "")">@IndexModel.Signed(m.NetDelta)</td>
                             </tr>
                         }
                     </tbody>
@@ -110,17 +131,18 @@ else if (Model.Report is { } r)
     else if (Model.CurrentTab == "burden")
     {
         var wages = t.QbFieldWages;
-        var hours = t.JtHours;
+        var hours = t.JtJobHours;
+        var ohRates = t.QbOverhead - t.QbBonuses;
         <div class="kpis">
-            <div class="card kpi"><span class="kpi-label">Real labor cost per hour (QB)</span><span class="kpi-value num">@IndexModel.PerHour(t.QbCostPerHour)</span><span class="kpi-sub">wages + burden ÷ JobTread hours</span></div>
-            <div class="card kpi"><span class="kpi-label">JobTread average rate</span><span class="kpi-value num">@IndexModel.PerHour(t.JtCostPerHour)</span><span class="kpi-sub">burdened cost on time entries</span></div>
-            <div class="card kpi"><span class="kpi-label">Gap per hour</span><span class="kpi-value num@(t.QbCostPerHour > t.JtCostPerHour ? " neg" : "")">@(t.QbCostPerHour is { } q && t.JtCostPerHour is { } j ? IndexModel.PerHour(q - j) : "—")</span><span class="kpi-sub">positive = JobTread rates too low</span></div>
-            <div class="card kpi"><span class="kpi-label">Burden on top of wages</span><span class="kpi-value num">@IndexModel.Pct(t.QbBurden, wages)</span><span class="kpi-sub num">@Format.Money(t.QbBurden) on @Format.Money(wages) wages</span></div>
+            <div class="card kpi"><span class="kpi-label">All-in cost per job hour (QB)</span><span class="kpi-value num">@IndexModel.PerHour(t.QbAllInPerHour)</span><span class="kpi-sub">wages + burden + overhead (not bonuses) ÷ JobTread job hours</span></div>
+            <div class="card kpi"><span class="kpi-label">JobTread average rate</span><span class="kpi-value num">@IndexModel.PerHour(t.JtJobRate)</span><span class="kpi-sub">burdened cost on job time entries</span></div>
+            <div class="card kpi"><span class="kpi-label">Gap per hour</span><span class="kpi-value num@(t.QbAllInPerHour > t.JtJobRate ? " neg" : "")">@(t.QbAllInPerHour is { } q && t.JtJobRate is { } j ? IndexModel.PerHour(q - j) : "—")</span><span class="kpi-sub num">positive = JobTread rates too low · @(t.QbAllInPerHour is { } q3 && t.JtJobRate is { } j3 ? Format.Money((q3 - j3) * hours) : "—") over the period</span></div>
+            <div class="card kpi"><span class="kpi-label">Overhead the rates recovered</span><span class="kpi-value num">@IndexModel.Pct(t.JtJobLabor - t.QbLabor, ohRates)</span><span class="kpi-sub num">@Format.Money(t.JtJobLabor - t.QbLabor) of @Format.Money(ohRates) overhead</span></div>
         </div>
 
         <section class="card fin-section">
             <h2 class="section-title">What makes up field labor cost</h2>
-            <p class="muted small">Per hour uses @Format.Number(hours) JobTread clocked hours in this period.</p>
+            <p class="muted small">Per hour uses @Format.Number(hours) JobTread hours on jobs in this period (@Format.Number(t.JtInternalHours) more on internal jobs are left out: QuickBooks books them as overhead). "% of wages" is the multiplier the rates need: all-in ÷ wages.</p>
             <div class="table-wrap">
                 <table class="data">
                     <thead><tr><th></th><th class="num">Amount</th><th class="num">Per hour</th><th class="num">% of wages</th></tr></thead>
@@ -134,8 +156,10 @@ else if (Model.Report is { } r)
                         {
                             <tr class="burden-row"><td>+ @c.Category</td><td class="num">@Format.Money(c.Total)</td><td class="num">@IndexModel.PerHour(hours > 0 ? c.Total / hours : null)</td><td class="num">@IndexModel.Pct(c.Total, wages)</td></tr>
                         }
-                        <tr class="total"><td>Real field labor cost</td><td class="num">@Format.Money(t.QbLabor)</td><td class="num">@IndexModel.PerHour(t.QbCostPerHour)</td><td class="num">@IndexModel.Pct(t.QbLabor, wages)</td></tr>
-                        <tr><td>JobTread labor cost (burdened rates)</td><td class="num">@Format.Money(t.JtLaborCost)</td><td class="num">@IndexModel.PerHour(t.JtCostPerHour)</td><td class="num">@IndexModel.Pct(t.JtLaborCost, wages)</td></tr>
+                        <tr class="total"><td>Real field labor cost</td><td class="num">@Format.Money(t.QbLabor)</td><td class="num">@IndexModel.PerHour(hours > 0 ? t.QbLabor / hours : null)</td><td class="num">@IndexModel.Pct(t.QbLabor, wages)</td></tr>
+                        <tr class="burden-row"><td>+ Overhead (not bonuses)</td><td class="num">@Format.Money(ohRates)</td><td class="num">@IndexModel.PerHour(hours > 0 ? ohRates / hours : null)</td><td class="num">@IndexModel.Pct(ohRates, wages)</td></tr>
+                        <tr class="total"><td>All-in cost the rates have to cover</td><td class="num">@Format.Money(t.QbLabor + ohRates)</td><td class="num">@IndexModel.PerHour(t.QbAllInPerHour)</td><td class="num">@IndexModel.Pct(t.QbLabor + ohRates, wages)</td></tr>
+                        <tr><td>JobTread labor cost on jobs (burdened rates)</td><td class="num">@Format.Money(t.JtJobLabor)</td><td class="num">@IndexModel.PerHour(t.JtJobRate)</td><td class="num">@IndexModel.Pct(t.JtJobLabor, wages)</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -146,15 +170,15 @@ else if (Model.Report is { } r)
             <h2 class="section-title">Per hour by month</h2>
             <div class="table-wrap">
                 <table class="data">
-                    <thead><tr><th>Month</th><th class="num">JT hours</th><th class="num">QB wages</th><th class="num">QB burden</th><th class="num">QB per hour</th><th class="num">JT per hour</th><th class="num">Gap</th></tr></thead>
+                    <thead><tr><th>Month</th><th class="num">JT job hours</th><th class="num">QB wages</th><th class="num">QB burden</th><th class="num">QB overhead</th><th class="num">QB all-in per hour</th><th class="num">JT per hour</th><th class="num">Gap</th></tr></thead>
                     <tbody>
                         @foreach (var m in r.Months)
                         {
                             <tr>
-                                <td>@m.Label</td><td class="num">@Format.Number(m.JtHours)</td>
-                                <td class="num">@Format.Money(m.QbFieldWages)</td><td class="num">@Format.Money(m.QbBurden)</td>
-                                <td class="num">@IndexModel.PerHour(m.QbCostPerHour)</td><td class="num">@IndexModel.PerHour(m.JtCostPerHour)</td>
-                                <td class="num">@(m.QbCostPerHour is { } q2 && m.JtCostPerHour is { } j2 ? IndexModel.PerHour(q2 - j2) : "—")</td>
+                                <td>@m.Label</td><td class="num">@Format.Number(m.JtJobHours)</td>
+                                <td class="num">@Format.Money(m.QbFieldWages)</td><td class="num">@Format.Money(m.QbBurden)</td><td class="num">@Format.Money(m.QbOverhead - m.QbBonuses)</td>
+                                <td class="num">@IndexModel.PerHour(m.QbAllInPerHour)</td><td class="num">@IndexModel.PerHour(m.JtJobRate)</td>
+                                <td class="num">@(m.QbAllInPerHour is { } q2 && m.JtJobRate is { } j2 ? IndexModel.PerHour(q2 - j2) : "—")</td>
                             </tr>
                         }
                     </tbody>

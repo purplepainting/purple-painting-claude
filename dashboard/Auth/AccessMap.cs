@@ -97,6 +97,7 @@ public static class AccessMap
         ["/Financials/Bonuses#Clawback"] = AccessRule.For(Perm.BonusesEdit),
         ["/Financials/Bonuses#DeleteClawback"] = AccessRule.For(Perm.BonusesEdit),
         ["/Financials/Bonuses#Exclude"] = AccessRule.For(Perm.BonusesEdit),
+        ["/Financials/Bonuses#LeaveOutJob"] = AccessRule.For(Perm.BonusesEdit),
         ["/Financials/Bonuses#Rate"] = AccessRule.For(Perm.BonusesRate),
         ["/Settings/Bonuses#"] = AccessRule.For(Perm.SettingsBonuses),
 
