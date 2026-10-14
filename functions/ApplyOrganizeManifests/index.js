@@ -28,8 +28,9 @@
  *     job folder (destPath is built from the job folder id; ".." and empty
  *     segments are refused).
  *   - Touches only items the manifest names.
- *   - Never renames Photos/Job Walk, Photos/Progress or Photos/Completed,
- *     never renames or moves package folders.
+ *   - Photos/Job Walk, Progress and Completed may only be renumbered to
+ *     1 Job Walk, 2 Progress, 3 Completed, and only when the numbered folder
+ *     does not exist. Package folders are never renamed or moved.
  *   - dryRun anything but false: every check runs, the results JSON is
  *     written, and nothing in a job folder or package is changed.
  *
@@ -60,6 +61,8 @@ const APPLIED_FOLDER = 'Applied';
 const POST_PACKAGES_PATH = '08 Sales & Marketing/Social Media/Post Packages';
 const SOCIAL_FOLDERS = ['Before and After', 'Post-Worthy', 'Our Crew'];
 const PROTECTED_FOLDERS = ['photos/job walk', 'photos/progress', 'photos/completed'];
+/* The only renames allowed on those: legacy name -> numbered name, inside Photos. */
+const LEGACY_RENAMES = { 'Job Walk': '1 Job Walk', 'Progress': '2 Progress', 'Completed': '3 Completed' };
 const MAX_BYTES = 100 * 1024 * 1024;   // same cap as SharePointSync
 const MOVE_GAP_MS = 750;
 const RUN_BUDGET_MS = 3.5 * 60 * 1000;
@@ -69,7 +72,7 @@ const RUN_BUDGET_MS = 3.5 * 60 * 1000;
 const api = {
   request: httpRequest,
   download: downloadFile,
-  findJobMapping: findJobMapping,
+  findJobMappings: findJobMappings,
   sleep: function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); },
   now: function () { return Date.now(); }
 };
@@ -117,7 +120,7 @@ module.exports = async function (context, myTimer) {
   }
 };
 
-module.exports._test = { api: api, buildBriefDocx: buildBriefDocx, shareId: shareId, MANIFESTS_PATH: MANIFESTS_PATH, POST_PACKAGES_PATH: POST_PACKAGES_PATH };
+module.exports._test = { api: api, buildBriefDocx: buildBriefDocx, sameLink: sameLink, MANIFESTS_PATH: MANIFESTS_PATH, POST_PACKAGES_PATH: POST_PACKAGES_PATH };
 
 // ------------------------------------------------------------ one manifest
 
@@ -132,6 +135,7 @@ async function processManifest(run, m, appliedId) {
     startedAt: new Date(api.now()).toISOString(),
     finishedAt: null,
     summary: {},
+    warnings: [],
     rows: rows
   };
 
@@ -150,7 +154,7 @@ async function processManifest(run, m, appliedId) {
     /* Only a literal false applies changes. A typo or a missing flag is a dry run. */
     report.dryRun = manifest.dryRun !== false;
     try {
-      await applyManifest(run, manifest, report.dryRun, rows);
+      await applyManifest(run, manifest, report.dryRun, rows, report.warnings);
     } catch (e) {
       if (e && e.outOfTime) {
         context.log.warn('ApplyOrganizeManifests: ' + m.name + ' not finished before the time budget; ' +
@@ -176,37 +180,52 @@ async function processManifest(run, m, appliedId) {
                    Buffer.from(JSON.stringify(report, null, 2), 'utf8'), 'application/json', 'fail');
   await patchItem(run.token, run.driveId, m.id, { name: stem + '.json', parentReference: { id: appliedId } }, 'fail');
 
+  for (const w of report.warnings) context.log.warn('ApplyOrganizeManifests: ' + m.name + ': ' + w);
   const counts = Object.keys(report.summary).map(function (k) { return report.summary[k] + ' ' + k; }).join(', ');
   context.log('ApplyOrganizeManifests: ' + m.name + ' | job "' + report.job + '" | ' +
               (report.dryRun ? 'DRY RUN' : 'APPLIED') + ' | ' + (counts || 'no actions'));
   return true;
 }
 
-async function applyManifest(run, man, dryRun, rows) {
+async function applyManifest(run, man, dryRun, rows, warnings) {
   const token = run.token;
   const driveId = run.driveId;
 
   if (typeof man.job !== 'string' || !man.job.trim()) throw new Error('Manifest has no "job"');
-  if (typeof man.folderLink !== 'string' || !man.folderLink.trim()) throw new Error('Manifest has no "folderLink"');
   const moves = man.moves === undefined || man.moves === null ? [] : man.moves;
   const renames = man.renames === undefined || man.renames === null ? [] : man.renames;
   if (!Array.isArray(moves)) throw new Error('"moves" must be an array');
   if (!Array.isArray(renames)) throw new Error('"renames" must be an array');
 
-  /* Open the job folder by its share link, and refuse anything that is not
-   * exactly the job named, on this drive, with a JobFolders row. */
-  const jobRes = await graph('GET', GRAPH + '/shares/' + shareId(man.folderLink) + '/driveItem', { token: token });
-  if (jobRes.status === 404) throw new Error('folderLink does not open anything (404). Manifest stopped.');
-  const job = ok(jobRes, 'Open folderLink');
-  if (!job || !job.folder) throw new Error('folderLink opens "' + (job && job.name) + '", which is not a folder. Manifest stopped.');
-  if (job.name !== man.job) {
-    throw new Error('folderLink opens "' + job.name + '", not "' + man.job + '". Manifest stopped.');
+  /* Open the job folder by the item id in its JobFolders row: the same id
+   * both sync directions use, and no /shares permission needed. folderLink
+   * is only a cross-check against the row's stored link. */
+  const mappings = await api.findJobMappings(man.job);
+  if (!mappings.length) {
+    throw new Error('No JobFolders row for "' + man.job + '", so it is not a synced job folder. Manifest stopped.');
   }
-  const jobDrive = job.parentReference && job.parentReference.driveId;
-  if (jobDrive && jobDrive !== driveId) throw new Error('Job folder is not on the team site drive. Manifest stopped.');
-  const mapping = await api.findJobMapping(job.id);
-  if (!mapping) {
-    throw new Error('"' + job.name + '" has no JobFolders row, so it is not a synced job folder. Manifest stopped.');
+  if (mappings.length > 1) {
+    throw new Error(mappings.length + ' JobFolders rows are named "' + man.job + '" (jobs ' +
+                    mappings.map(function (r) { return r.rowKey; }).join(', ') + '); cannot tell which. Manifest stopped.');
+  }
+  const mapping = mappings[0];
+  if (mapping.driveId && mapping.driveId !== driveId) {
+    throw new Error('JobFolders row for "' + man.job + '" is not on the team site drive. Manifest stopped.');
+  }
+  const jobRes = await graph('GET', GRAPH + '/drives/' + driveId + '/items/' + mapping.spFolderDriveId +
+                             '?$select=id,name,folder,deleted', { token: token });
+  if (jobRes.status === 404) {
+    throw new Error('JobFolders row for "' + man.job + '" points at folder ' + mapping.spFolderDriveId +
+                    ', which no longer exists. Manifest stopped.');
+  }
+  const job = ok(jobRes, 'Open job folder');
+  if (!job || !job.folder || job.deleted) throw new Error('JobFolders row for "' + man.job + '" does not point at a live folder. Manifest stopped.');
+  if (job.name !== man.job) {
+    throw new Error('Job folder is named "' + job.name + '", not "' + man.job + '". Manifest stopped.');
+  }
+  if (!sameLink(man.folderLink, mapping.spFolderUrl)) {
+    warnings.push('folderLink does not match the JobFolders link for "' + man.job + '" (' +
+                  (mapping.spFolderUrl || 'none stored') + '); used the JobFolders folder');
   }
 
   const ctx = {
@@ -479,8 +498,10 @@ async function doRename(ctx, man, rn, rootFiles, wouldLeave) {
       return;
     }
     const full = segs.concat([oldItem.name]).join('/').toLowerCase();
-    if (PROTECTED_FOLDERS.indexOf(full) >= 0) {
-      rows.push(row('rename', label, where, 'SKIP', 'Photos/Job Walk, Progress and Completed are never renamed'));
+    /* Reaching here means the numbered folder does not exist (checked above). */
+    if (PROTECTED_FOLDERS.indexOf(full) >= 0 && LEGACY_RENAMES[oldItem.name] !== newName) {
+      rows.push(row('rename', label, where, 'SKIP', 'Photos/Job Walk, Progress and Completed can only become ' +
+                    '1 Job Walk, 2 Progress and 3 Completed'));
       return;
     }
     const badSeg = badFolderName(newName);
@@ -655,10 +676,10 @@ function row(action, name, target, status, detail) {
   return { action: action, name: name, target: target, status: status, detail: detail || '' };
 }
 
-/* Graph /shares id for a sharing URL: "u!" + unpadded base64url. */
-function shareId(url) {
-  return 'u!' + Buffer.from(String(url).trim(), 'utf8').toString('base64')
-    .replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
+/* Share links compare without the query string (?e=... changes per copy). */
+function sameLink(a, b) {
+  const norm = function (u) { return String(u || '').trim().replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase(); };
+  return !!norm(a) && norm(a) === norm(b);
 }
 
 // ------------------------------------------------------------ brief .docx
@@ -940,13 +961,14 @@ async function getDriveId(token, siteId) {
   return drive.id;
 }
 
-/* Read-only: is this SharePoint folder a job folder JobTread syncs with? */
-async function findJobMapping(folderId) {
+/* Read-only: the JobFolders rows whose folder name is jobName (normally one). */
+async function findJobMappings(jobName) {
   const table = TableClient.fromConnectionString(process.env.STORAGE_CONNECTION_STRING, 'JobFolders',
                                                  { allowInsecureConnection: false });
-  const filter = "PartitionKey eq 'jobs' and spFolderDriveId eq '" + String(folderId).replace(/'/g, "''") + "'";
-  for await (const entity of table.listEntities({ queryOptions: { filter: filter } })) return entity;
-  return null;
+  const filter = "PartitionKey eq 'jobs' and jobName eq '" + String(jobName).replace(/'/g, "''") + "'";
+  const out = [];
+  for await (const entity of table.listEntities({ queryOptions: { filter: filter } })) out.push(entity);
+  return out;
 }
 
 // ------------------------------------------------------------ http
