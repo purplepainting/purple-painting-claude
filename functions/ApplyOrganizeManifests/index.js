@@ -44,8 +44,16 @@
  *
  * TIME BUDGET
  * The Function App kills a run at 5 minutes. After RUN_BUDGET_MS the run
- * stops starting new actions, leaves the unfinished manifest where it is, and
- * the next run picks it up; actions already done report ALREADY DONE.
+ * stops starting new actions, leaves the unfinished manifest in
+ * Applied/processing, and the next run picks it up; actions already done
+ * report ALREADY DONE.
+ *
+ * ONE RUN AT A TIME
+ * A run lock (a SyncState row with a 10 minute expiry) makes a second
+ * invocation exit, and each manifest is claimed by moving it into
+ * Applied/processing before anything else happens; a manifest that cannot
+ * be claimed is skipped. The lock is only taken when a manifest exists, so
+ * idle runs still write nothing.
  *
  * Idle when there is no manifest: a token, the site/drive lookups and one
  * folder listing, and no writes.
@@ -58,6 +66,7 @@ const { TableClient } = require('@azure/data-tables');
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 const MANIFESTS_PATH = 'Claude/Nightly Organize/Manifests';
 const APPLIED_FOLDER = 'Applied';
+const PROCESSING_FOLDER = 'processing';   // Applied/processing: claimed, not finished
 const POST_PACKAGES_PATH = '08 Sales & Marketing/Social Media/Post Packages';
 const SOCIAL_FOLDERS = ['Before and After', 'Post-Worthy', 'Our Crew'];
 const PROTECTED_FOLDERS = ['photos/job walk', 'photos/progress', 'photos/completed'];
@@ -66,6 +75,9 @@ const LEGACY_RENAMES = { 'Job Walk': '1 Job Walk', 'Progress': '2 Progress', 'Co
 const MAX_BYTES = 100 * 1024 * 1024;   // same cap as SharePointSync
 const MOVE_GAP_MS = 750;
 const RUN_BUDGET_MS = 3.5 * 60 * 1000;
+/* Longer than the 5 minute Function App limit, so a run that is killed
+ * without releasing the lock frees it before the next timer fire. */
+const LOCK_MS = 10 * 60 * 1000;
 
 /* Every outside call goes through api, so the logic can be exercised against
  * an in-memory drive without touching SharePoint. */
@@ -73,6 +85,8 @@ const api = {
   request: httpRequest,
   download: downloadFile,
   getJobMapping: getJobMapping,
+  acquireLock: acquireLock,
+  releaseLock: releaseLock,
   sleep: function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); },
   now: function () { return Date.now(); }
 };
@@ -91,28 +105,70 @@ module.exports = async function (context, myTimer) {
       context.log('ApplyOrganizeManifests: "' + MANIFESTS_PATH + '" not found, nothing to do');
       return;
     }
-    const manifests = (await listAllChildren(token, driveId, folder.id))
-      .filter(function (f) { return f.file && /\.json$/i.test(f.name); })
-      .sort(function (a, b) { return a.name.localeCompare(b.name); });
-    if (!manifests.length) {
+    const isManifest = function (f) { return f.file && /\.json$/i.test(f.name); };
+    const byName = function (a, b) { return a.name.localeCompare(b.name); };
+    const waiting = (await listAllChildren(token, driveId, folder.id)).filter(isManifest).sort(byName);
+    const applied = await getChildByName(token, driveId, folder.id, APPLIED_FOLDER);
+    const processing = applied ? await getChildByName(token, driveId, applied.id, PROCESSING_FOLDER) : null;
+    const stranded = processing
+      ? (await listAllChildren(token, driveId, processing.id)).filter(isManifest).sort(byName) : [];
+    if (!waiting.length && !stranded.length) {
       context.log('ApplyOrganizeManifests: no manifests, nothing to do');
       return;
     }
 
-    context.log('ApplyOrganizeManifests: ' + manifests.length + ' manifest(s) to process');
-    const appliedId = (await ensureChildFolder(token, driveId, folder.id, APPLIED_FOLDER)).id;
-    const run = {
-      context: context, token: token, driveId: driveId, started: started,
-      checkTime: function () { if (api.now() - started > RUN_BUDGET_MS) throw new OutOfTime(); }
-    };
+    /*
+     * RUN LOCK (2026-10-14). A manual "Run" at 19:44 and the timer at 19:45
+     * both processed the same manifests: duplicate results files and a 409
+     * on the second results upload. One SyncState row with an expiry; a
+     * second invocation that cannot take it exits without writing anything.
+     */
+    const owner = 'run-' + started + '-' + Math.random().toString(36).slice(2, 8);
+    if (!(await api.acquireLock(owner))) {
+      context.log('ApplyOrganizeManifests: another run holds the lock, exiting');
+      return;
+    }
+    try {
+      const appliedId = (applied || await ensureChildFolder(token, driveId, folder.id, APPLIED_FOLDER)).id;
+      const processingId = (processing || await ensureChildFolder(token, driveId, appliedId, PROCESSING_FOLDER)).id;
+      const run = {
+        context: context, token: token, driveId: driveId, started: started,
+        checkTime: function () { if (api.now() - started > RUN_BUDGET_MS) throw new OutOfTime(); }
+      };
+      context.log('ApplyOrganizeManifests: ' + waiting.length + ' new and ' + stranded.length +
+                  ' unfinished manifest(s) to process');
 
-    for (const m of manifests) {
-      if (api.now() - started > RUN_BUDGET_MS) {
-        context.log.warn('ApplyOrganizeManifests: time budget reached, remaining manifests wait for the next run');
-        break;
+      /* Unfinished ones first: they were claimed by a run that ran out of
+       * time or was killed. Holding the lock means no other run owns them. */
+      const queue = stranded.map(function (m) { return { item: m, claimed: true }; })
+        .concat(waiting.map(function (m) { return { item: m, claimed: false }; }));
+      for (const q of queue) {
+        if (api.now() - started > RUN_BUDGET_MS) {
+          context.log.warn('ApplyOrganizeManifests: time budget reached, remaining manifests wait for the next run');
+          break;
+        }
+        let m = q.item;
+        if (!q.claimed) {
+          /* CLAIM: move it into Applied/processing before touching anything,
+           * only if it is unchanged since we listed it (If-Match on its eTag:
+           * a second claimant gets 412, since moving an item to where it
+           * already is would otherwise succeed). If the claim fails, skip it. */
+          try {
+            m = await patchItem(token, driveId, m.id, { parentReference: { id: processingId } }, 'fail',
+                                m.eTag ? { 'If-Match': m.eTag } : null);
+            m.name = m.name || q.item.name;
+          } catch (e) {
+            context.log.warn('ApplyOrganizeManifests: could not claim ' + q.item.name + ', skipping: ' + e.message);
+            continue;
+          }
+        }
+        const finished = await processManifest(run, m, appliedId);
+        if (!finished) break;
       }
-      const finished = await processManifest(run, m, appliedId);
-      if (!finished) break;
+    } finally {
+      await api.releaseLock(owner).catch(function (e) {
+        context.log.warn('ApplyOrganizeManifests: could not release the lock (it expires on its own): ' + e.message);
+      });
     }
   } catch (err) {
     const detail = (err && (err.stack || err.message)) || String(err);
@@ -160,7 +216,7 @@ async function processManifest(run, m, appliedId) {
     } catch (e) {
       if (e && e.outOfTime) {
         context.log.warn('ApplyOrganizeManifests: ' + m.name + ' not finished before the time budget; ' +
-                         'left in Manifests, the next run resumes it (finished actions report ALREADY DONE)');
+                         'left in Applied/processing, the next run resumes it (finished actions report ALREADY DONE)');
         return false;
       }
       rows.push(row('manifest', m.name, '', 'ERROR', e.message));
@@ -171,7 +227,9 @@ async function processManifest(run, m, appliedId) {
   for (const r of rows) report.summary[r.status] = (report.summary[r.status] || 0) + 1;
 
   /* Results first, then the manifest. If the results write fails the
-   * manifest stays put and is retried; a rerun is safe (ALREADY DONE). */
+   * manifest stays in Applied/processing and the next run retries it; a
+   * rerun is safe (ALREADY DONE). Results are written with replace, so a
+   * retry overwrites a half-finished attempt instead of failing on it. */
   const taken = new Set((await listAllChildren(run.token, run.driveId, appliedId))
     .map(function (c) { return c.name.toLowerCase(); }));
   let stem = m.name.replace(/\.json$/i, '');
@@ -179,7 +237,7 @@ async function processManifest(run, m, appliedId) {
     stem = stem + ' ' + new Date(api.now()).toISOString().replace(/[-:]/g, '').replace(/\..*$/, '').replace('T', '-');
   }
   await putContent(run.token, run.driveId, appliedId, stem + '.results.json',
-                   Buffer.from(JSON.stringify(report, null, 2), 'utf8'), 'application/json', 'fail');
+                   Buffer.from(JSON.stringify(report, null, 2), 'utf8'), 'application/json', 'replace');
   await patchItem(run.token, run.driveId, m.id, { name: stem + '.json', parentReference: { id: appliedId } }, 'fail');
 
   for (const w of report.warnings) context.log.warn('ApplyOrganizeManifests: ' + m.name + ': ' + w);
@@ -241,7 +299,7 @@ async function applyManifest(run, man, dryRun, rows, warnings) {
 
   for (let i = 0; i < moves.length; i++) {
     run.checkTime();
-    const mv = moves[i] || {};
+    const mv = moveFields(moves[i]);
     if (typeof mv.expectedName === 'string') named.add(mv.expectedName.toLowerCase());
     try {
       await doMove(ctx, mv, rootFiles, wouldLeave);
@@ -293,6 +351,23 @@ async function applyManifest(run, man, dryRun, rows, warnings) {
 }
 
 // ------------------------------------------------------------ moves
+
+/* The nightly writes from / size / toFolder; accept them as aliases. The
+ * canonical name wins when both are present. Other fields (jtJobNumber,
+ * spFolderItemId, batchDate, source, notes, jtFileId, ...) are ignored. */
+function moveFields(raw) {
+  const mv = Object.assign({}, raw && typeof raw === 'object' ? raw : {});
+  const alias = function (canonical, short) {
+    if ((mv[canonical] === undefined || mv[canonical] === null || mv[canonical] === '') &&
+        mv[short] !== undefined && mv[short] !== null) {
+      mv[canonical] = mv[short];
+    }
+  };
+  alias('expectedName', 'from');
+  alias('expectedSize', 'size');
+  alias('destPath', 'toFolder');
+  return mv;
+}
 
 async function doMove(ctx, mv, rootFiles, wouldLeave) {
   const rows = ctx.rows;
@@ -877,13 +952,18 @@ async function getItemByPath(token, driveId, path) {
 
 async function listAllChildren(token, driveId, parentId) {
   const out = [];
-  let url = GRAPH + '/drives/' + driveId + '/items/' + parentId + '/children?$top=200&$select=id,name,folder,file,size';
+  let url = GRAPH + '/drives/' + driveId + '/items/' + parentId + '/children?$top=200&$select=id,name,folder,file,size,eTag';
   while (url) {
     const page = ok(await graph('GET', url, { token: token }), 'List children of ' + parentId);
     for (const item of (page.value || [])) out.push(item);
     url = page['@odata.nextLink'] || null;
   }
   return out;
+}
+
+async function getChildByName(token, driveId, parentId, name) {
+  return (await listAllChildren(token, driveId, parentId))
+    .find(function (c) { return c.name.toLowerCase() === name.toLowerCase(); }) || null;
 }
 
 /* Find or create a child folder. Created with conflictBehavior "fail", so a
@@ -909,10 +989,10 @@ async function ensureChildFolder(token, driveId, parentId, name) {
   return created;
 }
 
-async function patchItem(token, driveId, itemId, fields, conflictBehavior) {
+async function patchItem(token, driveId, itemId, fields, conflictBehavior, headers) {
   const res = await graph('PATCH', GRAPH + '/drives/' + driveId + '/items/' + itemId +
                           (conflictBehavior ? '?%40microsoft.graph.conflictBehavior=' + conflictBehavior : ''),
-                          { token: token, body: fields });
+                          { token: token, body: fields, headers: headers || undefined });
   const item = ok(res, 'Update item ' + itemId);
   return item && typeof item === 'object' ? item : { id: itemId, name: fields.name };
 }
@@ -969,6 +1049,62 @@ async function getJobMapping(jtJobId) {
     if (e && e.statusCode === 404) return null;
     throw e;
   }
+}
+
+// ------------------------------------------------------------ run lock
+
+/*
+ * One row in SyncState: { partitionKey 'lock', rowKey 'ApplyOrganizeManifests',
+ * owner, expiresAt }. Create it, or take it over once expired with an
+ * etag-matched update, so two runs racing for an expired lock cannot both
+ * win. Released by deleting it (only by its owner).
+ */
+const LOCK_PK = 'lock';
+const LOCK_RK = 'ApplyOrganizeManifests';
+
+function lockTable() {
+  return TableClient.fromConnectionString(process.env.STORAGE_CONNECTION_STRING, 'SyncState',
+                                          { allowInsecureConnection: false });
+}
+
+async function acquireLock(owner) {
+  const table = lockTable();
+  try { await table.createTable(); } catch (e) { /* already exists */ }
+  const entity = { partitionKey: LOCK_PK, rowKey: LOCK_RK, owner: owner, expiresAt: api.now() + LOCK_MS };
+  try {
+    await table.createEntity(entity);
+    return true;
+  } catch (e) {
+    if (!e || e.statusCode !== 409) throw e;
+  }
+  let current;
+  try {
+    current = await table.getEntity(LOCK_PK, LOCK_RK);
+  } catch (e) {
+    if (e && e.statusCode === 404) return false;   // released between our two calls; next run gets it
+    throw e;
+  }
+  if (Number(current.expiresAt) > api.now()) return false;
+  try {
+    await table.updateEntity(entity, 'Replace', { etag: current.etag });
+    return true;
+  } catch (e) {
+    if (e && (e.statusCode === 412 || e.statusCode === 404)) return false;
+    throw e;
+  }
+}
+
+async function releaseLock(owner) {
+  const table = lockTable();
+  let current;
+  try {
+    current = await table.getEntity(LOCK_PK, LOCK_RK);
+  } catch (e) {
+    if (e && e.statusCode === 404) return;
+    throw e;
+  }
+  if (current.owner !== owner) return;
+  await table.deleteEntity(LOCK_PK, LOCK_RK, { etag: current.etag });
 }
 
 // ------------------------------------------------------------ http
