@@ -582,8 +582,15 @@ module.exports = async function (context, req) {
       if (folderChanged) {
         context.log('Folder changed for ' + fileName + ': "' + oldFolderPath + '" -> "' + (newFolderPath || '') + '"');
         try {
-          const oldFolderId = await resolveSPFolderId(token, folderMapping.driveId, folderMapping.spFolderDriveId, oldFolderPath, context);
-          await deleteSharePointFileByName(token, folderMapping.driveId, oldFolderId, fileName, context);
+          /* Look up only: the old folder may have been renamed or removed in
+           * SharePoint (that is often why the folder changed), and creating it
+           * again just leaves an empty folder behind. */
+          const oldFolderId = await resolveSPFolderId(token, folderMapping.driveId, folderMapping.spFolderDriveId, oldFolderPath, context, false);
+          if (oldFolderId) {
+            await deleteSharePointFileByName(token, folderMapping.driveId, oldFolderId, fileName, context);
+          } else {
+            context.log('Old folder "' + oldFolderPath + '" no longer exists, nothing to remove');
+          }
         } catch (e) {
           context.log('Could not remove old SharePoint copy: ' + e.message);
         }
@@ -667,9 +674,15 @@ module.exports = async function (context, req) {
 
       try {
         const folderPath = fileRecord.jtFolderPath || fileRecord.spFolderPath || '';
-        const targetFolderId = await resolveSPFolderId(token, folderMapping.driveId, folderMapping.spFolderDriveId, folderPath, context);
-        await deleteSharePointFileByName(token, folderMapping.driveId, targetFolderId, fileRecord.fileName, context);
-        context.log('Deleted ' + fileRecord.fileName + ' from SharePoint');
+        /* Look up only, never create: a stale path would otherwise leave an
+         * empty folder behind and still miss the file. */
+        const targetFolderId = await resolveSPFolderId(token, folderMapping.driveId, folderMapping.spFolderDriveId, folderPath, context, false);
+        if (targetFolderId) {
+          await deleteSharePointFileByName(token, folderMapping.driveId, targetFolderId, fileRecord.fileName, context);
+          context.log('Deleted ' + fileRecord.fileName + ' from SharePoint');
+        } else {
+          context.log('Folder "' + folderPath + '" no longer exists, nothing to delete in SharePoint');
+        }
       } catch (e) {
         context.log('Failed to delete from SharePoint: ' + e.message);
       }
@@ -855,7 +868,9 @@ module.exports = async function (context, req) {
 
 // ------------------------------------------------------------ sharepoint
 
-async function resolveSPFolderId(token, driveId, jobFolderId, jtFolderPath, context) {
+/* createMissing (default true) creates any missing segment. Pass false for
+ * a lookup only: a missing segment returns null and nothing is created. */
+async function resolveSPFolderId(token, driveId, jobFolderId, jtFolderPath, context, createMissing = true) {
   if (!jtFolderPath) return jobFolderId;
   const segments = String(jtFolderPath).split('/').map(sanitizePathSegment).filter(Boolean);
   let currentParentId = jobFolderId;
@@ -863,6 +878,7 @@ async function resolveSPFolderId(token, driveId, jobFolderId, jtFolderPath, cont
     const children = await listAllChildren(token, driveId, currentParentId);
     let match = children.find(function(f) { return f.folder && f.name === segment; });
     if (!match) {
+      if (!createMissing) return null;
       context.log('Creating SharePoint subfolder: ' + segment);
       match = await createFolder(token, driveId, currentParentId, segment);
     }
