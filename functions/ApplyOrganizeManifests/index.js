@@ -72,7 +72,7 @@ const RUN_BUDGET_MS = 3.5 * 60 * 1000;
 const api = {
   request: httpRequest,
   download: downloadFile,
-  findJobMappings: findJobMappings,
+  getJobMapping: getJobMapping,
   sleep: function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); },
   now: function () { return Date.now(); }
 };
@@ -131,6 +131,7 @@ async function processManifest(run, m, appliedId) {
   const report = {
     manifest: m.name,
     job: '',
+    jtJobId: '',
     dryRun: true,
     startedAt: new Date(api.now()).toISOString(),
     finishedAt: null,
@@ -151,6 +152,7 @@ async function processManifest(run, m, appliedId) {
 
   if (manifest) {
     report.job = String(manifest.job || '');
+    report.jtJobId = String(manifest.jtJobId || '');
     /* Only a literal false applies changes. A typo or a missing flag is a dry run. */
     report.dryRun = manifest.dryRun !== false;
     try {
@@ -182,7 +184,7 @@ async function processManifest(run, m, appliedId) {
 
   for (const w of report.warnings) context.log.warn('ApplyOrganizeManifests: ' + m.name + ': ' + w);
   const counts = Object.keys(report.summary).map(function (k) { return report.summary[k] + ' ' + k; }).join(', ');
-  context.log('ApplyOrganizeManifests: ' + m.name + ' | job "' + report.job + '" | ' +
+  context.log('ApplyOrganizeManifests: ' + m.name + ' | JT ' + report.jtJobId + ' "' + report.job + '" | ' +
               (report.dryRun ? 'DRY RUN' : 'APPLIED') + ' | ' + (counts || 'no actions'));
   return true;
 }
@@ -191,40 +193,36 @@ async function applyManifest(run, man, dryRun, rows, warnings) {
   const token = run.token;
   const driveId = run.driveId;
 
-  if (typeof man.job !== 'string' || !man.job.trim()) throw new Error('Manifest has no "job"');
+  const jtJobId = typeof man.jtJobId === 'string' ? man.jtJobId.trim() : '';
+  if (!jtJobId) throw new Error('Manifest has no "jtJobId". Manifest stopped.');
   const moves = man.moves === undefined || man.moves === null ? [] : man.moves;
   const renames = man.renames === undefined || man.renames === null ? [] : man.renames;
   if (!Array.isArray(moves)) throw new Error('"moves" must be an array');
   if (!Array.isArray(renames)) throw new Error('"renames" must be an array');
 
-  /* Open the job folder by the item id in its JobFolders row: the same id
-   * both sync directions use, and no /shares permission needed. folderLink
-   * is only a cross-check against the row's stored link. */
-  const mappings = await api.findJobMappings(man.job);
-  if (!mappings.length) {
-    throw new Error('No JobFolders row for "' + man.job + '", so it is not a synced job folder. Manifest stopped.');
-  }
-  if (mappings.length > 1) {
-    throw new Error(mappings.length + ' JobFolders rows are named "' + man.job + '" (jobs ' +
-                    mappings.map(function (r) { return r.rowKey; }).join(', ') + '); cannot tell which. Manifest stopped.');
-  }
-  const mapping = mappings[0];
-  if (mapping.driveId && mapping.driveId !== driveId) {
-    throw new Error('JobFolders row for "' + man.job + '" is not on the team site drive. Manifest stopped.');
+  /* Match the job by its JT job id, the JobFolders row key, and open the
+   * folder by the SharePoint item id stored there: the same id both sync
+   * directions use, and no /shares permission needed. Names drift (JT "#"
+   * becomes "-", trailing periods are stripped, jobs get renamed), so "job"
+   * and "folderLink" are only cross-checks that add a warning. */
+  const mapping = await api.getJobMapping(jtJobId);
+  if (!mapping || !mapping.spFolderDriveId) {
+    throw new Error('No JobFolders row for JT job ' + jtJobId + ', so it is not a synced job folder. Manifest stopped.');
   }
   const jobRes = await graph('GET', GRAPH + '/drives/' + driveId + '/items/' + mapping.spFolderDriveId +
                              '?$select=id,name,folder,deleted', { token: token });
-  if (jobRes.status === 404) {
-    throw new Error('JobFolders row for "' + man.job + '" points at folder ' + mapping.spFolderDriveId +
+  const job = jobRes.status === 404 ? null : ok(jobRes, 'Open job folder');
+  if (!job || !job.folder || job.deleted) {
+    throw new Error('JobFolders row for JT job ' + jtJobId + ' points at folder ' + mapping.spFolderDriveId +
                     ', which no longer exists. Manifest stopped.');
   }
-  const job = ok(jobRes, 'Open job folder');
-  if (!job || !job.folder || job.deleted) throw new Error('JobFolders row for "' + man.job + '" does not point at a live folder. Manifest stopped.');
-  if (job.name !== man.job) {
-    throw new Error('Job folder is named "' + job.name + '", not "' + man.job + '". Manifest stopped.');
+  const expected = typeof man.job === 'string' ? man.job : '';
+  if (job.name !== expected) {
+    warnings.push('Job folder for JT job ' + jtJobId + ' is named "' + job.name + '", manifest says "' + expected +
+                  '"; used the JobFolders folder');
   }
   if (!sameLink(man.folderLink, mapping.spFolderUrl)) {
-    warnings.push('folderLink does not match the JobFolders link for "' + man.job + '" (' +
+    warnings.push('folderLink does not match the JobFolders link for JT job ' + jtJobId + ' (' +
                   (mapping.spFolderUrl || 'none stored') + '); used the JobFolders folder');
   }
 
@@ -961,14 +959,16 @@ async function getDriveId(token, siteId) {
   return drive.id;
 }
 
-/* Read-only: the JobFolders rows whose folder name is jobName (normally one). */
-async function findJobMappings(jobName) {
+/* Read-only: the JobFolders row for a JT job id (row key), or null. */
+async function getJobMapping(jtJobId) {
   const table = TableClient.fromConnectionString(process.env.STORAGE_CONNECTION_STRING, 'JobFolders',
                                                  { allowInsecureConnection: false });
-  const filter = "PartitionKey eq 'jobs' and jobName eq '" + String(jobName).replace(/'/g, "''") + "'";
-  const out = [];
-  for await (const entity of table.listEntities({ queryOptions: { filter: filter } })) out.push(entity);
-  return out;
+  try {
+    return await table.getEntity('jobs', jtJobId);
+  } catch (e) {
+    if (e && e.statusCode === 404) return null;
+    throw e;
+  }
 }
 
 // ------------------------------------------------------------ http

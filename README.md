@@ -22,6 +22,7 @@ convention is no longer needed once history is in git.
 ```json
 {
   "dryRun": true,
+  "jtJobId": "<JobTread job id>",
   "job": "<exact SP job folder name>",
   "folderLink": "<JT OneDrive Folder Link>",
   "package": "<Post Packages folder name, or empty>",
@@ -34,10 +35,10 @@ convention is no longer needed once history is in git.
 
 - `dryRun`: only `false` changes anything. `true` or a missing flag runs every check and writes the results JSON, with status `DRY RUN` for what would happen.
 - `moves`: the file must be in the job root with that exact name and byte size. `destPath` is a folder inside the job (created if missing). `newName` defaults to `expectedName` and must keep the extension. `social` is `Before and After`, `Post-Worthy` or `Our Crew`; the file is copied to `Post Packages/<package>/<social>/<socialName>` (`socialName` defaults to `newName`).
-- `job` must match exactly one JobFolders row, and the folder is opened by that row's SharePoint item id. `folderLink` is only a cross-check: if it differs from the row's stored link, the results JSON gets a warning and the run goes on.
+- `jtJobId` (required) picks the JobFolders row, and the folder is opened by that row's SharePoint item id. `job` (the expected folder name) and `folderLink` are only cross-checks: names drift (JT `#` becomes `-`, trailing periods are stripped, jobs get renamed), so a mismatch adds a warning to the results JSON and the run goes on.
 - `renames`: an in-place rename in `folderPath` (relative to the job, `""` for the root). Add `"in": "package"` to rename a file inside the package instead. The legacy photo folders can only be renumbered (`folderPath` `"Photos"`: `Job Walk` to `1 Job Walk`, `Progress` to `2 Progress`, `Completed` to `3 Completed`), and only when the numbered folder does not exist yet.
 - `brief`: written as a Word file into the package root, replacing any earlier one. Empty sections are left out.
 - Results statuses: `DONE`, `ALREADY DONE`, `DRY RUN`, `SKIP`, `NOT FOUND`, `ERROR`, `LEFT IN ROOT` (root files the manifest did not name).
 - Always skipped: files over 100 MB (they never sync to JT), a move whose `newName` matches another file in the job root, any other rename of `Photos/Job Walk|Progress|Completed`, renaming package folders, folder names with `: * ? ' " < > | # % \ /`, and file names with `: * ? " < > | \ /`. `& $ , ( )` are fine in both.
 - It never deletes anything and never calls JobTread. JT picks up moves and renames through SharePointSync (08:00 to 22:59 UTC).
-- A manifest that errors (bad JSON, no or ambiguous JobFolders row, folder renamed or gone) is still moved to Applied with an `ERROR` row. Fix it and drop it in again; reruns report `ALREADY DONE` for finished work.
+- A manifest that errors (bad JSON, no `jtJobId`, no JobFolders row for it, or the folder no longer exists) is still moved to Applied with an `ERROR` row. Fix it and drop it in again; reruns report `ALREADY DONE` for finished work.
