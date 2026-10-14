@@ -17,7 +17,7 @@ convention is no longer needed once history is in git.
 
 ## Organize manifests
 
-`functions/ApplyOrganizeManifests` runs every 15 minutes. It applies the job-folder organizer's decisions from JSON files in SharePoint `Claude/Nightly Organize/Manifests`, then moves each manifest to `Manifests/Applied` with `<name>.results.json` beside it. With no manifest it does nothing and writes nothing. To turn it off, disable the function in the portal.
+`functions/ApplyOrganizeManifests` runs every 15 minutes. It applies the job-folder organizer's decisions from JSON files in SharePoint `Claude/Nightly Organize/Manifests`, then moves each manifest to `Manifests/Applied` with `<name>.results.json` beside it. With no manifest it does nothing and writes nothing. Only one run works at a time (a lock row in the SyncState table, 10 minute expiry; a second run exits). Each manifest is claimed by moving it into `Applied/processing` first; a manifest that can't be claimed is skipped, and one left there by a run that ran out of time is finished by the next run. To turn it off, disable the function in the portal.
 
 ```json
 {
@@ -25,7 +25,7 @@ convention is no longer needed once history is in git.
   "jtJobId": "<JobTread job id>",
   "job": "<exact SP job folder name>",
   "folderLink": "<JT OneDrive Folder Link>",
-  "package": "<Post Packages folder name, or empty>",
+  "package": "<Post Packages folder name, or empty / null>",
   "moves":   [ { "expectedName": "", "expectedSize": 0, "destPath": "Photos/2 Progress", "newName": "", "social": "", "socialName": "" } ],
   "renames": [ { "folderPath": "", "oldName": "", "newName": "", "in": "job" } ],
   "brief":   { "file": "Post Brief - JT ###.docx", "title": "", "sub": "", "blurb": "",
@@ -34,7 +34,7 @@ convention is no longer needed once history is in git.
 ```
 
 - `dryRun`: only `false` changes anything. `true` or a missing flag runs every check and writes the results JSON, with status `DRY RUN` for what would happen.
-- `moves`: the file must be in the job root with that exact name and byte size. `destPath` is a folder inside the job (created if missing). `newName` defaults to `expectedName` and must keep the extension. `social` is `Before and After`, `Post-Worthy` or `Our Crew`; the file is copied to `Post Packages/<package>/<social>/<socialName>` (`socialName` defaults to `newName`).
+- `moves`: `from`, `size` and `toFolder` are accepted for `expectedName`, `expectedSize` and `destPath`. Other fields (`jtJobNumber`, `spFolderItemId`, `batchDate`, `source`, `notes`, `jtFileId`) are ignored. The file must be in the job root with that exact name and byte size. `destPath` is a folder inside the job (created if missing). `newName` defaults to `expectedName` and must keep the extension. `social` is `Before and After`, `Post-Worthy` or `Our Crew`; the file is copied to `Post Packages/<package>/<social>/<socialName>` (`socialName` defaults to `newName`).
 - `jtJobId` (required) picks the JobFolders row, and the folder is opened by that row's SharePoint item id. `job` (the expected folder name) and `folderLink` are only cross-checks: names drift (JT `#` becomes `-`, trailing periods are stripped, jobs get renamed), so a mismatch adds a warning to the results JSON and the run goes on.
 - `renames`: an in-place rename in `folderPath` (relative to the job, `""` for the root). Add `"in": "package"` to rename a file inside the package instead. The legacy photo folders can only be renumbered (`folderPath` `"Photos"`: `Job Walk` to `1 Job Walk`, `Progress` to `2 Progress`, `Completed` to `3 Completed`), and only when the numbered folder does not exist yet.
 - `brief`: written as a Word file into the package root, replacing any earlier one. Empty sections are left out.
