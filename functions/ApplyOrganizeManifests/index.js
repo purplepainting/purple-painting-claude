@@ -10,7 +10,7 @@
  *     Claude/Nightly Organize/Manifests/<anything>.json
  * After a manifest is processed it moves to Manifests/Applied, with
  * "<name>.results.json" beside it: one row per action, with a status
- * (DONE / ALREADY DONE / DRY RUN / SKIP / NOT FOUND / ERROR / LEFT IN ROOT).
+ * (DONE / ALREADY DONE / BULK MOVED / DRY RUN / SKIP / NOT FOUND / ERROR / LEFT IN ROOT).
  * Schema and the dryRun flag are in README.md ("Organize manifests").
  *
  * HOW IT REACHES JOBTREAD
@@ -176,7 +176,7 @@ module.exports = async function (context, myTimer) {
   }
 };
 
-module.exports._test = { api: api, buildBriefDocx: buildBriefDocx, sameLink: sameLink, MANIFESTS_PATH: MANIFESTS_PATH, POST_PACKAGES_PATH: POST_PACKAGES_PATH };
+module.exports._test = { api: api, globToRegex: globToRegex, buildBriefDocx: buildBriefDocx, sameLink: sameLink, MANIFESTS_PATH: MANIFESTS_PATH, POST_PACKAGES_PATH: POST_PACKAGES_PATH };
 
 // ------------------------------------------------------------ one manifest
 
@@ -257,6 +257,8 @@ async function applyManifest(run, man, dryRun, rows, warnings) {
   const renames = man.renames === undefined || man.renames === null ? [] : man.renames;
   if (!Array.isArray(moves)) throw new Error('"moves" must be an array');
   if (!Array.isArray(renames)) throw new Error('"renames" must be an array');
+  const bulkMoves = man.bulkMoves === undefined || man.bulkMoves === null ? [] : man.bulkMoves;
+  if (!Array.isArray(bulkMoves)) throw new Error('"bulkMoves" must be an array');
 
   /* Match the job by its JT job id, the JobFolders row key, and open the
    * folder by the SharePoint item id stored there: the same id both sync
@@ -324,6 +326,11 @@ async function applyManifest(run, man, dryRun, rows, warnings) {
       rows.push(row('rename', String(rn.oldName || '#' + (i + 1)), String(rn.folderPath || ''), 'ERROR', e.message));
     }
   }
+
+  /* Bulk rules run last, on what is still in the root. Every file the
+   * "moves" or root "renames" named is already in `named`, so explicit rows
+   * always win over a bulk rule. */
+  if (bulkMoves.length) await doBulkMoves(ctx, bulkMoves, rootFiles, named, wouldLeave);
 
   if (man.brief) {
     run.checkTime();
@@ -523,6 +530,88 @@ async function waitForCopy(monitorUrl) {
     } catch (e) { /* keep polling */ }
   }
   return 'pending';
+}
+
+// ------------------------------------------------------------ bulk moves
+
+/*
+ * "bulkMoves": [ { "match": "*.jpeg|*.jpg|*.heic|*.png", "destPath": "Photos/1 Job Walk" }, ... ]
+ * For each file still in the job root that no explicit row named, the first
+ * rule whose glob matches its name (case-insensitive, globs separated by |)
+ * moves it to destPath, keeping its name. One row per file: BULK MOVED,
+ * DRY RUN or SKIP (over 100 MB, zip, name taken in the destination).
+ */
+async function doBulkMoves(ctx, rules, rootFiles, named, wouldLeave) {
+  const rows = ctx.rows;
+  const parsed = [];
+  rules.forEach(function (raw, i) {
+    const r = raw && typeof raw === 'object' ? raw : {};
+    const label = typeof r.match === 'string' && r.match.trim() ? r.match : '#' + (i + 1);
+    const re = globToRegex(r.match);
+    const segs = parsePath(r.destPath);
+    const bad = !re ? 'match is empty'
+      : (typeof segs === 'string') ? segs
+      : !segs.length ? 'destPath is empty; bulk moves go into a folder inside the job' : null;
+    if (bad) {
+      rows.push(row('bulk', label, String(r.destPath || ''), 'SKIP', 'rule not used: ' + bad));
+      return;
+    }
+    parsed.push({ re: re, segs: segs });
+  });
+  if (!parsed.length) return;
+
+  const candidates = Array.from(rootFiles.values())
+    .filter(function (f) { return !wouldLeave.has(f.id) && !named.has(f.name.toLowerCase()); })
+    .sort(function (a, b) { return a.name.localeCompare(b.name); });
+
+  for (const f of candidates) {
+    ctx.run.checkTime();
+    const rule = parsed.find(function (p) { return p.re.test(f.name); });
+    if (!rule) continue;
+    named.add(f.name.toLowerCase());
+    const target = rule.segs.join('/') + '/' + f.name;
+    try {
+      if (Number(f.size) > MAX_BYTES) {
+        rows.push(row('bulk', f.name, target, 'SKIP', 'over 100 MB, never syncs to JT'));
+        continue;
+      }
+      if (extOf(f.name) === 'zip') {
+        rows.push(row('bulk', f.name, target, 'SKIP', 'zip files are not bulk moved'));
+        continue;
+      }
+      const destId = await resolveFolder(ctx, ctx.jobId, rule.segs, false);
+      const taken = destId ? await childByName(ctx, destId, f.name) : null;
+      if (taken) {
+        rows.push(row('bulk', f.name, target, 'SKIP', 'name taken: "' + taken.name + '" is already in ' + rule.segs.join('/')));
+        continue;
+      }
+      if (ctx.dryRun) {
+        wouldLeave.add(f.id);
+        rows.push(row('bulk', f.name, target, 'DRY RUN', 'would move' + (destId ? '' : ' (and create the destination folder)')));
+        continue;
+      }
+      await pace(ctx);
+      const folderId = destId || await resolveFolder(ctx, ctx.jobId, rule.segs, true);
+      const placed = await patchItem(ctx.token, ctx.driveId, f.id, { parentReference: { id: folderId } }, 'fail');
+      rootFiles.delete(f.name.toLowerCase());
+      addChild(ctx, folderId, placed);
+      rows.push(row('bulk', f.name, target, 'BULK MOVED', 'moved, name kept'));
+    } catch (e) {
+      if (e && e.outOfTime) throw e;
+      rows.push(row('bulk', f.name, target, 'ERROR', e.message));
+    }
+  }
+}
+
+/* "*.jpg|*.HEIC|IMG_?.png" -> one case-insensitive regex over the whole name. */
+function globToRegex(match) {
+  if (typeof match !== 'string') return null;
+  const parts = match.split('|').map(function (p) { return p.trim(); }).filter(Boolean);
+  if (!parts.length) return null;
+  const src = parts.map(function (p) {
+    return p.replace(/[.+^${}()[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.');
+  }).join('|');
+  return new RegExp('^(?:' + src + ')$', 'i');
 }
 
 // ------------------------------------------------------------ renames
