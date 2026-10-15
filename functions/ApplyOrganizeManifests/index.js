@@ -389,8 +389,7 @@ async function doMove(ctx, mv, rootFiles, wouldLeave) {
     : !segs.length ? 'destPath is empty; moves go into a folder inside the job'
     : badFileName(newName)
     || (!Number.isFinite(size) || size < 0 ? 'expectedSize is not a number' : null)
-    || (extOf(newName) !== extOf(expectedName)
-        ? 'newName changes the file extension ("' + extOf(expectedName) + '" -> "' + extOf(newName) + '")' : null);
+    || extensionChange(expectedName, newName);
   if (bad) {
     rows.push(row('move', expectedName || '(none)', target, 'SKIP', bad));
     return;
@@ -827,6 +826,22 @@ function parsePath(p) {
     if (bad) return bad;
   }
   return segs;
+}
+
+/* Files with no extension (JT daily-log photos arrive as "Photo 1") may gain
+ * one of ADDABLE_EXTENSIONS. Changing an existing extension is refused. */
+const ADDABLE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'heic', 'mov', 'pdf'];
+
+function extensionChange(fromName, toName) {
+  const from = extOf(fromName);
+  const to = extOf(toName);
+  if (from === to) return null;
+  if (!from) {
+    return ADDABLE_EXTENSIONS.indexOf(to) >= 0 ? null
+      : 'newName adds ".' + to + '"; only ' + ADDABLE_EXTENSIONS.map(function (e) { return '.' + e; }).join(' ') +
+        ' can be added to a file with no extension';
+  }
+  return 'newName changes the file extension ("' + from + '" -> "' + to + '")';
 }
 
 function extOf(name) {
