@@ -28,6 +28,8 @@ convention is no longer needed once history is in git.
   "package": "<Post Packages folder name, or empty / null>",
   "moves":   [ { "expectedName": "", "expectedSize": 0, "destPath": "Photos/2 Progress", "newName": "", "social": "", "socialName": "" } ],
   "renames": [ { "folderPath": "", "oldName": "", "newName": "", "in": "job" } ],
+  "bulkMoves": [ { "match": "*.jpeg|*.jpg|*.heic|*.png", "destPath": "Photos/1 Job Walk" },
+                 { "match": "*.pdf", "destPath": "Plans & Docs/Bid Documents" } ],
   "brief":   { "file": "Post Brief - JT ###.docx", "title": "", "sub": "", "blurb": "",
                "did": [], "team": [], "tags": [], "personal": [], "photos": [], "ideas": [], "captions": [], "check": [] }
 }
@@ -37,8 +39,9 @@ convention is no longer needed once history is in git.
 - `moves`: `from`, `size` and `toFolder` are accepted for `expectedName`, `expectedSize` and `destPath`. Other fields (`jtJobNumber`, `spFolderItemId`, `batchDate`, `source`, `notes`, `jtFileId`) are ignored. The file must be in the job root with that exact name and byte size. `destPath` is a folder inside the job (created if missing). `newName` defaults to `expectedName` and must keep the extension. `social` is `Before and After`, `Post-Worthy` or `Our Crew`; the file is copied to `Post Packages/<package>/<social>/<socialName>` (`socialName` defaults to `newName`).
 - `jtJobId` (required) picks the JobFolders row, and the folder is opened by that row's SharePoint item id. `job` (the expected folder name) and `folderLink` are only cross-checks: names drift (JT `#` becomes `-`, trailing periods are stripped, jobs get renamed), so a mismatch adds a warning to the results JSON and the run goes on.
 - `renames`: an in-place rename in `folderPath` (relative to the job, `""` for the root). Add `"in": "package"` to rename a file inside the package instead. The legacy photo folders can only be renumbered (`folderPath` `"Photos"`: `Job Walk` to `1 Job Walk`, `Progress` to `2 Progress`, `Completed` to `3 Completed`), and only when the numbered folder does not exist yet.
+- `bulkMoves`: runs after `moves` and `renames`, on files still in the job root that no explicit row named (explicit rows always win). The first rule whose `match` fits the file name (case-insensitive globs, `*` and `?`, separated by `|`) moves it to `destPath`, keeping its name. Skipped: files over 100 MB, zips, and a name already taken in the destination. One results row per file: `BULK MOVED`, `DRY RUN` or `SKIP`. Same dryRun, lock, claim and 750 ms pacing as moves.
 - `brief`: written as a Word file into the package root, replacing any earlier one. Empty sections are left out.
-- Results statuses: `DONE`, `ALREADY DONE`, `DRY RUN`, `SKIP`, `NOT FOUND`, `ERROR`, `LEFT IN ROOT` (root files the manifest did not name).
+- Results statuses: `DONE`, `ALREADY DONE`, `BULK MOVED`, `DRY RUN`, `SKIP`, `NOT FOUND`, `ERROR`, `LEFT IN ROOT` (root files the manifest did not name).
 - Always skipped: files over 100 MB (they never sync to JT), a move whose `newName` matches another file in the job root, any other rename of `Photos/Job Walk|Progress|Completed`, renaming package folders, folder names with `: * ? ' " < > | # % \ /`, and file names with `: * ? " < > | \ /`. `& $ , ( )` are fine in both.
 - It never deletes anything and never calls JobTread. JT picks up moves and renames through SharePointSync (08:00 to 22:59 UTC).
 - A manifest that errors (bad JSON, no `jtJobId`, no JobFolders row for it, or the folder no longer exists) is still moved to Applied with an `ERROR` row. Fix it and drop it in again; reruns report `ALREADY DONE` for finished work.
