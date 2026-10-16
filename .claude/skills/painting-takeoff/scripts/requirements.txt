@@ -1,0 +1,4 @@
+pymupdf
+opencv-python-headless
+numpy
+openpyxl
