@@ -1,0 +1,185 @@
+{
+ "rooms": [
+  {
+   "no": "101",
+   "name": "Waiting & Reception",
+   "area": 238,
+   "perim": 81.0,
+   "h": 11.71,
+   "wall_sf": 949,
+   "clg": "P-02 T&G",
+   "clg_sf": 258,
+   "note": "Vault 9'-8\u00bc\"\u219213'-8\u00be\"; WP2 feature wall + WP1 panels deduct; small 9'-7\" gyp area"
+  },
+  {
+   "no": "102",
+   "name": "Office",
+   "area": 104,
+   "perim": 41.3,
+   "h": 8.08,
+   "wall_sf": 334,
+   "clg": "ACT",
+   "clg_sf": 0,
+   "note": ""
+  },
+  {
+   "no": "103",
+   "name": "Hallway",
+   "area": 226,
+   "perim": 94.3,
+   "h": 8.08,
+   "wall_sf": 762,
+   "clg": "P-03 Gyp",
+   "clg_sf": 226,
+   "note": "Hallway incl. west stub; WP1 wood panel one side (deduct)"
+  },
+  {
+   "no": "104",
+   "name": "Consult",
+   "area": 75,
+   "perim": 34.3,
+   "h": 8.08,
+   "wall_sf": 277,
+   "clg": "ACT",
+   "clg_sf": 0,
+   "note": ""
+  },
+  {
+   "no": "105",
+   "name": "Exam #1",
+   "area": 97,
+   "perim": 48.1,
+   "h": 10.97,
+   "wall_sf": 528,
+   "clg": "P-02 T&G",
+   "clg_sf": 105,
+   "note": "Vault 8'-6\u00bc\"\u219213'-5\"; (N) soffit at curtain"
+  },
+  {
+   "no": "106",
+   "name": "Utility",
+   "area": 50,
+   "perim": 28.2,
+   "h": 8.08,
+   "wall_sf": 228,
+   "clg": "ACT",
+   "clg_sf": 0,
+   "note": ""
+  },
+  {
+   "no": "107",
+   "name": "Exam #2",
+   "area": 102,
+   "perim": 48.2,
+   "h": 10.97,
+   "wall_sf": 529,
+   "clg": "P-02 T&G",
+   "clg_sf": 110,
+   "note": "Vault 8'-6\u00bc\"\u219213'-5\"; (N) soffit at curtain"
+  },
+  {
+   "no": "108",
+   "name": "EVS",
+   "area": 12,
+   "perim": 13.7,
+   "h": 8.08,
+   "wall_sf": 111,
+   "clg": "P-03 Gyp",
+   "clg_sf": 12,
+   "note": "FRP to 48\" AFF (spec 097800) \u2014 paint above only"
+  },
+  {
+   "no": "109",
+   "name": "Exam #3",
+   "area": 106,
+   "perim": 51.4,
+   "h": 10.97,
+   "wall_sf": 564,
+   "clg": "P-02 T&G",
+   "clg_sf": 115,
+   "note": "Vault 8'-6\u00bc\"\u219213'-5\"; (N) soffit at curtain"
+  },
+  {
+   "no": "110",
+   "name": "IT",
+   "area": 15,
+   "perim": 15.3,
+   "h": 8.08,
+   "wall_sf": 124,
+   "clg": "P-03 Gyp",
+   "clg_sf": 15,
+   "note": ""
+  },
+  {
+   "no": "111",
+   "name": "Exam #4",
+   "area": 97,
+   "perim": 50.8,
+   "h": 10.97,
+   "wall_sf": 557,
+   "clg": "P-02 T&G",
+   "clg_sf": 105,
+   "note": "Vault 8'-6\u00bc\"\u219213'-5\"; (N) soffit at curtain"
+  },
+  {
+   "no": "112",
+   "name": "M.A.",
+   "area": 170,
+   "perim": 52.6,
+   "h": 8.08,
+   "wall_sf": 425,
+   "clg": "P-03 Gyp",
+   "clg_sf": 170,
+   "note": "Open to hallway; split estimated 55/45"
+  },
+  {
+   "no": "113",
+   "name": "Exam #5",
+   "area": 120,
+   "perim": 50.8,
+   "h": 10.97,
+   "wall_sf": 557,
+   "clg": "P-02 T&G",
+   "clg_sf": 130,
+   "note": "Vault 8'-6\u00bc\"\u219213'-5\"; (N) soffit at curtain"
+  },
+  {
+   "no": "114",
+   "name": "POC",
+   "area": 70,
+   "perim": 33.3,
+   "h": 8.08,
+   "wall_sf": 269,
+   "clg": "ACT",
+   "clg_sf": 0,
+   "note": ""
+  },
+  {
+   "no": "115",
+   "name": "Break Room",
+   "area": 108,
+   "perim": 46.6,
+   "h": 12.64,
+   "wall_sf": 589,
+   "clg": "P-02 T&G",
+   "clg_sf": 117,
+   "note": "Vault 11'-6\u00be\"\u219213'-8\u00bd\""
+  },
+  {
+   "no": "116",
+   "name": "Restroom",
+   "area": 55,
+   "perim": 29.5,
+   "h": 8.08,
+   "wall_sf": 238,
+   "clg": "P-03 Gyp",
+   "clg_sf": 55,
+   "note": "Tile wainscot/walls per A4.2 \u2014 deduct"
+  }
+ ],
+ "tot": {
+  "wall": 7041,
+  "tg": 940,
+  "gyp": 478
+ }
+}
